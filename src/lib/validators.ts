@@ -37,6 +37,15 @@ export const formatCPF = (cpf: string): string => {
   return cleanCPF.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
 };
 
+// Format CPF as user types (for input mask)
+export const formatCPFInput = (value: string): string => {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+  return digits
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+};
+
 // Remove CPF formatting
 export const cleanCPF = (cpf: string): string => {
   return cpf.replace(/\D/g, "");
@@ -52,4 +61,17 @@ export const formatPhone = (phone: string): string => {
     return cleanPhone.replace(/(\d{2})(\d{4})(\d{4})/, "($1) $2-$3");
   }
   return phone;
+};
+
+// Format phone as user types (for input mask)
+export const formatPhoneInput = (value: string): string => {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 7) {
+    return digits.replace(/(\d{2})(\d{0,5})/, "($1) $2");
+  }
+  if (digits.length <= 10) {
+    return digits.replace(/(\d{2})(\d{4})(\d{0,4})/, "($1) $2-$3");
+  }
+  return digits.replace(/(\d{2})(\d{5})(\d{0,4})/, "($1) $2-$3");
 };

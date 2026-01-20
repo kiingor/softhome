@@ -15,6 +15,31 @@ export const parseCurrencyInput = (value: string): number => {
   return parseFloat(normalized) || 0;
 };
 
+// Format currency for input display (R$ 1.234,56)
+export const formatCurrencyForInput = (value: string): string => {
+  // Remove all non-digits
+  const digits = value.replace(/\D/g, "");
+  
+  if (!digits) return "";
+  
+  // Convert to number (cents to reais)
+  const number = parseInt(digits, 10) / 100;
+  
+  return number.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
+};
+
+// Format a number as currency for display in input
+export const formatNumberAsCurrency = (value: number): string => {
+  if (!value && value !== 0) return "";
+  return value.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
+};
+
 // Format month/year display
 export const formatCompetencia = (month: number, year: number): string => {
   const monthStr = month.toString().padStart(2, "0");

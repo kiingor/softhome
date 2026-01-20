@@ -16,25 +16,34 @@ export type Database = {
     Tables: {
       benefits: {
         Row: {
+          applicable_days: string[] | null
           company_id: string
           created_at: string
           description: string | null
           id: string
           name: string
+          value: number
+          value_type: string
         }
         Insert: {
+          applicable_days?: string[] | null
           company_id: string
           created_at?: string
           description?: string | null
           id?: string
           name: string
+          value?: number
+          value_type?: string
         }
         Update: {
+          applicable_days?: string[] | null
           company_id?: string
           created_at?: string
           description?: string | null
           id?: string
           name?: string
+          value?: number
+          value_type?: string
         }
         Relationships: [
           {
@@ -147,6 +156,7 @@ export type Database = {
           name: string
           phone: string | null
           position: string | null
+          position_id: string | null
           status: Database["public"]["Enums"]["collaborator_status"]
           store_id: string | null
           team_id: string | null
@@ -165,6 +175,7 @@ export type Database = {
           name: string
           phone?: string | null
           position?: string | null
+          position_id?: string | null
           status?: Database["public"]["Enums"]["collaborator_status"]
           store_id?: string | null
           team_id?: string | null
@@ -183,6 +194,7 @@ export type Database = {
           name?: string
           phone?: string | null
           position?: string | null
+          position_id?: string | null
           status?: Database["public"]["Enums"]["collaborator_status"]
           store_id?: string | null
           team_id?: string | null
@@ -202,6 +214,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collaborators_position_id_fkey"
+            columns: ["position_id"]
+            isOneToOne: false
+            referencedRelation: "positions"
             referencedColumns: ["id"]
           },
           {
