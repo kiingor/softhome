@@ -691,6 +691,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          image_url: string | null
           is_read: boolean | null
           message_type: string
           read_at: string | null
@@ -703,6 +704,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          image_url?: string | null
           is_read?: boolean | null
           message_type?: string
           read_at?: string | null
@@ -715,6 +717,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          image_url?: string | null
           is_read?: boolean | null
           message_type?: string
           read_at?: string | null

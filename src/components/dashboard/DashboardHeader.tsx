@@ -10,9 +10,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { LogOut, User, Settings, Bell } from "lucide-react";
+import { LogOut, User, Settings } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
+import { NotificationBell } from "./NotificationBell";
 
 const roleLabels: Record<string, string> = {
   admin: "Administrador",
@@ -65,10 +66,7 @@ const DashboardHeader = () => {
 
       <div className="flex items-center gap-3">
         {/* Notifications */}
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="w-5 h-5" />
-          <span className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full" />
-        </Button>
+        <NotificationBell />
 
         {/* User Menu */}
         <DropdownMenu>
