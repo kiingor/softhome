@@ -31,6 +31,13 @@ import MeuExtratoPage from "./pages/colaborador/MeuExtratoPage";
 import MeusBeneficiosPage from "./pages/colaborador/MeusBeneficiosPage";
 import MeusContracheques from "./pages/colaborador/MeusContracheques";
 
+// Portal Master
+import { MasterProvider } from "./contexts/MasterContext";
+import { MasterGuard } from "./components/master/MasterGuard";
+import { MasterLayout } from "./components/master/MasterLayout";
+import MasterDashboard from "./pages/master/MasterDashboard";
+import MasterEmpresasPage from "./pages/master/MasterEmpresasPage";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -108,6 +115,32 @@ const App = () => (
                   </PortalLayout>
                 </PortalGuard>
               </PortalProvider>
+            }
+          />
+
+          {/* Portal Master - Administração RH360 */}
+          <Route
+            path="/master"
+            element={
+              <MasterProvider>
+                <MasterGuard>
+                  <MasterLayout>
+                    <MasterDashboard />
+                  </MasterLayout>
+                </MasterGuard>
+              </MasterProvider>
+            }
+          />
+          <Route
+            path="/master/empresas"
+            element={
+              <MasterProvider>
+                <MasterGuard>
+                  <MasterLayout>
+                    <MasterEmpresasPage />
+                  </MasterLayout>
+                </MasterGuard>
+              </MasterProvider>
             }
           />
           

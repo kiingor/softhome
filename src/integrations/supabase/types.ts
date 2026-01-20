@@ -44,6 +44,13 @@ export type Database = {
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "benefits_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_overview"
+            referencedColumns: ["id"]
+          },
         ]
       }
       benefits_assignments: {
@@ -118,6 +125,13 @@ export type Database = {
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "closed_periods_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_overview"
+            referencedColumns: ["id"]
+          },
         ]
       }
       collaborators: {
@@ -184,6 +198,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "collaborators_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_overview"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "collaborators_store_id_fkey"
             columns: ["store_id"]
             isOneToOne: false
@@ -201,25 +222,64 @@ export type Database = {
       }
       companies: {
         Row: {
+          asaas_customer_id: string | null
+          asaas_subscription_id: string | null
           company_name: string
           created_at: string
           id: string
+          is_blocked: boolean | null
           owner_id: string
           plan_type: string
+          subscription_due_date: string | null
+          subscription_status: string | null
         }
         Insert: {
+          asaas_customer_id?: string | null
+          asaas_subscription_id?: string | null
           company_name: string
           created_at?: string
           id?: string
+          is_blocked?: boolean | null
           owner_id: string
           plan_type?: string
+          subscription_due_date?: string | null
+          subscription_status?: string | null
         }
         Update: {
+          asaas_customer_id?: string | null
+          asaas_subscription_id?: string | null
           company_name?: string
           created_at?: string
           id?: string
+          is_blocked?: boolean | null
           owner_id?: string
           plan_type?: string
+          subscription_due_date?: string | null
+          subscription_status?: string | null
+        }
+        Relationships: []
+      }
+      master_admins: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          name: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          name?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          name?: string | null
+          user_id?: string
         }
         Relationships: []
       }
@@ -285,6 +345,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "payroll_entries_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_overview"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "payroll_entries_store_id_fkey"
             columns: ["store_id"]
             isOneToOne: false
@@ -342,6 +409,13 @@ export type Database = {
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "payslips_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_overview"
+            referencedColumns: ["id"]
+          },
         ]
       }
       profiles: {
@@ -375,6 +449,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_overview"
             referencedColumns: ["id"]
           },
           {
@@ -419,6 +500,58 @@ export type Database = {
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "stores_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_overview"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subscription_history: {
+        Row: {
+          change_reason: string | null
+          changed_by: string | null
+          company_id: string
+          created_at: string
+          id: string
+          new_plan: string
+          previous_plan: string | null
+        }
+        Insert: {
+          change_reason?: string | null
+          changed_by?: string | null
+          company_id: string
+          created_at?: string
+          id?: string
+          new_plan: string
+          previous_plan?: string | null
+        }
+        Update: {
+          change_reason?: string | null
+          changed_by?: string | null
+          company_id?: string
+          created_at?: string
+          id?: string
+          new_plan?: string
+          previous_plan?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_history_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_history_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_overview"
+            referencedColumns: ["id"]
+          },
         ]
       }
       teams: {
@@ -455,6 +588,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "teams_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_overview"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "teams_store_id_fkey"
             columns: ["store_id"]
             isOneToOne: false
@@ -486,9 +626,49 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      companies_overview: {
+        Row: {
+          active_collaborators: number | null
+          asaas_customer_id: string | null
+          asaas_subscription_id: string | null
+          company_name: string | null
+          created_at: string | null
+          id: string | null
+          is_blocked: boolean | null
+          plan_type: string | null
+          subscription_due_date: string | null
+          subscription_status: string | null
+        }
+        Insert: {
+          active_collaborators?: never
+          asaas_customer_id?: string | null
+          asaas_subscription_id?: string | null
+          company_name?: string | null
+          created_at?: string | null
+          id?: string | null
+          is_blocked?: boolean | null
+          plan_type?: string | null
+          subscription_due_date?: string | null
+          subscription_status?: string | null
+        }
+        Update: {
+          active_collaborators?: never
+          asaas_customer_id?: string | null
+          asaas_subscription_id?: string | null
+          company_name?: string | null
+          created_at?: string | null
+          id?: string | null
+          is_blocked?: boolean | null
+          plan_type?: string | null
+          subscription_due_date?: string | null
+          subscription_status?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
+      can_add_collaborator: { Args: { _company_id: string }; Returns: boolean }
+      get_plan_limit: { Args: { plan: string }; Returns: number }
       get_user_roles: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"][]
@@ -500,6 +680,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_master_admin: { Args: { _user_id: string }; Returns: boolean }
       user_belongs_to_company: {
         Args: { _company_id: string; _user_id: string }
         Returns: boolean
@@ -509,6 +690,7 @@ export type Database = {
       app_role: "admin" | "rh" | "gestor" | "contador" | "colaborador"
       collaborator_status: "ativo" | "inativo"
       payroll_entry_type: "salario" | "vale" | "custo" | "despesa" | "adicional"
+      plan_tier: "essencial" | "crescer" | "profissional" | "empresa_plus"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -639,6 +821,7 @@ export const Constants = {
       app_role: ["admin", "rh", "gestor", "contador", "colaborador"],
       collaborator_status: ["ativo", "inativo"],
       payroll_entry_type: ["salario", "vale", "custo", "despesa", "adicional"],
+      plan_tier: ["essencial", "crescer", "profissional", "empresa_plus"],
     },
   },
 } as const
