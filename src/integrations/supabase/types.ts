@@ -241,37 +241,49 @@ export type Database = {
       }
       companies: {
         Row: {
+          address: string | null
           asaas_customer_id: string | null
           asaas_subscription_id: string | null
+          cnpj: string | null
           company_name: string
           created_at: string
+          email: string | null
           id: string
           is_blocked: boolean | null
           owner_id: string
+          phone: string | null
           plan_type: string
           subscription_due_date: string | null
           subscription_status: string | null
         }
         Insert: {
+          address?: string | null
           asaas_customer_id?: string | null
           asaas_subscription_id?: string | null
+          cnpj?: string | null
           company_name: string
           created_at?: string
+          email?: string | null
           id?: string
           is_blocked?: boolean | null
           owner_id: string
+          phone?: string | null
           plan_type?: string
           subscription_due_date?: string | null
           subscription_status?: string | null
         }
         Update: {
+          address?: string | null
           asaas_customer_id?: string | null
           asaas_subscription_id?: string | null
+          cnpj?: string | null
           company_name?: string
           created_at?: string
+          email?: string | null
           id?: string
           is_blocked?: boolean | null
           owner_id?: string
+          phone?: string | null
           plan_type?: string
           subscription_due_date?: string | null
           subscription_status?: string | null
