@@ -21,12 +21,10 @@ import {
   Calendar,
   FileText,
   DollarSign,
-  Wallet,
   Gift,
   BarChart3,
   Settings,
-  Store,
-  UserCog,
+  Briefcase,
   ChevronDown,
 } from "lucide-react";
 import {
@@ -57,15 +55,21 @@ const navItems: NavItem[] = [
     roles: ["admin", "rh", "gestor"],
   },
   {
-    title: "Equipes",
-    url: "/dashboard/equipes",
-    icon: UserCog,
+    title: "Setores",
+    url: "/dashboard/setores",
+    icon: Users,
     roles: ["admin", "rh", "gestor"],
   },
   {
-    title: "Lojas",
-    url: "/dashboard/lojas",
-    icon: Store,
+    title: "Cargos",
+    url: "/dashboard/cargos",
+    icon: Briefcase,
+    roles: ["admin", "rh"],
+  },
+  {
+    title: "Empresas",
+    url: "/dashboard/empresas",
+    icon: Building2,
     roles: ["admin"],
   },
   {
@@ -75,14 +79,8 @@ const navItems: NavItem[] = [
     roles: ["admin", "rh", "gestor", "colaborador"],
   },
   {
-    title: "Financeiro",
+    title: "Lançamentos Financeiro",
     url: "/dashboard/financeiro",
-    icon: Wallet,
-    roles: ["admin", "rh"],
-  },
-  {
-    title: "Lançamentos",
-    url: "/dashboard/lancamentos",
     icon: DollarSign,
     roles: ["admin", "rh", "contador"],
   },
@@ -91,12 +89,6 @@ const navItems: NavItem[] = [
     url: "/dashboard/beneficios",
     icon: Gift,
     roles: ["admin", "rh", "colaborador"],
-  },
-  {
-    title: "Documentos",
-    url: "/dashboard/documentos",
-    icon: FileText,
-    roles: ["admin", "rh", "gestor", "colaborador"],
   },
   {
     title: "Relatórios",
@@ -111,16 +103,10 @@ const navItems: NavItem[] = [
     roles: ["contador", "admin", "rh"],
   },
   {
-    title: "Empresa",
-    url: "/dashboard/empresa",
-    icon: Building2,
-    roles: ["admin"],
-  },
-  {
     title: "Configurações",
     url: "/dashboard/configuracoes",
     icon: Settings,
-    roles: ["admin", "rh"],
+    roles: ["admin"],
   },
 ];
 
@@ -157,7 +143,7 @@ const DashboardSidebar = () => {
             <DropdownMenuTrigger className="w-full mt-4 p-3 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors text-left">
               <div className="flex items-center justify-between">
                 <div className="min-w-0">
-                  <p className="text-xs text-muted-foreground">Empresa</p>
+                  <p className="text-xs text-muted-foreground">Conta</p>
                   <p className="font-semibold text-foreground truncate">
                     {currentCompany?.company_name || "Selecionar"}
                   </p>
@@ -185,9 +171,9 @@ const DashboardSidebar = () => {
             <DropdownMenuTrigger className="w-full mt-2 p-3 rounded-lg bg-muted hover:bg-muted/80 transition-colors text-left">
               <div className="flex items-center justify-between">
                 <div className="min-w-0">
-                  <p className="text-xs text-muted-foreground">Loja</p>
+                  <p className="text-xs text-muted-foreground">Empresa</p>
                   <p className="font-medium text-foreground truncate">
-                    {currentStore?.store_name || "Todas as lojas"}
+                    {currentStore?.store_name || "Todas as empresas"}
                   </p>
                 </div>
                 <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
@@ -198,7 +184,7 @@ const DashboardSidebar = () => {
                 onClick={() => setCurrentStore(null)}
                 className={!currentStore ? "bg-secondary" : ""}
               >
-                Todas as lojas
+                Todas as empresas
               </DropdownMenuItem>
               {stores.map(store => (
                 <DropdownMenuItem
