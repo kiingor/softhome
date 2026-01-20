@@ -105,6 +105,12 @@ const navItems: NavItem[] = [
     roles: ["admin", "rh", "contador"],
   },
   {
+    title: "Contabilidade",
+    url: "/dashboard/contabilidade",
+    icon: FileText,
+    roles: ["contador", "admin", "rh"],
+  },
+  {
     title: "Empresa",
     url: "/dashboard/empresa",
     icon: Building2,

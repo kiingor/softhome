@@ -20,6 +20,7 @@ import BeneficiosPage from "./pages/dashboard/BeneficiosPage";
 import EmpresaPage from "./pages/dashboard/EmpresaPage";
 import ConfiguracoesPage from "./pages/dashboard/ConfiguracoesPage";
 import EquipesPage from "./pages/dashboard/EquipesPage";
+import ContabilidadePage from "./pages/dashboard/ContabilidadePage";
 
 // Portal do Colaborador
 import { PortalProvider } from "./contexts/PortalContext";
@@ -57,6 +58,7 @@ const App = () => (
             <Route path="relatorios" element={<RelatoriosPage />} />
             <Route path="empresa" element={<EmpresaPage />} />
             <Route path="configuracoes" element={<ConfiguracoesPage />} />
+            <Route path="contabilidade" element={<ContabilidadePage />} />
           </Route>
 
           {/* Portal do Colaborador - Layout isolado */}
