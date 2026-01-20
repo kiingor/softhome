@@ -14,13 +14,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -30,26 +23,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Gift, Plus, Pencil, Trash2, UserPlus, Users } from "lucide-react";
+import { Gift, Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import RoleGuard from "@/components/dashboard/RoleGuard";
 import BenefitForm from "@/components/benefits/BenefitForm";
-import BenefitAssignmentForm from "@/components/benefits/BenefitAssignmentForm";
-
-type TabType = "benefits" | "assignments";
+import { formatCurrency } from "@/lib/formatters";
+import { DayAbbrev, dayLabels } from "@/lib/workingDays";
 
 const BeneficiosPage = () => {
   const { currentCompany, hasAnyRole } = useDashboard();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<TabType>("benefits");
   const [benefitFormOpen, setBenefitFormOpen] = useState(false);
-  const [assignmentFormOpen, setAssignmentFormOpen] = useState(false);
   const [editingBenefit, setEditingBenefit] = useState<any>(null);
   const [deletingBenefit, setDeletingBenefit] = useState<any>(null);
-  const [deletingAssignment, setDeletingAssignment] = useState<any>(null);
-  const [collaboratorFilter, setCollaboratorFilter] = useState<string>("all");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const canManage = hasAnyRole(["admin", "rh"]);
@@ -70,60 +56,40 @@ const BeneficiosPage = () => {
     enabled: !!currentCompany?.id,
   });
 
-  // Fetch collaborators (non-temp)
-  const { data: collaborators = [] } = useQuery({
-    queryKey: ["collaborators-active", currentCompany?.id],
+  // Fetch assignments count per benefit
+  const { data: assignmentCounts = {} } = useQuery({
+    queryKey: ["benefits-assignment-counts", currentCompany?.id],
     queryFn: async () => {
-      if (!currentCompany?.id) return [];
+      if (!currentCompany?.id || benefits.length === 0) return {};
       const { data, error } = await supabase
-        .from("collaborators")
-        .select("id, name")
-        .eq("company_id", currentCompany.id)
-        .eq("status", "ativo")
-        .eq("is_temp", false)
-        .order("name");
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!currentCompany?.id,
-  });
-
-  // Fetch assignments with benefit and collaborator details
-  const { data: assignments = [], isLoading: loadingAssignments } = useQuery({
-    queryKey: ["benefits-assignments", currentCompany?.id, collaboratorFilter],
-    queryFn: async () => {
-      if (!currentCompany?.id) return [];
-      let query = supabase
         .from("benefits_assignments")
-        .select(`
-          *,
-          benefit:benefits(id, name),
-          collaborator:collaborators(id, name)
-        `)
-        .order("assigned_at", { ascending: false });
-
-      if (collaboratorFilter && collaboratorFilter !== "all") {
-        query = query.eq("collaborator_id", collaboratorFilter);
-      }
-
-      const { data, error } = await query;
+        .select("benefit_id");
       if (error) throw error;
       
-      // Filter by company through benefit relationship
-      return data.filter((a: any) => {
-        const benefit = benefits.find((b) => b.id === a.benefit_id);
-        return benefit?.company_id === currentCompany?.id;
+      const counts: Record<string, number> = {};
+      data.forEach((a: any) => {
+        counts[a.benefit_id] = (counts[a.benefit_id] || 0) + 1;
       });
+      return counts;
     },
     enabled: !!currentCompany?.id && benefits.length > 0,
   });
 
   // Create benefit mutation
   const createBenefit = useMutation({
-    mutationFn: async (data: { name: string; description?: string }) => {
+    mutationFn: async (data: {
+      name: string;
+      description?: string;
+      value: number;
+      value_type: "monthly" | "daily";
+      applicable_days: string[];
+    }) => {
       const { error } = await supabase.from("benefits").insert({
         name: data.name,
         description: data.description || null,
+        value: data.value,
+        value_type: data.value_type,
+        applicable_days: data.applicable_days,
         company_id: currentCompany!.id,
       });
       if (error) throw error;
@@ -140,10 +106,23 @@ const BeneficiosPage = () => {
 
   // Update benefit mutation
   const updateBenefit = useMutation({
-    mutationFn: async (data: { id: string; name: string; description?: string }) => {
+    mutationFn: async (data: {
+      id: string;
+      name: string;
+      description?: string;
+      value: number;
+      value_type: "monthly" | "daily";
+      applicable_days: string[];
+    }) => {
       const { error } = await supabase
         .from("benefits")
-        .update({ name: data.name, description: data.description || null })
+        .update({
+          name: data.name,
+          description: data.description || null,
+          value: data.value,
+          value_type: data.value_type,
+          applicable_days: data.applicable_days,
+        })
         .eq("id", data.id);
       if (error) throw error;
     },
@@ -165,7 +144,7 @@ const BeneficiosPage = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["benefits"] });
-      queryClient.invalidateQueries({ queryKey: ["benefits-assignments"] });
+      queryClient.invalidateQueries({ queryKey: ["benefits-assignment-counts"] });
       setDeletingBenefit(null);
       toast.success("Benefício removido!");
     },
@@ -174,55 +153,13 @@ const BeneficiosPage = () => {
     },
   });
 
-  // Create assignment mutation
-  const createAssignment = useMutation({
-    mutationFn: async (data: {
-      benefit_id: string;
-      collaborator_id: string;
-      observation?: string;
-    }) => {
-      const { error } = await supabase.from("benefits_assignments").insert({
-        benefit_id: data.benefit_id,
-        collaborator_id: data.collaborator_id,
-        observation: data.observation || null,
-      });
-      if (error) {
-        if (error.code === "23505") {
-          throw new Error("Este benefício já está atribuído a este colaborador");
-        }
-        throw error;
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["benefits-assignments"] });
-      setAssignmentFormOpen(false);
-      toast.success("Benefício atribuído com sucesso!");
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || "Erro ao atribuir benefício");
-    },
-  });
-
-  // Delete assignment mutation
-  const deleteAssignment = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("benefits_assignments")
-        .delete()
-        .eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["benefits-assignments"] });
-      setDeletingAssignment(null);
-      toast.success("Atribuição removida!");
-    },
-    onError: () => {
-      toast.error("Erro ao remover atribuição");
-    },
-  });
-
-  const handleBenefitSubmit = async (data: { name: string; description?: string }) => {
+  const handleBenefitSubmit = async (data: {
+    name: string;
+    description?: string;
+    value: number;
+    value_type: "monthly" | "daily";
+    applicable_days: string[];
+  }) => {
     setIsSubmitting(true);
     try {
       if (editingBenefit) {
@@ -235,17 +172,16 @@ const BeneficiosPage = () => {
     }
   };
 
-  const handleAssignmentSubmit = async (data: {
-    benefit_id: string;
-    collaborator_id: string;
-    observation?: string;
-  }) => {
-    setIsSubmitting(true);
-    try {
-      await createAssignment.mutateAsync(data);
-    } finally {
-      setIsSubmitting(false);
+  const getValueTypeLabel = (type: string) => {
+    return type === "monthly" ? "Mensal" : "Diário";
+  };
+
+  const getApplicableDaysLabel = (days: string[] | null) => {
+    if (!days || days.length === 0) return "-";
+    if (days.length === 5 && ["mon", "tue", "wed", "thu", "fri"].every(d => days.includes(d))) {
+      return "Seg-Sex";
     }
+    return days.map((d) => dayLabels[d as DayAbbrev] || d).join(", ");
   };
 
   return (
@@ -255,231 +191,122 @@ const BeneficiosPage = () => {
           <div>
             <h1 className="text-2xl font-bold text-foreground">Benefícios</h1>
             <p className="text-muted-foreground">
-              Gerencie os benefícios dos colaboradores
+              Cadastre os tipos de benefícios da empresa
             </p>
           </div>
           {canManage && (
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setAssignmentFormOpen(true)}
-                disabled={benefits.length === 0}
-              >
-                <UserPlus className="w-4 h-4 mr-2" />
-                Atribuir
-              </Button>
-              <Button onClick={() => setBenefitFormOpen(true)}>
-                <Plus className="w-4 h-4 mr-2" />
-                Novo Benefício
-              </Button>
-            </div>
+            <Button onClick={() => setBenefitFormOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Novo Benefício
+            </Button>
           )}
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-2 border-b">
-          <button
-            onClick={() => setActiveTab("benefits")}
-            className={`px-4 py-2 font-medium transition-colors ${
-              activeTab === "benefits"
-                ? "border-b-2 border-primary text-primary"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Gift className="w-4 h-4 inline-block mr-2" />
-            Tipos de Benefício
-          </button>
-          <button
-            onClick={() => setActiveTab("assignments")}
-            className={`px-4 py-2 font-medium transition-colors ${
-              activeTab === "assignments"
-                ? "border-b-2 border-primary text-primary"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Users className="w-4 h-4 inline-block mr-2" />
-            Atribuições
-          </button>
-        </div>
-
-        {/* Benefits Tab */}
-        {activeTab === "benefits" && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Tipos de Benefício</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {loadingBenefits ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  Carregando...
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Tipos de Benefício</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {loadingBenefits ? (
+              <div className="text-center py-8 text-muted-foreground">
+                Carregando...
+              </div>
+            ) : benefits.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+                  <Gift className="w-8 h-8 text-muted-foreground" />
                 </div>
-              ) : benefits.length === 0 ? (
-                <div className="text-center py-12">
-                  <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
-                    <Gift className="w-8 h-8 text-muted-foreground" />
-                  </div>
-                  <h3 className="font-medium text-foreground mb-2">
-                    Nenhum benefício cadastrado
-                  </h3>
-                  <p className="text-muted-foreground text-sm mb-4">
-                    Comece criando os tipos de benefícios da empresa
-                  </p>
-                  {canManage && (
-                    <Button onClick={() => setBenefitFormOpen(true)}>
-                      <Plus className="w-4 h-4 mr-2" />
-                      Criar Benefício
-                    </Button>
-                  )}
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nome</TableHead>
-                      <TableHead>Descrição</TableHead>
-                      <TableHead className="text-center">Atribuições</TableHead>
-                      {canManage && <TableHead className="w-[100px]">Ações</TableHead>}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {benefits.map((benefit) => {
-                      const assignmentCount = assignments.filter(
-                        (a: any) => a.benefit_id === benefit.id
-                      ).length;
-                      return (
-                        <TableRow key={benefit.id}>
-                          <TableCell className="font-medium">
-                            {benefit.name}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {benefit.description || "-"}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <Badge variant="secondary">{assignmentCount}</Badge>
-                          </TableCell>
-                          {canManage && (
-                            <TableCell>
-                              <div className="flex gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => setEditingBenefit(benefit)}
-                                >
-                                  <Pencil className="w-4 h-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => setDeletingBenefit(benefit)}
-                                >
-                                  <Trash2 className="w-4 h-4 text-destructive" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          )}
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Assignments Tab */}
-        {activeTab === "assignments" && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-lg">Atribuições por Colaborador</CardTitle>
-              <Select value={collaboratorFilter} onValueChange={setCollaboratorFilter}>
-                <SelectTrigger className="w-[250px]">
-                  <SelectValue placeholder="Filtrar por colaborador" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos os colaboradores</SelectItem>
-                  {collaborators.map((collab) => (
-                    <SelectItem key={collab.id} value={collab.id}>
-                      {collab.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </CardHeader>
-            <CardContent>
-              {loadingAssignments ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  Carregando...
-                </div>
-              ) : assignments.length === 0 ? (
-                <div className="text-center py-12">
-                  <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
-                    <Users className="w-8 h-8 text-muted-foreground" />
-                  </div>
-                  <h3 className="font-medium text-foreground mb-2">
-                    Nenhuma atribuição encontrada
-                  </h3>
-                  <p className="text-muted-foreground text-sm mb-4">
-                    {benefits.length === 0
-                      ? "Primeiro crie os tipos de benefícios"
-                      : "Atribua benefícios aos colaboradores"}
-                  </p>
-                  {canManage && benefits.length > 0 && (
-                    <Button onClick={() => setAssignmentFormOpen(true)}>
-                      <UserPlus className="w-4 h-4 mr-2" />
-                      Atribuir Benefício
-                    </Button>
-                  )}
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Colaborador</TableHead>
-                      <TableHead>Benefício</TableHead>
-                      <TableHead>Observação</TableHead>
-                      <TableHead>Data Atribuição</TableHead>
-                      {canManage && <TableHead className="w-[80px]">Ações</TableHead>}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {assignments.map((assignment: any) => (
-                      <TableRow key={assignment.id}>
+                <h3 className="font-medium text-foreground mb-2">
+                  Nenhum benefício cadastrado
+                </h3>
+                <p className="text-muted-foreground text-sm mb-4">
+                  Comece criando os tipos de benefícios da empresa
+                </p>
+                {canManage && (
+                  <Button onClick={() => setBenefitFormOpen(true)}>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Criar Benefício
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nome</TableHead>
+                    <TableHead>Descrição</TableHead>
+                    <TableHead className="text-right">Valor</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Dias Aplicáveis</TableHead>
+                    <TableHead className="text-center">Atribuições</TableHead>
+                    {canManage && <TableHead className="w-[100px]">Ações</TableHead>}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {benefits.map((benefit) => {
+                    const assignmentCount = assignmentCounts[benefit.id] || 0;
+                    return (
+                      <TableRow key={benefit.id}>
                         <TableCell className="font-medium">
-                          {assignment.collaborator?.name || "-"}
+                          {benefit.name}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground max-w-[200px] truncate">
+                          {benefit.description || "-"}
+                        </TableCell>
+                        <TableCell className="text-right font-mono">
+                          {formatCurrency(benefit.value || 0)}
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline">
-                            {assignment.benefit?.name || "-"}
+                          <Badge variant={benefit.value_type === "monthly" ? "default" : "secondary"}>
+                            {getValueTypeLabel(benefit.value_type)}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {assignment.observation || "-"}
+                        <TableCell className="text-muted-foreground text-sm">
+                          {benefit.value_type === "daily" 
+                            ? getApplicableDaysLabel(benefit.applicable_days)
+                            : "-"}
                         </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {format(new Date(assignment.assigned_at), "dd/MM/yyyy", {
-                            locale: ptBR,
-                          })}
+                        <TableCell className="text-center">
+                          <Badge variant="outline">{assignmentCount}</Badge>
                         </TableCell>
                         {canManage && (
                           <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setDeletingAssignment(assignment)}
-                            >
-                              <Trash2 className="w-4 h-4 text-destructive" />
-                            </Button>
+                            <div className="flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setEditingBenefit(benefit)}
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setDeletingBenefit(benefit)}
+                              >
+                                <Trash2 className="w-4 h-4 text-destructive" />
+                              </Button>
+                            </div>
                           </TableCell>
                         )}
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        )}
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Info Card */}
+        <Card className="bg-muted/50 border-dashed">
+          <CardContent className="p-4">
+            <p className="text-sm text-muted-foreground">
+              <strong>Dica:</strong> A atribuição de benefícios aos colaboradores é feita diretamente na tela de edição do colaborador. 
+              Acesse "Colaboradores" no menu, clique em "Editar" e atribua os benefícios desejados no painel de custos.
+            </p>
+          </CardContent>
+        </Card>
 
         {/* Benefit Form Modal */}
         <BenefitForm
@@ -491,17 +318,13 @@ const BeneficiosPage = () => {
             }
           }}
           onSubmit={handleBenefitSubmit}
-          initialData={editingBenefit}
-          isLoading={isSubmitting}
-        />
-
-        {/* Assignment Form Modal */}
-        <BenefitAssignmentForm
-          open={assignmentFormOpen}
-          onOpenChange={setAssignmentFormOpen}
-          onSubmit={handleAssignmentSubmit}
-          benefits={benefits}
-          collaborators={collaborators}
+          initialData={editingBenefit ? {
+            name: editingBenefit.name,
+            description: editingBenefit.description,
+            value: editingBenefit.value || 0,
+            value_type: editingBenefit.value_type || "monthly",
+            applicable_days: editingBenefit.applicable_days || ["mon", "tue", "wed", "thu", "fri"],
+          } : undefined}
           isLoading={isSubmitting}
         />
 
@@ -522,30 +345,6 @@ const BeneficiosPage = () => {
               <AlertDialogCancel>Cancelar</AlertDialogCancel>
               <AlertDialogAction
                 onClick={() => deleteBenefit.mutate(deletingBenefit.id)}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
-                Remover
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-
-        {/* Delete Assignment Dialog */}
-        <AlertDialog
-          open={!!deletingAssignment}
-          onOpenChange={(open) => !open && setDeletingAssignment(null)}
-        >
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Remover Atribuição</AlertDialogTitle>
-              <AlertDialogDescription>
-                Tem certeza que deseja remover este benefício do colaborador?
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={() => deleteAssignment.mutate(deletingAssignment.id)}
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               >
                 Remover

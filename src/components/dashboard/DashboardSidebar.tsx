@@ -137,33 +137,7 @@ const DashboardSidebar = () => {
           )}
         </Link>
 
-        {/* Company Selector */}
-        {!isCollapsed && companies.length > 0 && (
-          <DropdownMenu>
-            <DropdownMenuTrigger className="w-full mt-4 p-3 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors text-left">
-              <div className="flex items-center justify-between">
-                <div className="min-w-0">
-                  <p className="text-xs text-muted-foreground">Conta</p>
-                  <p className="font-semibold text-foreground truncate">
-                    {currentCompany?.company_name || "Selecionar"}
-                  </p>
-                </div>
-                <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-              </div>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-56">
-              {companies.map(company => (
-                <DropdownMenuItem
-                  key={company.id}
-                  onClick={() => setCurrentCompany(company)}
-                  className={currentCompany?.id === company.id ? "bg-secondary" : ""}
-                >
-                  {company.company_name}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
+        {/* Store Selector - Renamed from Loja to Empresa */}
 
         {/* Store Selector (if applicable) */}
         {!isCollapsed && stores.length > 0 && (
