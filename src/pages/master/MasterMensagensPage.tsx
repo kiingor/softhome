@@ -32,7 +32,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useMaster } from "@/contexts/MasterContext";
-import { Send, Trash2, CheckCircle, Clock, RefreshCw, Plus, Megaphone } from "lucide-react";
+import { Send, Trash2, CheckCircle, Clock, RefreshCw, Plus, Megaphone, ImageIcon } from "lucide-react";
 
 export default function MasterMensagensPage() {
   const { toast } = useToast();
@@ -44,6 +44,7 @@ export default function MasterMensagensPage() {
   const [messageTitle, setMessageTitle] = useState("");
   const [messageBody, setMessageBody] = useState("");
   const [messageType, setMessageType] = useState<'info' | 'warning' | 'alert'>('info');
+  const [imageUrl, setImageUrl] = useState("");
 
   // Fetch companies for dropdown
   const { data: companies } = useQuery({
@@ -74,7 +75,8 @@ export default function MasterMensagensPage() {
           visible_until,
           is_read,
           read_at,
-          company_id
+          company_id,
+          image_url
         `)
         .order('created_at', { ascending: false });
 
@@ -95,6 +97,7 @@ export default function MasterMensagensPage() {
           message_type: messageType,
           created_by: userId,
           visible_until: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          image_url: imageUrl || null,
         });
 
       if (error) throw error;
@@ -112,6 +115,7 @@ export default function MasterMensagensPage() {
       setMessageBody("");
       setMessageType('info');
       setSelectedCompany('all');
+      setImageUrl("");
     },
     onError: (error: Error) => {
       toast({
@@ -197,11 +201,20 @@ export default function MasterMensagensPage() {
                 messages?.map((message) => (
                   <TableRow key={message.id}>
                     <TableCell>
-                      <div>
-                        <p className="font-medium">{message.title}</p>
-                        <p className="text-xs text-muted-foreground line-clamp-1">
-                          {message.body}
-                        </p>
+                      <div className="flex items-start gap-3">
+                        {message.image_url && (
+                          <img 
+                            src={message.image_url} 
+                            alt="" 
+                            className="w-10 h-10 rounded object-cover flex-shrink-0"
+                          />
+                        )}
+                        <div>
+                          <p className="font-medium">{message.title}</p>
+                          <p className="text-xs text-muted-foreground line-clamp-1">
+                            {message.body}
+                          </p>
+                        </div>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -316,6 +329,25 @@ export default function MasterMensagensPage() {
                 onChange={(e) => setMessageBody(e.target.value)}
                 rows={4}
               />
+            </div>
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <ImageIcon className="w-4 h-4" />
+                URL da Imagem (opcional)
+              </Label>
+              <Input 
+                placeholder="https://exemplo.com/imagem.png"
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+              />
+              {imageUrl && (
+                <img 
+                  src={imageUrl} 
+                  alt="Preview" 
+                  className="w-20 h-20 rounded object-cover border"
+                  onError={(e) => (e.currentTarget.style.display = 'none')}
+                />
+              )}
             </div>
           </div>
           <DialogFooter>

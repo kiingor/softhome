@@ -2,9 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Users, CreditCard, AlertTriangle, TrendingUp, CheckCircle } from "lucide-react";
+import { Building2, Users, CreditCard, AlertTriangle, TrendingUp, CheckCircle, Clock } from "lucide-react";
 import { PLANS, PlanId } from "@/lib/planUtils";
 import { Link } from "react-router-dom";
+import { differenceInDays } from "date-fns";
 
 export default function MasterDashboard() {
   const { data: stats } = useQuery({
@@ -103,11 +104,37 @@ export default function MasterDashboard() {
     },
   });
 
+  // Get trial companies
+  const { data: trialCompanies } = useQuery({
+    queryKey: ['master-trial-companies'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('companies')
+        .select('id, company_name, trial_ends_at, plan_type, created_at')
+        .not('trial_ends_at', 'is', null)
+        .gt('trial_ends_at', new Date().toISOString())
+        .order('trial_ends_at', { ascending: true });
+
+      if (error) throw error;
+      return data;
+    },
+  });
+
   // Calculate MRR (Monthly Recurring Revenue)
   const mrr = stats?.planCounts ? Object.entries(stats.planCounts).reduce((acc, [plan, count]) => {
     const planInfo = PLANS[plan as PlanId];
     return acc + (planInfo?.price || 0) * count;
   }, 0) : 0;
+
+  const getDaysRemaining = (trialEndsAt: string) => {
+    return differenceInDays(new Date(trialEndsAt), new Date());
+  };
+
+  const getTrialBadgeVariant = (days: number) => {
+    if (days <= 1) return "destructive";
+    if (days <= 2) return "secondary";
+    return "outline";
+  };
 
   return (
     <div className="space-y-8">
@@ -148,17 +175,19 @@ export default function MasterDashboard() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/30 dark:to-amber-950/30 border-orange-200 dark:border-orange-800">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Colaboradores Ativos
+            <CardTitle className="text-sm font-medium text-orange-700 dark:text-orange-300">
+              Em Trial
             </CardTitle>
-            <Users className="w-4 h-4 text-muted-foreground" />
+            <Clock className="w-4 h-4 text-orange-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{stats?.totalCollaborators || 0}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Média: {((stats?.totalCollaborators || 0) / (stats?.totalCompanies || 1)).toFixed(1)} por empresa
+            <div className="text-3xl font-bold text-orange-700 dark:text-orange-300">
+              {trialCompanies?.length || 0}
+            </div>
+            <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
+              Empresas em período de teste
             </p>
           </CardContent>
         </Card>
@@ -180,6 +209,47 @@ export default function MasterDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Trial Companies */}
+      {trialCompanies && trialCompanies.length > 0 && (
+        <Card className="border-orange-200 dark:border-orange-800">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="w-5 h-5 text-orange-500" />
+              Empresas em Trial
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {trialCompanies.map((company) => {
+                const daysRemaining = getDaysRemaining(company.trial_ends_at!);
+                return (
+                  <Link
+                    key={company.id}
+                    to={`/master/empresas/${company.id}`}
+                    className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors"
+                  >
+                    <div>
+                      <p className="font-medium text-foreground">{company.company_name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Criada em {new Date(company.created_at).toLocaleDateString('pt-BR')}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="text-xs">
+                        {PLANS[company.plan_type as PlanId]?.name || company.plan_type}
+                      </Badge>
+                      <Badge variant={getTrialBadgeVariant(daysRemaining)} className="text-xs">
+                        {daysRemaining <= 0 ? 'Expira hoje' : `${daysRemaining} dia${daysRemaining > 1 ? 's' : ''} restante${daysRemaining > 1 ? 's' : ''}`}
+                      </Badge>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Distribution Cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
