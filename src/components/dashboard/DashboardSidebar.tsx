@@ -99,22 +99,11 @@ const navCategories: NavCategory[] = [
     label: "Gestão",
     items: [
       {
-        title: "Férias e Ausências",
-        url: "/dashboard/ferias",
-        icon: Calendar,
-        roles: ["admin", "rh", "gestor", "colaborador"],
-      },
-      {
         title: "Lançamentos Financeiro",
         url: "/dashboard/financeiro",
         icon: DollarSign,
         roles: ["admin", "rh", "contador"],
       },
-    ],
-  },
-  {
-    label: "Relatórios",
-    items: [
       {
         title: "Relatórios",
         url: "/dashboard/relatorios",
