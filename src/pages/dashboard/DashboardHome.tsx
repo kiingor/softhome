@@ -3,61 +3,211 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   Users,
-  Calendar,
   FileText,
   DollarSign,
   TrendingUp,
-  Clock,
   UserPlus,
-  AlertCircle,
+  Building2,
+  Briefcase,
+  Gift,
+  Cake,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { SystemNotifications } from "@/components/dashboard/SystemNotifications";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { TableSkeleton } from "@/components/ui/table-skeleton";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+} from "recharts";
+import { format, parseISO, isThisMonth } from "date-fns";
+import { ptBR } from "date-fns/locale";
+
+const COLORS = ["hsl(var(--primary))", "hsl(var(--accent))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
 
 const DashboardHome = () => {
-  const { profile, roles, currentCompany, hasRole, hasAnyRole } = useDashboard();
+  const { profile, currentCompany, hasRole, hasAnyRole } = useDashboard();
   const navigate = useNavigate();
 
-  const isAdmin = hasRole("admin");
-  const isRH = hasRole("rh");
-  const isGestor = hasRole("gestor");
   const isColaborador = hasRole("colaborador") && !hasAnyRole(["admin", "rh", "gestor"]);
 
-  // Stats cards based on role
+  // Fetch collaborators count
+  const { data: collaborators = [], isLoading: loadingCollaborators } = useQuery({
+    queryKey: ["dashboard-collaborators", currentCompany?.id],
+    queryFn: async () => {
+      if (!currentCompany?.id) return [];
+      const { data, error } = await supabase
+        .from("collaborators")
+        .select("id, name, status, position_id, store_id, admission_date, birth_date")
+        .eq("company_id", currentCompany.id);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentCompany?.id,
+  });
+
+  // Fetch stores count
+  const { data: stores = [], isLoading: loadingStores } = useQuery({
+    queryKey: ["dashboard-stores", currentCompany?.id],
+    queryFn: async () => {
+      if (!currentCompany?.id) return [];
+      const { data, error } = await supabase
+        .from("stores")
+        .select("id, store_name")
+        .eq("company_id", currentCompany.id);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentCompany?.id,
+  });
+
+  // Fetch positions
+  const { data: positions = [], isLoading: loadingPositions } = useQuery({
+    queryKey: ["dashboard-positions", currentCompany?.id],
+    queryFn: async () => {
+      if (!currentCompany?.id) return [];
+      const { data, error } = await supabase
+        .from("positions")
+        .select("id, name, salary")
+        .eq("company_id", currentCompany.id);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentCompany?.id,
+  });
+
+  // Fetch benefits
+  const { data: benefits = [], isLoading: loadingBenefits } = useQuery({
+    queryKey: ["dashboard-benefits", currentCompany?.id],
+    queryFn: async () => {
+      if (!currentCompany?.id) return [];
+      const { data, error } = await supabase
+        .from("benefits")
+        .select("id, name, value")
+        .eq("company_id", currentCompany.id);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentCompany?.id,
+  });
+
+  // Fetch payroll entries for current month
+  const { data: payrollEntries = [], isLoading: loadingPayroll } = useQuery({
+    queryKey: ["dashboard-payroll", currentCompany?.id],
+    queryFn: async () => {
+      if (!currentCompany?.id) return [];
+      const currentMonth = new Date().getMonth() + 1;
+      const currentYear = new Date().getFullYear();
+      const { data, error } = await supabase
+        .from("payroll_entries")
+        .select("id, value, type")
+        .eq("company_id", currentCompany.id)
+        .eq("month", currentMonth)
+        .eq("year", currentYear);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentCompany?.id,
+  });
+
+  const isLoading = loadingCollaborators || loadingStores || loadingPositions || loadingBenefits || loadingPayroll;
+
+  // Calculate stats
+  const activeCollaborators = collaborators.filter((c) => c.status === "ativo").length;
+  const inactiveCollaborators = collaborators.filter((c) => c.status === "inativo").length;
+  const totalPayroll = payrollEntries.reduce((sum, e) => sum + Number(e.value), 0);
+
+  // Birthdays this month
+  const birthdaysThisMonth = collaborators.filter((c) => {
+    if (!c.birth_date) return false;
+    const birthDate = parseISO(c.birth_date);
+    return isThisMonth(birthDate);
+  });
+
+  // Collaborators by position chart data
+  const collaboratorsByPosition = positions.map((pos) => ({
+    name: pos.name,
+    value: collaborators.filter((c) => c.position_id === pos.id).length,
+  })).filter((item) => item.value > 0);
+
+  // Collaborators by store chart data
+  const collaboratorsByStore = stores.map((store) => ({
+    name: store.store_name,
+    colaboradores: collaborators.filter((c) => c.store_id === store.id).length,
+  })).filter((item) => item.colaboradores > 0);
+
+  // Payroll by type chart data
+  const payrollByType = [
+    { name: "Salário", value: payrollEntries.filter((e) => e.type === "salario").reduce((sum, e) => sum + Number(e.value), 0) },
+    { name: "Vale", value: payrollEntries.filter((e) => e.type === "vale").reduce((sum, e) => sum + Number(e.value), 0) },
+    { name: "Adicional", value: payrollEntries.filter((e) => e.type === "adicional").reduce((sum, e) => sum + Number(e.value), 0) },
+    { name: "Custo", value: payrollEntries.filter((e) => e.type === "custo").reduce((sum, e) => sum + Number(e.value), 0) },
+    { name: "Despesa", value: payrollEntries.filter((e) => e.type === "despesa").reduce((sum, e) => sum + Number(e.value), 0) },
+  ].filter((item) => item.value > 0);
+
+  // Stats cards
   const adminStats = [
-    { label: "Colaboradores", value: "0", icon: Users, color: "bg-primary/10 text-primary", change: "+0%" },
-    { label: "Férias Pendentes", value: "0", icon: Calendar, color: "bg-accent/10 text-accent", change: "0" },
-    { label: "Lançamentos do Mês", value: "R$ 0", icon: DollarSign, color: "bg-green-100 text-green-600", change: "+0%" },
-    { label: "Documentos Vencendo", value: "0", icon: FileText, color: "bg-orange-100 text-orange-600", change: "0" },
+    { label: "Colaboradores Ativos", value: activeCollaborators.toString(), icon: Users, color: "bg-primary/10 text-primary" },
+    { label: "Empresas/Lojas", value: stores.length.toString(), icon: Building2, color: "bg-accent/10 text-accent" },
+    { label: "Lançamentos do Mês", value: `R$ ${totalPayroll.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, icon: DollarSign, color: "bg-green-100 text-green-600" },
+    { label: "Cargos Cadastrados", value: positions.length.toString(), icon: Briefcase, color: "bg-orange-100 text-orange-600" },
   ];
-
-  const colaboradorStats = [
-    { label: "Dias de Férias", value: "30", icon: Calendar, color: "bg-accent/10 text-accent" },
-    { label: "Próximo Pagamento", value: "5 dias", icon: Clock, color: "bg-primary/10 text-primary" },
-    { label: "Documentos Pendentes", value: "0", icon: FileText, color: "bg-orange-100 text-orange-600" },
-  ];
-
-  const stats = isColaborador ? colaboradorStats : adminStats;
 
   const quickActions = isColaborador
     ? [
-        { label: "Solicitar Férias", icon: Calendar, action: () => navigate("/dashboard/ferias") },
-        { label: "Meus Documentos", icon: FileText, action: () => navigate("/dashboard/documentos") },
-        { label: "Meus Benefícios", icon: DollarSign, action: () => navigate("/dashboard/beneficios") },
+        { label: "Meus Documentos", icon: FileText, action: () => navigate("/colaborador/contracheques") },
+        { label: "Meus Benefícios", icon: DollarSign, action: () => navigate("/colaborador/beneficios") },
       ]
     : [
         { label: "Novo Colaborador", icon: UserPlus, action: () => navigate("/dashboard/colaboradores") },
-        { label: "Aprovar Férias", icon: Calendar, action: () => navigate("/dashboard/ferias") },
-        { label: "Lançamentos", icon: DollarSign, action: () => navigate("/dashboard/lancamentos") },
+        { label: "Lançamentos", icon: DollarSign, action: () => navigate("/dashboard/financeiro") },
         { label: "Relatórios", icon: TrendingUp, action: () => navigate("/dashboard/relatorios") },
+        { label: "Benefícios", icon: Gift, action: () => navigate("/dashboard/beneficios") },
       ];
 
+  if (isLoading) {
+    return (
+      <div className="space-y-8 animate-fade-in">
+        <div>
+          <div className="h-8 w-48 bg-muted rounded animate-pulse mb-2" />
+          <div className="h-5 w-64 bg-muted rounded animate-pulse" />
+        </div>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Card key={i} className="border border-border">
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between">
+                  <div className="space-y-2">
+                    <div className="h-4 w-24 bg-muted rounded animate-pulse" />
+                    <div className="h-8 w-16 bg-muted rounded animate-pulse" />
+                  </div>
+                  <div className="w-12 h-12 rounded-xl bg-muted animate-pulse" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <TableSkeleton columns={4} rows={3} />
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 animate-fade-in">
       {/* System Notifications */}
       <SystemNotifications />
+      
       {/* Welcome Section */}
-      <div>
+      <div className="animate-slide-up">
         <h1 className="text-2xl md:text-3xl font-bold text-foreground">
           Olá{profile?.full_name ? `, ${profile.full_name.split(" ")[0]}` : ""}! 👋
         </h1>
@@ -69,31 +219,32 @@ const DashboardHome = () => {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((stat, index) => (
-          <Card key={index} className="border border-border hover:shadow-soft transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">{stat.label}</p>
-                  <p className="text-2xl font-bold text-foreground">{stat.value}</p>
-                  {"change" in stat && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      <span className="text-accent">{String((stat as any).change)}</span> vs mês anterior
-                    </p>
-                  )}
+      {!isColaborador && (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {adminStats.map((stat, index) => (
+            <Card
+              key={index}
+              className="border border-border hover:shadow-soft transition-all duration-300 animate-scale-in"
+              style={{ animationDelay: `${index * 100}ms` }}
+            >
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">{stat.label}</p>
+                    <p className="text-2xl font-bold text-foreground">{stat.value}</p>
+                  </div>
+                  <div className={`w-12 h-12 rounded-xl ${stat.color} flex items-center justify-center`}>
+                    <stat.icon className="w-6 h-6" />
+                  </div>
                 </div>
-                <div className={`w-12 h-12 rounded-xl ${stat.color} flex items-center justify-center`}>
-                  <stat.icon className="w-6 h-6" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* Quick Actions */}
-      <div>
+      <div className="animate-slide-up" style={{ animationDelay: "200ms" }}>
         <h2 className="text-lg font-semibold text-foreground mb-4">Ações Rápidas</h2>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {quickActions.map((action, index) => (
@@ -113,44 +264,160 @@ const DashboardHome = () => {
         </div>
       </div>
 
-      {/* Pending Items (Admin/RH view) */}
-      {hasAnyRole(["admin", "rh", "gestor"]) && (
-        <div className="grid lg:grid-cols-2 gap-6">
-          <Card className="border border-border">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <AlertCircle className="w-5 h-5 text-orange-500" />
-                Pendências
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8 text-muted-foreground">
-                <p>Nenhuma pendência no momento.</p>
-                <p className="text-sm mt-1">Cadastre colaboradores para começar.</p>
-              </div>
-            </CardContent>
-          </Card>
+      {/* Charts Section */}
+      {hasAnyRole(["admin", "rh", "gestor"]) && collaborators.length > 0 && (
+        <div className="grid lg:grid-cols-2 gap-6 animate-slide-up" style={{ animationDelay: "300ms" }}>
+          {/* Collaborators by Position */}
+          {collaboratorsByPosition.length > 0 && (
+            <Card className="border border-border">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Briefcase className="w-5 h-5 text-primary" />
+                  Colaboradores por Cargo
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={250}>
+                  <PieChart>
+                    <Pie
+                      data={collaboratorsByPosition}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {collaboratorsByPosition.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
 
+          {/* Collaborators by Store */}
+          {collaboratorsByStore.length > 0 && (
+            <Card className="border border-border">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Building2 className="w-5 h-5 text-accent" />
+                  Colaboradores por Empresa
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={250}>
+                  <BarChart data={collaboratorsByStore}>
+                    <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} />
+                    <Tooltip />
+                    <Bar dataKey="colaboradores" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Payroll Distribution */}
+          {payrollByType.length > 0 && (
+            <Card className="border border-border">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <DollarSign className="w-5 h-5 text-green-600" />
+                  Distribuição de Lançamentos ({format(new Date(), "MMMM", { locale: ptBR })})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={250}>
+                  <PieChart>
+                    <Pie
+                      data={payrollByType}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, value }) => `${name}: R$ ${value.toLocaleString("pt-BR")}`}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {payrollByType.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value) => `R$ ${Number(value).toLocaleString("pt-BR")}`} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Birthdays This Month */}
           <Card className="border border-border">
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-accent" />
-                Próximos Eventos
+                <Cake className="w-5 h-5 text-pink-500" />
+                Aniversariantes do Mês
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-8 text-muted-foreground">
-                <p>Nenhum evento próximo.</p>
-                <p className="text-sm mt-1">Aniversários e férias aparecerão aqui.</p>
-              </div>
+              {birthdaysThisMonth.length > 0 ? (
+                <div className="space-y-3 max-h-[200px] overflow-y-auto">
+                  {birthdaysThisMonth.map((collab) => (
+                    <div key={collab.id} className="flex items-center gap-3 p-2 rounded-lg bg-secondary/50">
+                      <div className="w-10 h-10 rounded-full bg-pink-100 flex items-center justify-center">
+                        <Cake className="w-5 h-5 text-pink-500" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-foreground">{collab.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {collab.birth_date && format(parseISO(collab.birth_date), "dd 'de' MMMM", { locale: ptBR })}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Cake className="w-12 h-12 mx-auto mb-2 opacity-30" />
+                  <p>Nenhum aniversariante este mês.</p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
       )}
 
-      {/* Getting Started (if no data) */}
-      {hasAnyRole(["admin", "rh"]) && (
-        <Card className="border-2 border-dashed border-primary/30 bg-primary/5">
+      {/* Status Overview */}
+      {hasAnyRole(["admin", "rh", "gestor"]) && collaborators.length > 0 && (
+        <div className="grid sm:grid-cols-3 gap-4 animate-slide-up" style={{ animationDelay: "400ms" }}>
+          <Card className="border border-border bg-green-50 dark:bg-green-950/20">
+            <CardContent className="p-6 text-center">
+              <p className="text-3xl font-bold text-green-600">{activeCollaborators}</p>
+              <p className="text-sm text-green-700 dark:text-green-400">Colaboradores Ativos</p>
+            </CardContent>
+          </Card>
+          <Card className="border border-border bg-red-50 dark:bg-red-950/20">
+            <CardContent className="p-6 text-center">
+              <p className="text-3xl font-bold text-red-600">{inactiveCollaborators}</p>
+              <p className="text-sm text-red-700 dark:text-red-400">Colaboradores Inativos</p>
+            </CardContent>
+          </Card>
+          <Card className="border border-border bg-blue-50 dark:bg-blue-950/20">
+            <CardContent className="p-6 text-center">
+              <p className="text-3xl font-bold text-blue-600">{benefits.length}</p>
+              <p className="text-sm text-blue-700 dark:text-blue-400">Benefícios Ativos</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Getting Started (only if no collaborators) */}
+      {hasAnyRole(["admin", "rh"]) && collaborators.length === 0 && (
+        <Card className="border-2 border-dashed border-primary/30 bg-primary/5 animate-scale-in">
           <CardContent className="p-8 text-center">
             <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
               <Users className="w-8 h-8 text-primary" />
