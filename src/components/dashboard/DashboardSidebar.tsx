@@ -129,17 +129,6 @@ const navCategories: NavCategory[] = [
       },
     ],
   },
-  {
-    label: "Sistema",
-    items: [
-      {
-        title: "Configurações",
-        url: "/dashboard/configuracoes",
-        icon: Settings,
-        roles: ["admin"],
-      },
-    ],
-  },
 ];
 
 const DashboardSidebar = () => {
@@ -215,25 +204,25 @@ const DashboardSidebar = () => {
         )}
       </SidebarHeader>
 
-      <SidebarContent>
+      <SidebarContent className="gap-0">
         {filteredCategories.map((category, index) => (
           <div key={category.label}>
-            {index > 0 && <SidebarSeparator className="my-2" />}
-            <SidebarGroup>
-              <SidebarGroupLabel>{category.label}</SidebarGroupLabel>
+            {index > 0 && <SidebarSeparator className="my-1" />}
+            <SidebarGroup className="py-1">
+              <SidebarGroupLabel className="text-xs py-1">{category.label}</SidebarGroupLabel>
               <SidebarGroupContent>
-                <SidebarMenu>
+                <SidebarMenu className="gap-0.5">
                   {category.items.map((item) => (
                     <SidebarMenuItem key={item.url}>
-                      <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                      <SidebarMenuButton asChild isActive={isActive(item.url)} className="h-8">
                         <NavLink
                           to={item.url}
                           end={item.url === "/dashboard"}
-                          className="flex items-center gap-3"
+                          className="flex items-center gap-2"
                           activeClassName="bg-primary/10 text-primary font-medium"
                         >
-                          <item.icon className="w-5 h-5 flex-shrink-0" />
-                          {!isCollapsed && <span>{item.title}</span>}
+                          <item.icon className="w-4 h-4 flex-shrink-0" />
+                          {!isCollapsed && <span className="text-sm">{item.title}</span>}
                         </NavLink>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -245,12 +234,21 @@ const DashboardSidebar = () => {
         ))}
       </SidebarContent>
 
-      <SidebarFooter className="p-4 border-t border-border">
-        {!isCollapsed && (
-          <div className="text-xs text-muted-foreground text-center">
-            RH360 © 2024
-          </div>
-        )}
+      <SidebarFooter className="p-2 border-t border-border">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild isActive={isActive("/dashboard/configuracoes")} className="h-8">
+              <NavLink
+                to="/dashboard/configuracoes"
+                className="flex items-center gap-2"
+                activeClassName="bg-primary/10 text-primary font-medium"
+              >
+                <Settings className="w-4 h-4 flex-shrink-0" />
+                {!isCollapsed && <span className="text-sm">Configurações</span>}
+              </NavLink>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
   );

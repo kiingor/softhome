@@ -32,13 +32,17 @@ import {
   Check,
   Loader2,
   Save,
+  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PLANS, getPlanById } from "@/lib/planUtils";
+import { UsersAccessTab } from "@/components/dashboard/UsersAccessTab";
+import { useIsCompanyAdmin } from "@/hooks/usePermissions";
 
 const ConfiguracoesPage = () => {
   const { currentCompany } = useDashboard();
   const queryClient = useQueryClient();
+  const { isAdmin } = useIsCompanyAdmin();
   const [isEditing, setIsEditing] = useState(false);
 
   // Form state for company data
@@ -204,11 +208,17 @@ const ConfiguracoesPage = () => {
         </div>
 
         <Tabs defaultValue="conta" className="space-y-6">
-          <TabsList>
+          <TabsList className="flex-wrap">
             <TabsTrigger value="conta" className="gap-2">
               <Building2 className="w-4 h-4" />
               Dados da Conta
             </TabsTrigger>
+            {isAdmin && (
+              <TabsTrigger value="usuarios" className="gap-2">
+                <Users className="w-4 h-4" />
+                Usuários e Acessos
+              </TabsTrigger>
+            )}
             <TabsTrigger value="plano" className="gap-2">
               <CreditCard className="w-4 h-4" />
               Plano e Assinatura
@@ -342,6 +352,13 @@ const ConfiguracoesPage = () => {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* Tab: Usuários e Acessos */}
+          {isAdmin && (
+            <TabsContent value="usuarios">
+              <UsersAccessTab />
+            </TabsContent>
+          )}
 
           {/* Tab: Plano e Assinatura */}
           <TabsContent value="plano" className="space-y-6">
