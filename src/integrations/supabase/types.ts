@@ -14,6 +14,85 @@ export type Database = {
   }
   public: {
     Tables: {
+      collaborators: {
+        Row: {
+          admission_date: string | null
+          birth_date: string | null
+          company_id: string
+          cpf: string
+          created_at: string
+          email: string | null
+          id: string
+          is_temp: boolean
+          name: string
+          phone: string | null
+          position: string | null
+          status: Database["public"]["Enums"]["collaborator_status"]
+          store_id: string | null
+          team_id: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          admission_date?: string | null
+          birth_date?: string | null
+          company_id: string
+          cpf: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          is_temp?: boolean
+          name: string
+          phone?: string | null
+          position?: string | null
+          status?: Database["public"]["Enums"]["collaborator_status"]
+          store_id?: string | null
+          team_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          admission_date?: string | null
+          birth_date?: string | null
+          company_id?: string
+          cpf?: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          is_temp?: boolean
+          name?: string
+          phone?: string | null
+          position?: string | null
+          status?: Database["public"]["Enums"]["collaborator_status"]
+          store_id?: string | null
+          team_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collaborators_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collaborators_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collaborators_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       companies: {
         Row: {
           company_name: string
@@ -115,6 +194,48 @@ export type Database = {
           },
         ]
       }
+      teams: {
+        Row: {
+          company_id: string
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          store_id: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          store_id?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          store_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "teams_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "teams_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -159,6 +280,7 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "rh" | "gestor" | "contador" | "colaborador"
+      collaborator_status: "ativo" | "inativo"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -287,6 +409,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "rh", "gestor", "contador", "colaborador"],
+      collaborator_status: ["ativo", "inativo"],
     },
   },
 } as const
