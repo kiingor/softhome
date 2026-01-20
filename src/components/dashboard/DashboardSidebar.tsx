@@ -19,22 +19,15 @@ import {
   LayoutDashboard,
   Users,
   Building2,
-  Calendar,
   FileText,
   DollarSign,
   Gift,
   BarChart3,
   Settings,
   Briefcase,
-  ChevronDown,
   FolderTree,
+  LogOut,
 } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 
 interface NavItem {
   title: string;
@@ -121,7 +114,7 @@ const navCategories: NavCategory[] = [
 ];
 
 const DashboardSidebar = () => {
-  const { hasAnyRole, stores, currentStore, setCurrentStore } = useDashboard();
+  const { hasAnyRole, signOut } = useDashboard();
   const location = useLocation();
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
@@ -152,45 +145,6 @@ const DashboardSidebar = () => {
             <span className="text-lg font-bold text-foreground">RH360</span>
           )}
         </Link>
-
-        {/* Store Selector */}
-        {!isCollapsed && stores.length > 0 && (
-          <DropdownMenu>
-            <DropdownMenuTrigger className="w-full mt-2 p-3 rounded-lg bg-muted hover:bg-muted/80 transition-colors text-left">
-              <div className="flex items-center justify-between">
-                <div className="min-w-0">
-                  <p className="text-xs text-muted-foreground">Empresa</p>
-                  <p className="font-medium text-foreground truncate">
-                    {currentStore?.store_name || "Todas as empresas"}
-                  </p>
-                </div>
-                <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-              </div>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-56">
-              <DropdownMenuItem
-                onClick={() => setCurrentStore(null)}
-                className={!currentStore ? "bg-secondary" : ""}
-              >
-                Todas as empresas
-              </DropdownMenuItem>
-              {stores.map((store) => (
-                <DropdownMenuItem
-                  key={store.id}
-                  onClick={() => setCurrentStore(store)}
-                  className={currentStore?.id === store.id ? "bg-secondary" : ""}
-                >
-                  {store.store_name}
-                  {store.store_code && (
-                    <span className="text-muted-foreground ml-2">
-                      ({store.store_code})
-                    </span>
-                  )}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
       </SidebarHeader>
 
       <SidebarContent className="gap-0">
@@ -224,7 +178,7 @@ const DashboardSidebar = () => {
       </SidebarContent>
 
       <SidebarFooter className="p-2 border-t border-border">
-        <SidebarMenu>
+        <SidebarMenu className="gap-0.5">
           <SidebarMenuItem>
             <SidebarMenuButton asChild isActive={isActive("/dashboard/configuracoes")} className="h-8">
               <NavLink
@@ -235,6 +189,15 @@ const DashboardSidebar = () => {
                 <Settings className="w-4 h-4 flex-shrink-0" />
                 {!isCollapsed && <span className="text-sm">Configurações</span>}
               </NavLink>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton 
+              className="h-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+              onClick={signOut}
+            >
+              <LogOut className="w-4 h-4 flex-shrink-0" />
+              {!isCollapsed && <span className="text-sm">Sair</span>}
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
