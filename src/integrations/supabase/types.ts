@@ -293,6 +293,57 @@ export type Database = {
           },
         ]
       }
+      payslips: {
+        Row: {
+          collaborator_id: string
+          company_id: string
+          file_name: string
+          file_url: string
+          id: string
+          month: number
+          uploaded_at: string
+          uploaded_by: string | null
+          year: number
+        }
+        Insert: {
+          collaborator_id: string
+          company_id: string
+          file_name: string
+          file_url: string
+          id?: string
+          month: number
+          uploaded_at?: string
+          uploaded_by?: string | null
+          year: number
+        }
+        Update: {
+          collaborator_id?: string
+          company_id?: string
+          file_name?: string
+          file_url?: string
+          id?: string
+          month?: number
+          uploaded_at?: string
+          uploaded_by?: string | null
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payslips_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payslips_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           company_id: string | null

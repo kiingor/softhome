@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useDashboard } from "@/contexts/DashboardContext";
+import { usePortal } from "@/contexts/PortalContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Gift, Info } from "lucide-react";
@@ -8,23 +8,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 const MeusBeneficiosPage = () => {
-  const { user } = useDashboard();
-
-  // Fetch collaborator linked to current user
-  const { data: collaborator } = useQuery({
-    queryKey: ["my-collaborator", user?.id],
-    queryFn: async () => {
-      if (!user?.id) return null;
-      const { data, error } = await supabase
-        .from("collaborators")
-        .select("id, name")
-        .eq("user_id", user.id)
-        .single();
-      if (error) return null;
-      return data;
-    },
-    enabled: !!user?.id,
-  });
+  const { collaborator } = usePortal();
 
   // Fetch benefits assigned to the collaborator
   const { data: myBenefits = [], isLoading } = useQuery({
@@ -99,7 +83,7 @@ const MeusBeneficiosPage = () => {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {myBenefits.map((item: any) => (
             <Card key={item.id} className="hover:shadow-md transition-shadow">
               <CardHeader className="pb-2">
