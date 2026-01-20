@@ -23,8 +23,6 @@ const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/master' },
   { icon: Building2, label: 'Empresas', href: '/master/empresas' },
   { icon: MessageSquare, label: 'Mensagens', href: '/master/mensagens' },
-  { icon: Users, label: 'Admins', href: '/master/admins' },
-  { icon: Settings, label: 'Configurações', href: '/master/config' },
 ];
 
 export function MasterLayout({ children }: MasterLayoutProps) {

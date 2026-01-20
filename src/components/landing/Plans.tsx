@@ -87,15 +87,20 @@ const Plans = () => {
                   ))}
                 </ul>
 
-                <Link to={`/signup?plan=${planId}`} className="mt-auto">
-                  <Button 
-                    variant={plan.popular ? "hero" : "outline"} 
-                    size="lg" 
-                    className="w-full"
-                  >
-                    Começar com este plano
-                  </Button>
-                </Link>
+                <div className="mt-auto space-y-3">
+                  <Link to={`/signup?plan=${planId}`}>
+                    <Button 
+                      variant={plan.popular ? "hero" : "outline"} 
+                      size="lg" 
+                      className="w-full"
+                    >
+                      Começar com este plano
+                    </Button>
+                  </Link>
+                  <p className="text-xs text-center text-muted-foreground">
+                    ✨ Teste grátis por 3 dias
+                  </p>
+                </div>
               </div>
             );
           })}
