@@ -20,7 +20,15 @@ import BeneficiosPage from "./pages/dashboard/BeneficiosPage";
 import EmpresaPage from "./pages/dashboard/EmpresaPage";
 import ConfiguracoesPage from "./pages/dashboard/ConfiguracoesPage";
 import EquipesPage from "./pages/dashboard/EquipesPage";
+
+// Portal do Colaborador
+import { PortalProvider } from "./contexts/PortalContext";
+import PortalLayout from "./components/portal/PortalLayout";
+import PortalGuard from "./components/portal/PortalGuard";
+import PortalHome from "./pages/colaborador/PortalHome";
+import MeuExtratoPage from "./pages/colaborador/MeuExtratoPage";
 import MeusBeneficiosPage from "./pages/colaborador/MeusBeneficiosPage";
+import MeusContracheques from "./pages/colaborador/MeusContracheques";
 
 const queryClient = new QueryClient();
 
@@ -49,8 +57,57 @@ const App = () => (
             <Route path="relatorios" element={<RelatoriosPage />} />
             <Route path="empresa" element={<EmpresaPage />} />
             <Route path="configuracoes" element={<ConfiguracoesPage />} />
-            <Route path="meus-beneficios" element={<MeusBeneficiosPage />} />
           </Route>
+
+          {/* Portal do Colaborador - Layout isolado */}
+          <Route
+            path="/colaborador"
+            element={
+              <PortalProvider>
+                <PortalGuard>
+                  <PortalLayout>
+                    <PortalHome />
+                  </PortalLayout>
+                </PortalGuard>
+              </PortalProvider>
+            }
+          />
+          <Route
+            path="/colaborador/extrato"
+            element={
+              <PortalProvider>
+                <PortalGuard>
+                  <PortalLayout>
+                    <MeuExtratoPage />
+                  </PortalLayout>
+                </PortalGuard>
+              </PortalProvider>
+            }
+          />
+          <Route
+            path="/colaborador/beneficios"
+            element={
+              <PortalProvider>
+                <PortalGuard>
+                  <PortalLayout>
+                    <MeusBeneficiosPage />
+                  </PortalLayout>
+                </PortalGuard>
+              </PortalProvider>
+            }
+          />
+          <Route
+            path="/colaborador/contracheques"
+            element={
+              <PortalProvider>
+                <PortalGuard>
+                  <PortalLayout>
+                    <MeusContracheques />
+                  </PortalLayout>
+                </PortalGuard>
+              </PortalProvider>
+            }
+          />
           
           <Route path="*" element={<NotFound />} />
         </Routes>
