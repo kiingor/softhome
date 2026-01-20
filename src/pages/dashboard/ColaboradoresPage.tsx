@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import RoleGuard from "@/components/dashboard/RoleGuard";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -30,7 +31,6 @@ import { useDashboard } from "@/contexts/DashboardContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { formatCPF } from "@/lib/validators";
-import CollaboratorForm from "@/components/collaborators/CollaboratorForm";
 
 interface Collaborator {
   id: string;
@@ -57,15 +57,14 @@ interface Team {
 }
 
 const ColaboradoresPage = () => {
-  const { currentCompany, stores: contextStores } = useDashboard();
+  const { currentCompany } = useDashboard();
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [formOpen, setFormOpen] = useState(false);
-  const [editingCollaborator, setEditingCollaborator] = useState<Collaborator | null>(null);
 
   // Filters
   const [searchTerm, setSearchTerm] = useState("");
@@ -179,8 +178,7 @@ const ColaboradoresPage = () => {
   };
 
   const handleEdit = (collaborator: Collaborator) => {
-    setEditingCollaborator(collaborator);
-    setFormOpen(true);
+    navigate(`/dashboard/colaboradores/${collaborator.id}`);
   };
 
   const handleDelete = async (collaborator: Collaborator) => {
@@ -233,10 +231,7 @@ const ColaboradoresPage = () => {
           </div>
           <Button
             variant="hero"
-            onClick={() => {
-              setEditingCollaborator(null);
-              setFormOpen(true);
-            }}
+            onClick={() => navigate("/dashboard/colaboradores/novo")}
           >
             <UserPlus className="w-4 h-4 mr-2" />
             Novo Colaborador
@@ -283,7 +278,7 @@ const ColaboradoresPage = () => {
 
                 {stores.length > 0 && (
                   <div>
-                    <label className="text-sm font-medium mb-2 block">Loja</label>
+                    <label className="text-sm font-medium mb-2 block">Empresa</label>
                     <Select value={storeFilter} onValueChange={setStoreFilter}>
                       <SelectTrigger>
                         <SelectValue />
@@ -302,13 +297,13 @@ const ColaboradoresPage = () => {
 
                 {teams.length > 0 && (
                   <div>
-                    <label className="text-sm font-medium mb-2 block">Equipe</label>
+                    <label className="text-sm font-medium mb-2 block">Setor</label>
                     <Select value={teamFilter} onValueChange={setTeamFilter}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">Todas</SelectItem>
+                        <SelectItem value="all">Todos</SelectItem>
                         {teams.map((team) => (
                           <SelectItem key={team.id} value={team.id}>
                             {team.name}
@@ -349,10 +344,7 @@ const ColaboradoresPage = () => {
               {!searchTerm && statusFilter === "all" && storeFilter === "all" && teamFilter === "all" && (
                 <Button
                   variant="hero"
-                  onClick={() => {
-                    setEditingCollaborator(null);
-                    setFormOpen(true);
-                  }}
+                  onClick={() => navigate("/dashboard/colaboradores/novo")}
                 >
                   <UserPlus className="w-4 h-4 mr-2" />
                   Cadastrar Colaborador
@@ -369,8 +361,8 @@ const ColaboradoresPage = () => {
                     <TableHead>Nome</TableHead>
                     <TableHead>CPF</TableHead>
                     <TableHead>Cargo</TableHead>
-                    <TableHead>Loja</TableHead>
-                    <TableHead>Equipe</TableHead>
+                    <TableHead>Empresa</TableHead>
+                    <TableHead>Setor</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="w-12"></TableHead>
                   </TableRow>
@@ -467,16 +459,6 @@ const ColaboradoresPage = () => {
             )}
           </Card>
         )}
-
-        {/* Form Modal */}
-        <CollaboratorForm
-          open={formOpen}
-          onOpenChange={setFormOpen}
-          onSuccess={loadCollaborators}
-          stores={stores}
-          teams={teams}
-          editingCollaborator={editingCollaborator}
-        />
       </div>
     </RoleGuard>
   );

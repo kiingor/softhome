@@ -27,8 +27,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { DayAbbrev, dayLabels, defaultWorkingDays } from "@/lib/workingDays";
-import { formatCurrencyForInput, parseCurrencyInput, formatNumberAsCurrency } from "@/lib/formatters";
+import { DayAbbrev, dayLabels, defaultWorkingDays, countWorkingDays } from "@/lib/workingDays";
+import { formatCurrencyForInput, parseCurrencyInput, formatNumberAsCurrency, formatCurrency, getCurrentCompetencia } from "@/lib/formatters";
 import { useState, useEffect } from "react";
 
 const benefitSchema = z.object({
@@ -92,8 +92,20 @@ const BenefitForm = ({
   });
 
   const valueType = form.watch("value_type");
+  const applicableDays = form.watch("applicable_days") || defaultWorkingDays;
+  const { month: currentMonth, year: currentYear } = getCurrentCompetencia();
 
-  // Reset form when dialog opens/closes or initialData changes
+  // Calculate preview of monthly value for daily benefits
+  const getMonthlyPreview = () => {
+    if (valueType !== "daily" || !valueDisplay) return null;
+    const dailyValue = parseCurrencyInput(valueDisplay);
+    if (dailyValue <= 0) return null;
+    const workingDays = countWorkingDays(currentMonth, currentYear, applicableDays as DayAbbrev[]);
+    const total = dailyValue * workingDays;
+    return { workingDays, total };
+  };
+
+  const monthlyPreview = getMonthlyPreview();
   useEffect(() => {
     if (open) {
       const initialValue = initialData?.value
@@ -197,7 +209,7 @@ const BenefitForm = ({
                 name="value_type"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Tipo de Valor</FormLabel>
+                    <FormLabel>Tipo do Cálculo</FormLabel>
                     <Select
                       onValueChange={field.onChange}
                       value={field.value}
@@ -217,6 +229,18 @@ const BenefitForm = ({
                 )}
               />
             </div>
+
+            {/* Monthly preview for daily benefits */}
+            {valueType === "daily" && monthlyPreview && (
+              <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
+                <p className="text-sm text-muted-foreground">
+                  Previsão para {currentMonth.toString().padStart(2, "0")}/{currentYear}:
+                </p>
+                <p className="font-medium text-primary">
+                  {formatCurrency(parseCurrencyInput(valueDisplay))} × {monthlyPreview.workingDays} dias = <strong>{formatCurrency(monthlyPreview.total)}</strong>
+                </p>
+              </div>
+            )}
 
             {valueType === "daily" && (
               <FormField
