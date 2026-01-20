@@ -26,7 +26,6 @@ import {
   Settings,
   Briefcase,
   FolderTree,
-  LogOut,
 } from "lucide-react";
 
 interface NavItem {
@@ -114,7 +113,7 @@ const navCategories: NavCategory[] = [
 ];
 
 const DashboardSidebar = () => {
-  const { hasAnyRole, signOut } = useDashboard();
+  const { hasAnyRole } = useDashboard();
   const location = useLocation();
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
@@ -189,15 +188,6 @@ const DashboardSidebar = () => {
                 <Settings className="w-4 h-4 flex-shrink-0" />
                 {!isCollapsed && <span className="text-sm">Configurações</span>}
               </NavLink>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton 
-              className="h-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-              onClick={signOut}
-            >
-              <LogOut className="w-4 h-4 flex-shrink-0" />
-              {!isCollapsed && <span className="text-sm">Sair</span>}
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
