@@ -10,16 +10,14 @@ import NotFound from "./pages/NotFound";
 import DashboardLayout from "./components/dashboard/DashboardLayout";
 import DashboardHome from "./pages/dashboard/DashboardHome";
 import ColaboradoresPage from "./pages/dashboard/ColaboradoresPage";
-import LojasPage from "./pages/dashboard/LojasPage";
+import EmpresasPage from "./pages/dashboard/EmpresasPage";
+import SetoresPage from "./pages/dashboard/SetoresPage";
+import CargosPage from "./pages/dashboard/CargosPage";
 import FeriasPage from "./pages/dashboard/FeriasPage";
-import LancamentosPage from "./pages/dashboard/LancamentosPage";
 import FinanceiroPage from "./pages/dashboard/FinanceiroPage";
 import RelatoriosPage from "./pages/dashboard/RelatoriosPage";
-import DocumentosPage from "./pages/dashboard/DocumentosPage";
 import BeneficiosPage from "./pages/dashboard/BeneficiosPage";
-import EmpresaPage from "./pages/dashboard/EmpresaPage";
 import ConfiguracoesPage from "./pages/dashboard/ConfiguracoesPage";
-import EquipesPage from "./pages/dashboard/EquipesPage";
 import ContabilidadePage from "./pages/dashboard/ContabilidadePage";
 
 // Portal do Colaborador
@@ -58,15 +56,13 @@ const App = () => (
           <Route path="/dashboard" element={<DashboardLayout />}>
             <Route index element={<DashboardHome />} />
             <Route path="colaboradores" element={<ColaboradoresPage />} />
-            <Route path="equipes" element={<EquipesPage />} />
-            <Route path="lojas" element={<LojasPage />} />
+            <Route path="setores" element={<SetoresPage />} />
+            <Route path="empresas" element={<EmpresasPage />} />
+            <Route path="cargos" element={<CargosPage />} />
             <Route path="ferias" element={<FeriasPage />} />
             <Route path="financeiro" element={<FinanceiroPage />} />
-            <Route path="lancamentos" element={<LancamentosPage />} />
             <Route path="beneficios" element={<BeneficiosPage />} />
-            <Route path="documentos" element={<DocumentosPage />} />
             <Route path="relatorios" element={<RelatoriosPage />} />
-            <Route path="empresa" element={<EmpresaPage />} />
             <Route path="configuracoes" element={<ConfiguracoesPage />} />
             <Route path="contabilidade" element={<ContabilidadePage />} />
           </Route>
