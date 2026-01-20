@@ -14,6 +14,77 @@ export type Database = {
   }
   public: {
     Tables: {
+      benefits: {
+        Row: {
+          company_id: string
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "benefits_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      benefits_assignments: {
+        Row: {
+          assigned_at: string
+          benefit_id: string
+          collaborator_id: string
+          id: string
+          observation: string | null
+        }
+        Insert: {
+          assigned_at?: string
+          benefit_id: string
+          collaborator_id: string
+          id?: string
+          observation?: string | null
+        }
+        Update: {
+          assigned_at?: string
+          benefit_id?: string
+          collaborator_id?: string
+          id?: string
+          observation?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "benefits_assignments_benefit_id_fkey"
+            columns: ["benefit_id"]
+            isOneToOne: false
+            referencedRelation: "benefits"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "benefits_assignments_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       collaborators: {
         Row: {
           admission_date: string | null

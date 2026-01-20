@@ -20,6 +20,7 @@ import BeneficiosPage from "./pages/dashboard/BeneficiosPage";
 import EmpresaPage from "./pages/dashboard/EmpresaPage";
 import ConfiguracoesPage from "./pages/dashboard/ConfiguracoesPage";
 import EquipesPage from "./pages/dashboard/EquipesPage";
+import MeusBeneficiosPage from "./pages/colaborador/MeusBeneficiosPage";
 
 const queryClient = new QueryClient();
 
@@ -48,6 +49,7 @@ const App = () => (
             <Route path="relatorios" element={<RelatoriosPage />} />
             <Route path="empresa" element={<EmpresaPage />} />
             <Route path="configuracoes" element={<ConfiguracoesPage />} />
+            <Route path="meus-beneficios" element={<MeusBeneficiosPage />} />
           </Route>
           
           <Route path="*" element={<NotFound />} />
