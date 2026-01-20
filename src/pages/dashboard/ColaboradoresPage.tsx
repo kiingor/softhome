@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import RoleGuard from "@/components/dashboard/RoleGuard";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,6 +30,7 @@ import { useDashboard } from "@/contexts/DashboardContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { formatCPF } from "@/lib/validators";
+import CollaboratorModal from "@/components/collaborators/CollaboratorModal";
 
 interface Collaborator {
   id: string;
@@ -59,12 +59,15 @@ interface Team {
 const ColaboradoresPage = () => {
   const { currentCompany } = useDashboard();
   const { toast } = useToast();
-  const navigate = useNavigate();
 
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Modal state
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // Filters
   const [searchTerm, setSearchTerm] = useState("");
@@ -177,8 +180,18 @@ const ColaboradoresPage = () => {
     }
   };
 
+  const handleNewCollaborator = () => {
+    setEditingId(null);
+    setModalOpen(true);
+  };
+
   const handleEdit = (collaborator: Collaborator) => {
-    navigate(`/dashboard/colaboradores/${collaborator.id}`);
+    setEditingId(collaborator.id);
+    setModalOpen(true);
+  };
+
+  const handleModalSuccess = () => {
+    loadCollaborators();
   };
 
   const handleDelete = async (collaborator: Collaborator) => {
@@ -229,10 +242,7 @@ const ColaboradoresPage = () => {
               {totalCount} colaborador{totalCount !== 1 ? "es" : ""} cadastrado{totalCount !== 1 ? "s" : ""}
             </p>
           </div>
-          <Button
-            variant="hero"
-            onClick={() => navigate("/dashboard/colaboradores/novo")}
-          >
+          <Button variant="hero" onClick={handleNewCollaborator}>
             <UserPlus className="w-4 h-4 mr-2" />
             Novo Colaborador
           </Button>
@@ -342,10 +352,7 @@ const ColaboradoresPage = () => {
                   : "Comece cadastrando seu primeiro colaborador."}
               </p>
               {!searchTerm && statusFilter === "all" && storeFilter === "all" && teamFilter === "all" && (
-                <Button
-                  variant="hero"
-                  onClick={() => navigate("/dashboard/colaboradores/novo")}
-                >
+                <Button variant="hero" onClick={handleNewCollaborator}>
                   <UserPlus className="w-4 h-4 mr-2" />
                   Cadastrar Colaborador
                 </Button>
@@ -459,6 +466,14 @@ const ColaboradoresPage = () => {
             )}
           </Card>
         )}
+
+        {/* Collaborator Modal */}
+        <CollaboratorModal
+          open={modalOpen}
+          onOpenChange={setModalOpen}
+          collaboratorId={editingId}
+          onSuccess={handleModalSuccess}
+        />
       </div>
     </RoleGuard>
   );
