@@ -418,6 +418,45 @@ export type Database = {
           },
         ]
       }
+      positions: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          name: string
+          salary: number
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          name: string
+          salary?: number
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          name?: string
+          salary?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "positions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "positions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_overview"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           company_id: string | null
@@ -470,6 +509,7 @@ export type Database = {
       stores: {
         Row: {
           address: string | null
+          cnpj: string | null
           company_id: string
           created_at: string
           id: string
@@ -478,6 +518,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          cnpj?: string | null
           company_id: string
           created_at?: string
           id?: string
@@ -486,6 +527,7 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          cnpj?: string | null
           company_id?: string
           created_at?: string
           id?: string

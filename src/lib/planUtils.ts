@@ -5,6 +5,7 @@ export const PLANS = {
     price: 49.90,
     priceDisplay: '49,90',
     collaboratorLimit: 5,
+    trialDays: 3,
     description: 'Ideal para pequenas empresas começando a digitalizar o RH',
     features: [
       'Cadastro de colaboradores',
@@ -21,6 +22,7 @@ export const PLANS = {
     price: 99.90,
     priceDisplay: '99,90',
     collaboratorLimit: 10,
+    trialDays: 3,
     description: 'Para empresas em crescimento que precisam de mais recursos',
     features: [
       'Tudo do Essencial',
@@ -39,6 +41,7 @@ export const PLANS = {
     price: 199.90,
     priceDisplay: '199,90',
     collaboratorLimit: 30,
+    trialDays: 3,
     description: 'Solução completa para médias empresas',
     features: [
       'Tudo do Crescer',
@@ -46,7 +49,7 @@ export const PLANS = {
       'Folha de pagamento completa',
       'Integração contábil',
       'Relatórios avançados',
-      'Gestão de lojas e equipes',
+      'Gestão de empresas e setores',
       'Contracheques digitais',
     ],
     color: 'violet',
@@ -58,11 +61,12 @@ export const PLANS = {
     price: 399.90,
     priceDisplay: '399,90',
     collaboratorLimit: 100,
+    trialDays: 3,
     description: 'Para grandes operações com múltiplas unidades',
     features: [
       'Tudo do Profissional',
       'Até 100 colaboradores',
-      'Multi-lojas ilimitadas',
+      'Multi-empresas ilimitadas',
       'API de integração',
       'Relatórios customizados',
       'Gerente de conta dedicado',
@@ -106,6 +110,13 @@ export function getSubscriptionStatusLabel(status: string): { label: string; var
     overdue: { label: 'Em atraso', variant: 'destructive' },
     cancelled: { label: 'Cancelado', variant: 'destructive' },
     expired: { label: 'Expirado', variant: 'outline' },
+    trial: { label: 'Período de teste', variant: 'secondary' },
   };
   return statusMap[status] || { label: status, variant: 'outline' };
+}
+
+export function getTrialEndDate(): Date {
+  const trialEnd = new Date();
+  trialEnd.setDate(trialEnd.getDate() + 3);
+  return trialEnd;
 }
