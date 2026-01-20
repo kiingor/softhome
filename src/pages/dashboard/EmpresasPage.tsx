@@ -43,6 +43,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
+import { TableSkeleton } from '@/components/ui/table-skeleton';
 
 interface Store {
   id: string;
@@ -191,8 +192,8 @@ export default function EmpresasPage() {
 
   return (
     <RoleGuard allowedRoles={['admin']}>
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="space-y-6 page-content">
+        <div className="flex items-center justify-between animate-fade-in">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Empresas</h1>
             <p className="text-muted-foreground">
@@ -292,7 +293,7 @@ export default function EmpresasPage() {
           </Dialog>
         </div>
 
-        <Card>
+        <Card className="animate-scale-in">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Building2 className="h-5 w-5" />
@@ -304,9 +305,7 @@ export default function EmpresasPage() {
           </CardHeader>
           <CardContent>
             {isLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-              </div>
+              <TableSkeleton columns={5} rows={4} />
             ) : stores.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Building2 className="h-12 w-12 mx-auto mb-4 opacity-50" />

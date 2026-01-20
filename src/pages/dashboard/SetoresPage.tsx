@@ -51,6 +51,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
+import { TableSkeleton } from '@/components/ui/table-skeleton';
 
 interface Team {
   id: string;
@@ -181,8 +182,8 @@ export default function SetoresPage() {
 
   return (
     <RoleGuard allowedRoles={['admin', 'rh']}>
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="space-y-6 page-content">
+        <div className="flex items-center justify-between animate-fade-in">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Setores</h1>
             <p className="text-muted-foreground">
@@ -286,7 +287,7 @@ export default function SetoresPage() {
           </Dialog>
         </div>
 
-        <Card>
+        <Card className="animate-scale-in">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Users className="h-5 w-5" />
@@ -298,9 +299,7 @@ export default function SetoresPage() {
           </CardHeader>
           <CardContent>
             {isLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-              </div>
+              <TableSkeleton columns={4} rows={4} />
             ) : teams.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -317,9 +316,9 @@ export default function SetoresPage() {
                     <TableHead className="w-[100px]">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
+                <TableBody className="stagger-animation">
                   {teams.map((team) => (
-                    <TableRow key={team.id}>
+                    <TableRow key={team.id} className="table-row-animate">
                       <TableCell className="font-medium">{team.name}</TableCell>
                       <TableCell>{team.description || '-'}</TableCell>
                       <TableCell>{team.stores?.store_name || '-'}</TableCell>
