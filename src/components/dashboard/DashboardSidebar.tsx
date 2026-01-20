@@ -21,6 +21,7 @@ import {
   Calendar,
   FileText,
   DollarSign,
+  Wallet,
   Gift,
   BarChart3,
   Settings,
@@ -72,6 +73,12 @@ const navItems: NavItem[] = [
     url: "/dashboard/ferias",
     icon: Calendar,
     roles: ["admin", "rh", "gestor", "colaborador"],
+  },
+  {
+    title: "Financeiro",
+    url: "/dashboard/financeiro",
+    icon: Wallet,
+    roles: ["admin", "rh"],
   },
   {
     title: "Lançamentos",

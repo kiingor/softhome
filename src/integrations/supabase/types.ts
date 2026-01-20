@@ -117,6 +117,76 @@ export type Database = {
         }
         Relationships: []
       }
+      payroll_entries: {
+        Row: {
+          collaborator_id: string
+          company_id: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_fixed: boolean
+          month: number
+          store_id: string | null
+          type: Database["public"]["Enums"]["payroll_entry_type"]
+          updated_at: string
+          value: number
+          year: number
+        }
+        Insert: {
+          collaborator_id: string
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_fixed?: boolean
+          month: number
+          store_id?: string | null
+          type: Database["public"]["Enums"]["payroll_entry_type"]
+          updated_at?: string
+          value: number
+          year: number
+        }
+        Update: {
+          collaborator_id?: string
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_fixed?: boolean
+          month?: number
+          store_id?: string | null
+          type?: Database["public"]["Enums"]["payroll_entry_type"]
+          updated_at?: string
+          value?: number
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payroll_entries_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_entries_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_entries_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           company_id: string | null
@@ -281,6 +351,7 @@ export type Database = {
     Enums: {
       app_role: "admin" | "rh" | "gestor" | "contador" | "colaborador"
       collaborator_status: "ativo" | "inativo"
+      payroll_entry_type: "salario" | "vale" | "custo" | "despesa" | "adicional"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -410,6 +481,7 @@ export const Constants = {
     Enums: {
       app_role: ["admin", "rh", "gestor", "contador", "colaborador"],
       collaborator_status: ["ativo", "inativo"],
+      payroll_entry_type: ["salario", "vale", "custo", "despesa", "adicional"],
     },
   },
 } as const
