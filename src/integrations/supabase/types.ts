@@ -554,6 +554,60 @@ export type Database = {
           },
         ]
       }
+      system_messages: {
+        Row: {
+          body: string
+          company_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          is_read: boolean | null
+          message_type: string
+          read_at: string | null
+          title: string
+          visible_until: string | null
+        }
+        Insert: {
+          body: string
+          company_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_read?: boolean | null
+          message_type?: string
+          read_at?: string | null
+          title: string
+          visible_until?: string | null
+        }
+        Update: {
+          body?: string
+          company_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_read?: boolean | null
+          message_type?: string
+          read_at?: string | null
+          title?: string
+          visible_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "system_messages_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "system_messages_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_overview"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       teams: {
         Row: {
           company_id: string

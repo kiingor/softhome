@@ -1,7 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Building2, Users, CreditCard, AlertTriangle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Building2, Users, CreditCard, AlertTriangle, TrendingUp, CheckCircle } from "lucide-react";
+import { PLANS, PlanId } from "@/lib/planUtils";
+import { Link } from "react-router-dom";
 
 export default function MasterDashboard() {
   const { data: stats } = useQuery({
@@ -30,11 +33,35 @@ export default function MasterDashboard() {
         .select('*', { count: 'exact', head: true })
         .eq('status', 'ativo');
 
+      // Get companies by plan
+      const { data: planDistribution } = await supabase
+        .from('companies')
+        .select('plan_type');
+
+      const planCounts: Record<string, number> = {};
+      planDistribution?.forEach((c) => {
+        const plan = c.plan_type || 'essencial';
+        planCounts[plan] = (planCounts[plan] || 0) + 1;
+      });
+
+      // Get subscription status distribution
+      const { data: statusDistribution } = await supabase
+        .from('companies')
+        .select('subscription_status');
+
+      const statusCounts: Record<string, number> = {};
+      statusDistribution?.forEach((c) => {
+        const status = c.subscription_status || 'active';
+        statusCounts[status] = (statusCounts[status] || 0) + 1;
+      });
+
       return {
         totalCompanies: totalCompanies || 0,
         activeSubscriptions: activeSubscriptions || 0,
         blockedCompanies: blockedCompanies || 0,
         totalCollaborators: totalCollaborators || 0,
+        planCounts,
+        statusCounts,
       };
     },
   });
@@ -54,6 +81,34 @@ export default function MasterDashboard() {
     },
   });
 
+  // Get recent messages
+  const { data: recentMessages } = useQuery({
+    queryKey: ['master-recent-messages'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('system_messages')
+        .select(`
+          id,
+          title,
+          message_type,
+          created_at,
+          is_read,
+          company_id
+        `)
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Calculate MRR (Monthly Recurring Revenue)
+  const mrr = stats?.planCounts ? Object.entries(stats.planCounts).reduce((acc, [plan, count]) => {
+    const planInfo = PLANS[plan as PlanId];
+    return acc + (planInfo?.price || 0) * count;
+  }, 0) : 0;
+
   return (
     <div className="space-y-8">
       <div>
@@ -61,7 +116,7 @@ export default function MasterDashboard() {
         <p className="text-muted-foreground">Visão geral do sistema RH360</p>
       </div>
 
-      {/* Stats cards */}
+      {/* Main Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -72,6 +127,9 @@ export default function MasterDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{stats?.totalCompanies || 0}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {stats?.blockedCompanies || 0} bloqueadas
+            </p>
           </CardContent>
         </Card>
 
@@ -80,22 +138,13 @@ export default function MasterDashboard() {
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Assinaturas Ativas
             </CardTitle>
-            <CreditCard className="w-4 h-4 text-muted-foreground" />
+            <CheckCircle className="w-4 h-4 text-green-500" />
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-green-600">{stats?.activeSubscriptions || 0}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Empresas Bloqueadas
-            </CardTitle>
-            <AlertTriangle className="w-4 h-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-destructive">{stats?.blockedCompanies || 0}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {((stats?.activeSubscriptions || 0) / (stats?.totalCompanies || 1) * 100).toFixed(0)}% do total
+            </p>
           </CardContent>
         </Card>
 
@@ -108,48 +157,195 @@ export default function MasterDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{stats?.totalCollaborators || 0}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Média: {((stats?.totalCollaborators || 0) / (stats?.totalCompanies || 1)).toFixed(1)} por empresa
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 border-green-200 dark:border-green-800">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-green-700 dark:text-green-300">
+              MRR Estimado
+            </CardTitle>
+            <TrendingUp className="w-4 h-4 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-green-700 dark:text-green-300">
+              R$ {mrr.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </div>
+            <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+              Receita mensal recorrente
+            </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Recent companies */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Empresas Recentes</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {recentCompanies?.map((company) => (
-              <div 
-                key={company.id}
-                className="flex items-center justify-between p-4 rounded-lg border border-border"
-              >
-                <div>
-                  <h3 className="font-medium text-foreground">{company.company_name}</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Plano: {company.plan_type} • 
-                    {new Date(company.created_at).toLocaleDateString('pt-BR')}
-                  </p>
+      {/* Distribution Cards */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Plan Distribution */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Distribuição por Plano</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {Object.entries(PLANS).map(([planId, plan]) => {
+                const count = stats?.planCounts?.[planId] || 0;
+                const percentage = stats?.totalCompanies 
+                  ? (count / stats.totalCompanies * 100).toFixed(0) 
+                  : 0;
+                
+                return (
+                  <div key={planId} className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-3 h-3 rounded-full ${
+                        planId === 'essencial' ? 'bg-emerald-500' :
+                        planId === 'crescer' ? 'bg-blue-500' :
+                        planId === 'profissional' ? 'bg-violet-500' :
+                        'bg-amber-500'
+                      }`} />
+                      <span className="text-sm font-medium">{plan.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">{count} empresas</span>
+                      <Badge variant="outline">{percentage}%</Badge>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Status Distribution */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Status das Assinaturas</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {[
+                { key: 'active', label: 'Ativas', color: 'bg-green-500' },
+                { key: 'pending', label: 'Pendentes', color: 'bg-yellow-500' },
+                { key: 'overdue', label: 'Em atraso', color: 'bg-orange-500' },
+                { key: 'cancelled', label: 'Canceladas', color: 'bg-red-500' },
+              ].map((status) => {
+                const count = stats?.statusCounts?.[status.key] || 0;
+                const percentage = stats?.totalCompanies 
+                  ? (count / stats.totalCompanies * 100).toFixed(0) 
+                  : 0;
+                
+                return (
+                  <div key={status.key} className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-3 h-3 rounded-full ${status.color}`} />
+                      <span className="text-sm font-medium">{status.label}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">{count}</span>
+                      <Badge variant="outline">{percentage}%</Badge>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Recent Activity */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Recent Companies */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Empresas Recentes</CardTitle>
+            <Link to="/master/empresas" className="text-sm text-primary hover:underline">
+              Ver todas
+            </Link>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {recentCompanies?.map((company) => (
+                <Link
+                  key={company.id}
+                  to={`/master/empresas/${company.id}`}
+                  className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors"
+                >
+                  <div>
+                    <p className="font-medium text-foreground">{company.company_name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(company.created_at).toLocaleDateString('pt-BR')}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {company.is_blocked && (
+                      <Badge variant="destructive" className="text-xs">Bloqueado</Badge>
+                    )}
+                    <Badge variant="outline" className="text-xs">
+                      {PLANS[company.plan_type as PlanId]?.name || company.plan_type}
+                    </Badge>
+                  </div>
+                </Link>
+              ))}
+              {!recentCompanies?.length && (
+                <p className="text-center text-muted-foreground py-4">
+                  Nenhuma empresa cadastrada
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Recent Messages */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Mensagens Enviadas</CardTitle>
+            <Link to="/master/mensagens" className="text-sm text-primary hover:underline">
+              Ver todas
+            </Link>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {recentMessages?.map((message) => (
+                <div
+                  key={message.id}
+                  className="flex items-center justify-between p-3 rounded-lg border border-border"
+                >
+                  <div>
+                    <p className="font-medium text-foreground">{message.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(message.created_at).toLocaleDateString('pt-BR', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge 
+                      variant={message.message_type === 'alert' ? 'destructive' : 
+                               message.message_type === 'warning' ? 'secondary' : 'outline'}
+                      className="text-xs"
+                    >
+                      {message.message_type}
+                    </Badge>
+                    {message.is_read && (
+                      <CheckCircle className="w-4 h-4 text-green-500" />
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {company.is_blocked && (
-                    <span className="px-2 py-1 text-xs rounded-full bg-destructive/10 text-destructive">
-                      Bloqueado
-                    </span>
-                  )}
-                  <span className={`px-2 py-1 text-xs rounded-full ${
-                    company.subscription_status === 'active' 
-                      ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                      : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
-                  }`}>
-                    {company.subscription_status}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+              ))}
+              {!recentMessages?.length && (
+                <p className="text-center text-muted-foreground py-4">
+                  Nenhuma mensagem enviada
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

@@ -8,7 +8,7 @@ import {
   LogOut, 
   Settings,
   Shield,
-  CreditCard,
+  MessageSquare,
   Users
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,7 @@ interface MasterLayoutProps {
 const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/master' },
   { icon: Building2, label: 'Empresas', href: '/master/empresas' },
-  { icon: CreditCard, label: 'Assinaturas', href: '/master/assinaturas' },
+  { icon: MessageSquare, label: 'Mensagens', href: '/master/mensagens' },
   { icon: Users, label: 'Admins', href: '/master/admins' },
   { icon: Settings, label: 'Configurações', href: '/master/config' },
 ];
@@ -36,7 +36,7 @@ export function MasterLayout({ children }: MasterLayoutProps) {
   async function handleLogout() {
     await supabase.auth.signOut();
     toast({ title: 'Logout realizado com sucesso' });
-    navigate('/login');
+    navigate('/master/login');
   }
 
   return (
@@ -57,7 +57,8 @@ export function MasterLayout({ children }: MasterLayoutProps) {
 
         <nav className="flex-1 p-4 space-y-1">
           {menuItems.map((item) => {
-            const isActive = location.pathname === item.href;
+            const isActive = location.pathname === item.href || 
+              (item.href !== '/master' && location.pathname.startsWith(item.href));
             return (
               <Link
                 key={item.href}
