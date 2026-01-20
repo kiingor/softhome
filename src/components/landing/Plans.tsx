@@ -1,52 +1,32 @@
-import { Check } from "lucide-react";
+import { Check, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
+import { PLANS, PlanId } from "@/lib/planUtils";
 
-const plans = [
-  {
-    name: "Starter",
-    price: "99",
-    description: "Para pequenas empresas começando sua jornada digital",
-    collaborators: "Até 20 colaboradores",
-    features: [
-      "Cadastro de colaboradores",
-      "Controle de férias",
-      "Documentos básicos",
-      "Suporte por email",
-    ],
-    popular: false,
+const planOrder: PlanId[] = ['essencial', 'crescer', 'profissional', 'empresa_plus'];
+
+const planColors: Record<string, { bg: string; border: string; badge: string }> = {
+  emerald: {
+    bg: 'bg-emerald-50 dark:bg-emerald-950/20',
+    border: 'border-emerald-200 dark:border-emerald-800',
+    badge: 'bg-emerald-500',
   },
-  {
-    name: "Profissional",
-    price: "249",
-    description: "Para empresas em crescimento que precisam de mais recursos",
-    collaborators: "Até 100 colaboradores",
-    features: [
-      "Tudo do Starter",
-      "Folha de pagamento",
-      "Assinatura digital",
-      "Relatórios avançados",
-      "Integração contábil",
-      "Suporte prioritário",
-    ],
-    popular: true,
+  blue: {
+    bg: 'bg-blue-50 dark:bg-blue-950/20',
+    border: 'border-blue-200 dark:border-blue-800',
+    badge: 'bg-blue-500',
   },
-  {
-    name: "Enterprise",
-    price: "Sob consulta",
-    description: "Para grandes empresas com necessidades específicas",
-    collaborators: "Colaboradores ilimitados",
-    features: [
-      "Tudo do Profissional",
-      "API completa",
-      "SSO / SAML",
-      "Customizações",
-      "Gerente de conta dedicado",
-      "SLA garantido",
-    ],
-    popular: false,
+  violet: {
+    bg: 'bg-violet-50 dark:bg-violet-950/20',
+    border: 'border-violet-200 dark:border-violet-800',
+    badge: 'bg-violet-500',
   },
-];
+  amber: {
+    bg: 'bg-amber-50 dark:bg-amber-950/20',
+    border: 'border-amber-200 dark:border-amber-800',
+    badge: 'bg-amber-500',
+  },
+};
 
 const Plans = () => {
   return (
@@ -62,59 +42,72 @@ const Plans = () => {
           </p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-          {plans.map((plan, index) => (
-            <div 
-              key={index}
-              className={`relative p-8 rounded-2xl bg-card border-2 transition-all duration-300 ${
-                plan.popular 
-                  ? "border-primary shadow-card scale-105" 
-                  : "border-border hover:border-primary/30 hover:shadow-soft"
-              }`}
-            >
-              {plan.popular && (
-                <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                  <span className="px-4 py-1.5 rounded-full gradient-hero text-primary-foreground text-sm font-semibold shadow-soft">
-                    Mais popular
-                  </span>
-                </div>
-              )}
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
+          {planOrder.map((planId) => {
+            const plan = PLANS[planId];
+            const colors = planColors[plan.color];
+            
+            return (
+              <div 
+                key={planId}
+                className={`relative p-6 rounded-2xl bg-card border-2 transition-all duration-300 flex flex-col ${
+                  plan.popular 
+                    ? "border-primary shadow-card scale-[1.02] lg:scale-105" 
+                    : `${colors.border} hover:border-primary/30 hover:shadow-soft`
+                }`}
+              >
+                {plan.popular && (
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2">
+                    <span className="px-4 py-1.5 rounded-full gradient-hero text-primary-foreground text-sm font-semibold shadow-soft flex items-center gap-1.5">
+                      <Star className="w-3.5 h-3.5 fill-current" />
+                      Mais popular
+                    </span>
+                  </div>
+                )}
 
-              <div className="mb-6">
-                <h3 className="text-xl font-bold text-foreground mb-2">{plan.name}</h3>
-                <p className="text-sm text-muted-foreground mb-4">{plan.description}</p>
-                <div className="flex items-baseline gap-1">
-                  {plan.price !== "Sob consulta" && (
+                <div className="mb-6">
+                  <div className={`inline-block px-3 py-1 rounded-full text-xs font-medium text-white mb-3 ${colors.badge}`}>
+                    Até {plan.collaboratorLimit} colaboradores
+                  </div>
+                  <h3 className="text-xl font-bold text-foreground mb-2">{plan.name}</h3>
+                  <p className="text-sm text-muted-foreground mb-4 min-h-[40px]">{plan.description}</p>
+                  <div className="flex items-baseline gap-1">
                     <span className="text-sm text-muted-foreground">R$</span>
-                  )}
-                  <span className="text-4xl font-extrabold text-foreground">{plan.price}</span>
-                  {plan.price !== "Sob consulta" && (
+                    <span className="text-4xl font-extrabold text-foreground">{plan.priceDisplay}</span>
                     <span className="text-muted-foreground">/mês</span>
-                  )}
+                  </div>
                 </div>
-                <p className="text-sm text-primary font-medium mt-2">{plan.collaborators}</p>
+
+                <ul className="space-y-3 mb-8 flex-grow">
+                  {plan.features.map((feature, i) => (
+                    <li key={i} className="flex items-start gap-3 text-foreground">
+                      <Check className="w-5 h-5 text-accent flex-shrink-0 mt-0.5" />
+                      <span className="text-sm">{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <Link to={`/signup?plan=${planId}`} className="mt-auto">
+                  <Button 
+                    variant={plan.popular ? "hero" : "outline"} 
+                    size="lg" 
+                    className="w-full"
+                  >
+                    Começar com este plano
+                  </Button>
+                </Link>
               </div>
+            );
+          })}
+        </div>
 
-              <ul className="space-y-3 mb-8">
-                {plan.features.map((feature, i) => (
-                  <li key={i} className="flex items-center gap-3 text-foreground">
-                    <Check className="w-5 h-5 text-accent flex-shrink-0" />
-                    <span className="text-sm">{feature}</span>
-                  </li>
-                ))}
-              </ul>
-
-              <Link to="/signup">
-                <Button 
-                  variant={plan.popular ? "hero" : "outline"} 
-                  size="lg" 
-                  className="w-full"
-                >
-                  {plan.price === "Sob consulta" ? "Falar com vendas" : "Começar agora"}
-                </Button>
-              </Link>
-            </div>
-          ))}
+        <div className="text-center mt-12">
+          <p className="text-muted-foreground">
+            Precisa de mais de 100 colaboradores?{" "}
+            <a href="mailto:comercial@rh360.com.br" className="text-primary font-semibold hover:underline">
+              Fale com nosso time comercial
+            </a>
+          </p>
         </div>
       </div>
     </section>

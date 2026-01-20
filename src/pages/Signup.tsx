@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { z } from "zod";
 import { Eye, EyeOff, ArrowLeft } from "lucide-react";
+import { PLANS, PlanId } from "@/lib/planUtils";
 
 const signupSchema = z.object({
   companyName: z.string().min(2, "Nome da empresa deve ter pelo menos 2 caracteres"),
@@ -15,6 +16,9 @@ const signupSchema = z.object({
 });
 
 const Signup = () => {
+  const [searchParams] = useSearchParams();
+  const selectedPlan = (searchParams.get('plan') as PlanId) || 'essencial';
+  const planInfo = PLANS[selectedPlan] || PLANS.essencial;
   const [companyName, setCompanyName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -69,7 +73,7 @@ const Signup = () => {
           .insert({
             company_name: companyName,
             owner_id: authData.user.id,
-            plan_type: "starter",
+            plan_type: selectedPlan,
           })
           .select()
           .single();
