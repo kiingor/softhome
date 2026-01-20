@@ -37,6 +37,9 @@ import { MasterGuard } from "./components/master/MasterGuard";
 import { MasterLayout } from "./components/master/MasterLayout";
 import MasterDashboard from "./pages/master/MasterDashboard";
 import MasterEmpresasPage from "./pages/master/MasterEmpresasPage";
+import MasterCompanyDetailsPage from "./pages/master/MasterCompanyDetailsPage";
+import MasterMensagensPage from "./pages/master/MasterMensagensPage";
+import MasterLoginPage from "./pages/master/MasterLoginPage";
 
 const queryClient = new QueryClient();
 
@@ -119,6 +122,7 @@ const App = () => (
           />
 
           {/* Portal Master - Administração RH360 */}
+          <Route path="/master/login" element={<MasterLoginPage />} />
           <Route
             path="/master"
             element={
@@ -138,6 +142,30 @@ const App = () => (
                 <MasterGuard>
                   <MasterLayout>
                     <MasterEmpresasPage />
+                  </MasterLayout>
+                </MasterGuard>
+              </MasterProvider>
+            }
+          />
+          <Route
+            path="/master/empresas/:id"
+            element={
+              <MasterProvider>
+                <MasterGuard>
+                  <MasterLayout>
+                    <MasterCompanyDetailsPage />
+                  </MasterLayout>
+                </MasterGuard>
+              </MasterProvider>
+            }
+          />
+          <Route
+            path="/master/mensagens"
+            element={
+              <MasterProvider>
+                <MasterGuard>
+                  <MasterLayout>
+                    <MasterMensagensPage />
                   </MasterLayout>
                 </MasterGuard>
               </MasterProvider>

@@ -12,6 +12,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { SystemNotifications } from "@/components/dashboard/SystemNotifications";
 
 const DashboardHome = () => {
   const { profile, roles, currentCompany, hasRole, hasAnyRole } = useDashboard();
@@ -53,6 +54,8 @@ const DashboardHome = () => {
 
   return (
     <div className="space-y-8">
+      {/* System Notifications */}
+      <SystemNotifications />
       {/* Welcome Section */}
       <div>
         <h1 className="text-2xl md:text-3xl font-bold text-foreground">
