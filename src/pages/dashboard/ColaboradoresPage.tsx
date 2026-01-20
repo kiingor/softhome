@@ -31,6 +31,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { formatCPF } from "@/lib/validators";
 import CollaboratorModal from "@/components/collaborators/CollaboratorModal";
+import { TableSkeleton } from "@/components/ui/table-skeleton";
 
 interface Collaborator {
   id: string;
@@ -234,8 +235,8 @@ const ColaboradoresPage = () => {
 
   return (
     <RoleGuard allowedRoles={["admin", "rh", "gestor"]}>
-      <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="space-y-6 page-content">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 animate-fade-in">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Colaboradores</h1>
             <p className="text-muted-foreground">
@@ -330,9 +331,9 @@ const ColaboradoresPage = () => {
 
         {/* Table */}
         {isLoading ? (
-          <Card className="border border-border">
-            <CardContent className="p-12 text-center">
-              <div className="animate-pulse text-muted-foreground">Carregando...</div>
+          <Card className="border border-border animate-scale-in">
+            <CardContent className="p-4">
+              <TableSkeleton columns={7} rows={6} />
             </CardContent>
           </Card>
         ) : collaborators.length === 0 ? (
@@ -360,7 +361,7 @@ const ColaboradoresPage = () => {
             </CardContent>
           </Card>
         ) : (
-          <Card className="border border-border overflow-hidden">
+          <Card className="border border-border overflow-hidden animate-scale-in">
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
@@ -374,9 +375,9 @@ const ColaboradoresPage = () => {
                     <TableHead className="w-12"></TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
+                <TableBody className="stagger-animation">
                   {collaborators.map((collaborator) => (
-                    <TableRow key={collaborator.id}>
+                    <TableRow key={collaborator.id} className="table-row-animate">
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <span className="font-medium">{collaborator.name}</span>

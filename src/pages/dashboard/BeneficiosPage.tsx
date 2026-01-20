@@ -186,8 +186,8 @@ const BeneficiosPage = () => {
 
   return (
     <RoleGuard allowedRoles={["admin", "rh", "colaborador"]}>
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="space-y-6 page-content">
+        <div className="flex items-center justify-between animate-fade-in">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Benefícios</h1>
             <p className="text-muted-foreground">

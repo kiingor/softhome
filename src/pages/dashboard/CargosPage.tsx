@@ -44,6 +44,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/formatters';
+import { TableSkeleton } from '@/components/ui/table-skeleton';
 
 interface Position {
   id: string;
@@ -167,8 +168,8 @@ export default function CargosPage() {
 
   return (
     <RoleGuard allowedRoles={['admin', 'rh']}>
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="space-y-6 page-content">
+        <div className="flex items-center justify-between animate-fade-in">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Cargos</h1>
             <p className="text-muted-foreground">
@@ -243,7 +244,7 @@ export default function CargosPage() {
           </Dialog>
         </div>
 
-        <Card>
+        <Card className="animate-scale-in">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Briefcase className="h-5 w-5" />
@@ -255,9 +256,7 @@ export default function CargosPage() {
           </CardHeader>
           <CardContent>
             {isLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-              </div>
+              <TableSkeleton columns={3} rows={4} />
             ) : positions.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Briefcase className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -273,9 +272,9 @@ export default function CargosPage() {
                     <TableHead className="w-[100px]">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
+                <TableBody className="stagger-animation">
                   {positions.map((position) => (
-                    <TableRow key={position.id}>
+                    <TableRow key={position.id} className="table-row-animate">
                       <TableCell className="font-medium">
                         {position.name}
                       </TableCell>
