@@ -33,23 +33,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   Save,
   Plus,
-  Trash2,
   DollarSign,
   Gift,
   Building2,
   Users,
   Loader2,
   X,
+  Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatCPFInput, cleanCPF, validateCPF, formatPhoneInput } from "@/lib/validators";
@@ -682,6 +674,13 @@ const CollaboratorModal = ({
     return labels[type] || type;
   };
 
+  // Get entry type color
+  const getEntryTypeVariant = (type: string): "default" | "secondary" | "destructive" | "outline" => {
+    if (type === "custo" || type === "despesa") return "destructive";
+    if (type === "salario") return "default";
+    return "secondary";
+  };
+
   // Get available benefits (not already assigned)
   const assignedBenefitIds = isNew
     ? pendingBenefits.map((b) => b.benefit_id)
@@ -690,32 +689,31 @@ const CollaboratorModal = ({
     (b) => !assignedBenefitIds.includes(b.id)
   );
 
-  // Entries to display
-  const displayEntries = isNew ? pendingEntries : payrollEntries;
-  const displayBenefits = isNew ? pendingBenefits : benefitAssignments;
-
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-5xl max-h-[90vh] p-0 overflow-hidden">
-          <DialogHeader className="p-6 pb-0">
-            <div className="flex items-center justify-between">
-              <DialogTitle className="text-xl">
-                {isNew ? "Novo Colaborador" : `Editar: ${formData.name || "Colaborador"}`}
-              </DialogTitle>
-            </div>
+        <DialogContent className="max-w-5xl h-[85vh] max-h-[85vh] p-0 flex flex-col overflow-hidden">
+          {/* Header */}
+          <DialogHeader className="shrink-0 px-6 pt-6 pb-4 border-b">
+            <DialogTitle className="text-xl">
+              {isNew ? "Novo Colaborador" : `Editar: ${formData.name || "Colaborador"}`}
+            </DialogTitle>
           </DialogHeader>
 
           {loadingCollaborator && !isNew ? (
-            <div className="flex items-center justify-center h-64">
+            <div className="flex-1 flex items-center justify-center">
               <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 divide-x">
-              {/* Left Column - Collaborator Data */}
-              <ScrollArea className="h-[calc(90vh-120px)]">
+            /* Content - Two Columns */
+            <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 divide-x overflow-hidden">
+              {/* Left Column - Dados Cadastrais */}
+              <ScrollArea className="h-full">
                 <div className="p-6 space-y-4">
-                  <h3 className="font-semibold text-lg">Dados Cadastrais</h3>
+                  <h3 className="font-semibold text-lg flex items-center gap-2">
+                    <Users className="w-5 h-5 text-primary" />
+                    Dados Cadastrais
+                  </h3>
                   
                   {/* Name */}
                   <div className="space-y-2">
@@ -896,197 +894,219 @@ const CollaboratorModal = ({
                 </div>
               </ScrollArea>
 
-              {/* Right Column - Entries & Benefits */}
-              <ScrollArea className="h-[calc(90vh-120px)] bg-muted/30">
-                <div className="p-6 space-y-6">
-                  {/* Total Cost Summary */}
-                  <div className="p-4 rounded-lg bg-primary/10 border border-primary/20">
-                    <div className="flex items-center gap-2 mb-1">
-                      <DollarSign className="w-5 h-5 text-primary" />
-                      <span className="text-sm text-muted-foreground">
-                        Custo Total - {currentMonth.toString().padStart(2, "0")}/{currentYear}
-                      </span>
-                    </div>
-                    <div className="text-2xl font-bold text-primary">
-                      {formatCurrency(totals.total)}
-                    </div>
-                    <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
-                      <span>Lançamentos: {formatCurrency(totals.entriesTotal)}</span>
-                      <span>Benefícios: {formatCurrency(totals.benefitsTotal)}</span>
-                    </div>
-                  </div>
+              {/* Right Column - Financeiro */}
+              <div className="flex flex-col h-full bg-muted/30">
+                {/* Financeiro Header */}
+                <div className="shrink-0 p-4 border-b bg-muted/50">
+                  <h3 className="font-semibold text-lg flex items-center gap-2">
+                    <Wallet className="w-5 h-5 text-primary" />
+                    Financeiro
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Competência: {currentMonth.toString().padStart(2, "0")}/{currentYear}
+                  </p>
+                </div>
 
-                  {/* Payroll Entries */}
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="font-semibold flex items-center gap-2">
-                        <DollarSign className="w-4 h-4" />
-                        Lançamentos
-                      </h3>
-                      {canManage && (
-                        <Button size="sm" variant="outline" onClick={() => setAddEntryOpen(true)}>
-                          <Plus className="w-4 h-4 mr-1" />
-                          Novo
-                        </Button>
-                      )}
-                    </div>
-                    
-                    {displayEntries.length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-4 bg-background rounded-lg">
-                        {isNew ? "Selecione um cargo para adicionar o salário" : "Nenhum lançamento no mês atual"}
-                      </p>
-                    ) : (
-                      <div className="space-y-2">
-                        {(isNew ? pendingEntries : payrollEntries).map((entry: any) => (
-                          <div
-                            key={entry.id}
-                            className="flex items-center justify-between p-3 rounded-lg bg-background"
-                          >
-                            <div className="flex items-center gap-2">
-                              <Badge variant={(entry.type === "custo" || entry.type === "despesa") ? "destructive" : "default"}>
-                                {getEntryTypeLabel(entry.type)}
-                              </Badge>
-                              {entry.is_fixed && (
-                                <Badge variant="outline" className="text-xs">Fixo</Badge>
-                              )}
-                              <span className="text-sm text-muted-foreground">
-                                {entry.description}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono font-medium">
-                                {formatCurrency(entry.value)}
-                              </span>
-                              {canManage && entry.source !== "position" && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8"
-                                  onClick={() => setDeletingEntry(entry)}
-                                >
-                                  <X className="w-4 h-4 text-muted-foreground" />
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        ))}
+                {/* Scrollable Content */}
+                <ScrollArea className="flex-1">
+                  <div className="p-4 space-y-6">
+                    {/* Payroll Entries */}
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-medium text-sm flex items-center gap-2">
+                          <DollarSign className="w-4 h-4 text-muted-foreground" />
+                          Lançamentos
+                        </h4>
+                        {canManage && (
+                          <Button size="sm" variant="outline" onClick={() => setAddEntryOpen(true)} className="h-7 text-xs">
+                            <Plus className="w-3 h-3 mr-1" />
+                            Novo
+                          </Button>
+                        )}
                       </div>
-                    )}
-                  </div>
-
-                  {/* Benefits */}
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="font-semibold flex items-center gap-2">
-                        <Gift className="w-4 h-4" />
-                        Benefícios
-                      </h3>
-                      {canManage && unassignedBenefits.length > 0 && (
-                        <Button size="sm" variant="outline" onClick={() => setAddBenefitOpen(true)}>
-                          <Plus className="w-4 h-4 mr-1" />
-                          Adicionar
-                        </Button>
-                      )}
-                    </div>
-
-                    {displayBenefits.length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-4 bg-background rounded-lg">
-                        Nenhum benefício atribuído
-                      </p>
-                    ) : (
-                      <div className="space-y-2">
-                        {isNew
-                          ? pendingBenefits.map((b) => {
-                              const description = getBenefitCalculationDescription(
-                                b.value,
-                                b.value_type,
-                                b.applicable_days as DayAbbrev[],
-                                currentMonth,
-                                currentYear
-                              );
-                              return (
-                                <div
-                                  key={b.id}
-                                  className="flex items-center justify-between p-3 rounded-lg bg-background"
-                                >
-                                  <div>
-                                    <div className="font-medium">{b.benefit_name}</div>
-                                    <div className="text-xs text-muted-foreground">{description}</div>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-mono font-medium">
-                                      {formatCurrency(b.monthly_value)}
+                      
+                      {(isNew ? pendingEntries : payrollEntries).length === 0 ? (
+                        <div className="text-sm text-muted-foreground text-center py-6 bg-background rounded-lg border border-dashed">
+                          {isNew ? "Selecione um cargo para adicionar o salário" : "Nenhum lançamento no mês atual"}
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {(isNew ? pendingEntries : payrollEntries).map((entry: any) => (
+                            <div
+                              key={entry.id}
+                              className="p-3 rounded-lg bg-background border hover:border-primary/30 transition-colors"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center justify-between mb-1.5">
+                                    <span className="text-sm font-medium truncate pr-2">
+                                      {entry.description || getEntryTypeLabel(entry.type)}
                                     </span>
-                                    {canManage && (
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-8 w-8"
-                                        onClick={() => setDeletingAssignment(b)}
-                                      >
-                                        <X className="w-4 h-4 text-muted-foreground" />
-                                      </Button>
+                                    <span className="font-mono text-sm font-semibold shrink-0">
+                                      {formatCurrency(entry.value)}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <Badge variant={getEntryTypeVariant(entry.type)} className="text-xs h-5 px-1.5">
+                                      {getEntryTypeLabel(entry.type)}
+                                    </Badge>
+                                    {entry.is_fixed && (
+                                      <Badge variant="outline" className="text-xs h-5 px-1.5">Fixo</Badge>
                                     )}
                                   </div>
                                 </div>
-                              );
-                            })
-                          : benefitAssignments.map((assignment: any) => {
-                              const benefit = assignment.benefit;
-                              if (!benefit) return null;
+                                {canManage && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
+                                    onClick={() => setDeletingEntry(entry)}
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
 
-                              const monthlyValue = calculateMonthlyBenefitValue(
-                                benefit.value || 0,
-                                benefit.value_type || "monthly",
-                                (benefit.applicable_days || ["mon", "tue", "wed", "thu", "fri"]) as DayAbbrev[],
-                                currentMonth,
-                                currentYear
-                              );
-                              const description = getBenefitCalculationDescription(
-                                benefit.value || 0,
-                                benefit.value_type || "monthly",
-                                (benefit.applicable_days || ["mon", "tue", "wed", "thu", "fri"]) as DayAbbrev[],
-                                currentMonth,
-                                currentYear
-                              );
-
-                              return (
-                                <div
-                                  key={assignment.id}
-                                  className="flex items-center justify-between p-3 rounded-lg bg-background"
-                                >
-                                  <div>
-                                    <div className="font-medium">{benefit.name}</div>
-                                    <div className="text-xs text-muted-foreground">{description}</div>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-mono font-medium">
-                                      {formatCurrency(monthlyValue)}
-                                    </span>
-                                    {canManage && (
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-8 w-8"
-                                        onClick={() => setDeletingAssignment(assignment)}
-                                      >
-                                        <X className="w-4 h-4 text-muted-foreground" />
-                                      </Button>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })}
+                    {/* Benefits */}
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-medium text-sm flex items-center gap-2">
+                          <Gift className="w-4 h-4 text-muted-foreground" />
+                          Benefícios
+                        </h4>
+                        {canManage && unassignedBenefits.length > 0 && (
+                          <Button size="sm" variant="outline" onClick={() => setAddBenefitOpen(true)} className="h-7 text-xs">
+                            <Plus className="w-3 h-3 mr-1" />
+                            Adicionar
+                          </Button>
+                        )}
                       </div>
-                    )}
+                      
+                      {(isNew ? pendingBenefits : benefitAssignments).length === 0 ? (
+                        <div className="text-sm text-muted-foreground text-center py-6 bg-background rounded-lg border border-dashed">
+                          Nenhum benefício atribuído
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {isNew
+                            ? pendingBenefits.map((b) => {
+                                const description = getBenefitCalculationDescription(
+                                  b.value,
+                                  b.value_type,
+                                  b.applicable_days as DayAbbrev[],
+                                  currentMonth,
+                                  currentYear
+                                );
+                                return (
+                                  <div
+                                    key={b.id}
+                                    className="p-3 rounded-lg bg-background border hover:border-primary/30 transition-colors"
+                                  >
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center justify-between mb-1">
+                                          <span className="text-sm font-medium truncate pr-2">{b.benefit_name}</span>
+                                          <span className="font-mono text-sm font-semibold shrink-0">
+                                            {formatCurrency(b.monthly_value)}
+                                          </span>
+                                        </div>
+                                        <p className="text-xs text-muted-foreground">{description}</p>
+                                      </div>
+                                      {canManage && (
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
+                                          onClick={() => setDeletingAssignment(b)}
+                                        >
+                                          <X className="w-3 h-3" />
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })
+                            : benefitAssignments.map((assignment: any) => {
+                                const benefit = assignment.benefit;
+                                if (!benefit) return null;
+
+                                const monthlyValue = calculateMonthlyBenefitValue(
+                                  benefit.value || 0,
+                                  benefit.value_type || "monthly",
+                                  (benefit.applicable_days || ["mon", "tue", "wed", "thu", "fri"]) as DayAbbrev[],
+                                  currentMonth,
+                                  currentYear
+                                );
+                                const description = getBenefitCalculationDescription(
+                                  benefit.value || 0,
+                                  benefit.value_type || "monthly",
+                                  (benefit.applicable_days || ["mon", "tue", "wed", "thu", "fri"]) as DayAbbrev[],
+                                  currentMonth,
+                                  currentYear
+                                );
+
+                                return (
+                                  <div
+                                    key={assignment.id}
+                                    className="p-3 rounded-lg bg-background border hover:border-primary/30 transition-colors"
+                                  >
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center justify-between mb-1">
+                                          <span className="text-sm font-medium truncate pr-2">{benefit.name}</span>
+                                          <span className="font-mono text-sm font-semibold shrink-0">
+                                            {formatCurrency(monthlyValue)}
+                                          </span>
+                                        </div>
+                                        <p className="text-xs text-muted-foreground">{description}</p>
+                                      </div>
+                                      {canManage && (
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
+                                          onClick={() => setDeletingAssignment(assignment)}
+                                        >
+                                          <X className="w-3 h-3" />
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </ScrollArea>
+
+                {/* Total Cost Summary - Fixed at Bottom */}
+                <div className="shrink-0 p-4 border-t bg-primary/5">
+                  <div className="flex items-center gap-2 mb-1">
+                    <DollarSign className="w-5 h-5 text-primary" />
+                    <span className="text-sm font-medium">
+                      Custo Total - {currentMonth.toString().padStart(2, "0")}/{currentYear}
+                    </span>
+                  </div>
+                  <div className="text-2xl font-bold text-primary">
+                    {formatCurrency(totals.total)}
+                  </div>
+                  <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
+                    <span>Lançamentos: {formatCurrency(totals.entriesTotal)}</span>
+                    <span>Benefícios: {formatCurrency(totals.benefitsTotal)}</span>
                   </div>
                 </div>
-              </ScrollArea>
+              </div>
             </div>
           )}
 
-          {/* Footer */}
-          <div className="flex justify-end gap-3 p-6 pt-0 border-t bg-background">
+          {/* Footer - Always Visible */}
+          <div className="shrink-0 flex justify-end gap-3 px-6 py-4 border-t bg-background">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
@@ -1269,7 +1289,7 @@ const CollaboratorModal = ({
           <AlertDialogHeader>
             <AlertDialogTitle>Remover Lançamento</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem certeza que deseja remover este lançamento?
+              Tem certeza que deseja remover este lançamento? Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1290,7 +1310,7 @@ const CollaboratorModal = ({
           <AlertDialogHeader>
             <AlertDialogTitle>Remover Benefício</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem certeza que deseja remover este benefício?
+              Tem certeza que deseja remover este benefício? Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
