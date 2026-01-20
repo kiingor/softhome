@@ -8,6 +8,8 @@ interface Company {
   id: string;
   company_name: string;
   plan_type: string;
+  subscription_status?: string;
+  trial_ends_at?: string | null;
 }
 
 interface Store {
@@ -39,6 +41,7 @@ interface DashboardContextType {
   hasRole: (role: AppRole) => boolean;
   hasAnyRole: (roles: AppRole[]) => boolean;
   isLoading: boolean;
+  isTrialExpired: boolean;
   signOut: () => Promise<void>;
 }
 
@@ -196,6 +199,22 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({ children }
     return checkRoles.some(role => roles.includes(role));
   };
 
+  // Check if trial is expired
+  const isTrialExpired = (() => {
+    if (!currentCompany) return false;
+    
+    // If subscription is active, not expired
+    if (currentCompany.subscription_status === "active") return false;
+    
+    // If trial_ends_at exists and is in the past
+    if (currentCompany.trial_ends_at) {
+      const trialEnd = new Date(currentCompany.trial_ends_at);
+      return trialEnd < new Date();
+    }
+    
+    return false;
+  })();
+
   const signOut = async () => {
     await supabase.auth.signOut();
     resetState();
@@ -217,6 +236,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({ children }
         hasRole,
         hasAnyRole,
         isLoading,
+        isTrialExpired,
         signOut,
       }}
     >

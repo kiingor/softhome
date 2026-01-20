@@ -3,9 +3,10 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { DashboardProvider, useDashboard } from "@/contexts/DashboardContext";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
+import { TrialExpiredDialog } from "@/components/dashboard/TrialExpiredDialog";
 
 const DashboardLayoutContent = () => {
-  const { user, isLoading } = useDashboard();
+  const { user, isLoading, isTrialExpired } = useDashboard();
 
   if (isLoading) {
     return (
@@ -25,17 +26,20 @@ const DashboardLayoutContent = () => {
   }
 
   return (
-    <SidebarProvider>
-      <div className="min-h-screen flex w-full bg-background">
-        <DashboardSidebar />
-        <div className="flex-1 flex flex-col min-w-0">
-          <DashboardHeader />
-          <main className="flex-1 p-6 overflow-auto">
-            <Outlet />
-          </main>
+    <>
+      {isTrialExpired && <TrialExpiredDialog />}
+      <SidebarProvider>
+        <div className="min-h-screen flex w-full bg-background">
+          <DashboardSidebar />
+          <div className="flex-1 flex flex-col min-w-0">
+            <DashboardHeader />
+            <main className="flex-1 p-6 overflow-auto">
+              <Outlet />
+            </main>
+          </div>
         </div>
-      </div>
-    </SidebarProvider>
+      </SidebarProvider>
+    </>
   );
 };
 
