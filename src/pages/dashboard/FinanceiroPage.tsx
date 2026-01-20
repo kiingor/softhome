@@ -26,16 +26,26 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
+import {
   DollarSign,
   Plus,
-  Filter,
   MoreHorizontal,
   Edit,
   Trash2,
   ChevronLeft,
   ChevronRight,
+  Lock,
 } from "lucide-react";
 import { useDashboard } from "@/contexts/DashboardContext";
+import { useClosedPeriods } from "@/hooks/useClosedPeriods";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -82,6 +92,7 @@ const typeColors: Record<string, string> = {
 const FinanceiroPage = () => {
   const { currentCompany } = useDashboard();
   const { toast } = useToast();
+  const { isPeriodClosed } = useClosedPeriods(currentCompany?.id);
 
   const currentComp = getCurrentCompetencia();
 
@@ -90,12 +101,15 @@ const FinanceiroPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<PayrollEntry | null>(null);
+  const [showClosedAlert, setShowClosedAlert] = useState(false);
 
   // Filters
   const [month, setMonth] = useState(currentComp.month);
   const [year, setYear] = useState(currentComp.year);
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [collaboratorFilter, setCollaboratorFilter] = useState<string>("all");
+
+  const periodClosed = isPeriodClosed(month, year);
 
   useEffect(() => {
     if (currentCompany) {
@@ -153,11 +167,19 @@ const FinanceiroPage = () => {
   };
 
   const handleEdit = (entry: PayrollEntry) => {
+    if (periodClosed) {
+      setShowClosedAlert(true);
+      return;
+    }
     setEditingEntry(entry);
     setFormOpen(true);
   };
 
   const handleDelete = async (entry: PayrollEntry) => {
+    if (periodClosed) {
+      setShowClosedAlert(true);
+      return;
+    }
     if (!confirm("Tem certeza que deseja excluir este lançamento?")) return;
 
     try {
@@ -245,12 +267,26 @@ const FinanceiroPage = () => {
           <Button
             variant="hero"
             onClick={() => {
+              if (periodClosed) {
+                setShowClosedAlert(true);
+                return;
+              }
               setEditingEntry(null);
               setFormOpen(true);
             }}
+            disabled={periodClosed}
           >
-            <Plus className="w-4 h-4 mr-2" />
-            Novo Lançamento
+            {periodClosed ? (
+              <>
+                <Lock className="w-4 h-4 mr-2" />
+                Período Fechado
+              </>
+            ) : (
+              <>
+                <Plus className="w-4 h-4 mr-2" />
+                Novo Lançamento
+              </>
+            )}
           </Button>
         </div>
 
@@ -268,9 +304,17 @@ const FinanceiroPage = () => {
                   <ChevronLeft className="w-4 h-4" />
                 </Button>
                 <div className="text-center min-w-[200px]">
-                  <p className="font-semibold text-lg text-foreground">
-                    {getMonthName(month)} {year}
-                  </p>
+                  <div className="flex items-center justify-center gap-2">
+                    <p className="font-semibold text-lg text-foreground">
+                      {getMonthName(month)} {year}
+                    </p>
+                    {periodClosed && (
+                      <Badge variant="destructive" className="text-xs">
+                        <Lock className="w-3 h-3 mr-1" />
+                        Fechado
+                      </Badge>
+                    )}
+                  </div>
                   <p className="text-sm text-muted-foreground">
                     {formatCompetencia(month, year)}
                   </p>
@@ -472,6 +516,27 @@ const FinanceiroPage = () => {
           defaultMonth={month}
           defaultYear={year}
         />
+
+        {/* Closed Period Alert */}
+        <AlertDialog open={showClosedAlert} onOpenChange={setShowClosedAlert}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <Lock className="w-5 h-5 text-destructive" />
+                Período Fechado
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta competência já foi fechada e não permite alterações.
+                Para editar lançamentos, solicite a reabertura do período em Relatórios.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogAction onClick={() => setShowClosedAlert(false)}>
+                Entendi
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </RoleGuard>
   );

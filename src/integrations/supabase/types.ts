@@ -85,6 +85,41 @@ export type Database = {
           },
         ]
       }
+      closed_periods: {
+        Row: {
+          closed_by: string | null
+          company_id: string
+          created_at: string
+          id: string
+          month: number
+          year: number
+        }
+        Insert: {
+          closed_by?: string | null
+          company_id: string
+          created_at?: string
+          id?: string
+          month: number
+          year: number
+        }
+        Update: {
+          closed_by?: string | null
+          company_id?: string
+          created_at?: string
+          id?: string
+          month?: number
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "closed_periods_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       collaborators: {
         Row: {
           admission_date: string | null
