@@ -42,7 +42,7 @@ const PortalLogin = () => {
         if (session) {
           // Check if user has collaborator role
           setTimeout(() => {
-            checkAndRedirect(session.user.id);
+            checkAndRedirect(session.user.id, session.user.email ?? undefined);
           }, 0);
         }
       }
@@ -50,14 +50,41 @@ const PortalLogin = () => {
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
-        checkAndRedirect(session.user.id);
+        checkAndRedirect(session.user.id, session.user.email ?? undefined);
       }
     });
 
     return () => subscription.unsubscribe();
   }, [navigate]);
 
-  const checkAndRedirect = async (userId: string) => {
+  const normalizeEmail = (value: string) => value.toLowerCase().trim();
+
+  const tryLinkCollaboratorByEmail = async (userId: string, emailValue: string) => {
+    const normalizedEmail = normalizeEmail(emailValue);
+
+    // Prefer exact match, but accept case-insensitive matches as fallback.
+    const tryUpdate = async (mode: "eq" | "ilike") => {
+      let q = supabase
+        .from("collaborators")
+        .update({ user_id: userId })
+        .is("user_id", null);
+
+      q = mode === "eq" ? q.eq("email", normalizedEmail) : q.ilike("email", normalizedEmail);
+
+      return q.select("id").maybeSingle();
+    };
+
+    const { data: linkedEq, error: eqError } = await tryUpdate("eq");
+    if (eqError) throw eqError;
+    if (linkedEq) return linkedEq;
+
+    const { data: linkedIlike, error: ilikeError } = await tryUpdate("ilike");
+    if (ilikeError) throw ilikeError;
+    return linkedIlike;
+  };
+
+  const checkAndRedirect = async (userId: string, userEmail?: string) => {
+    // 1) Already linked?
     const { data: collab } = await supabase
       .from("collaborators")
       .select("id")
@@ -66,7 +93,19 @@ const PortalLogin = () => {
 
     if (collab) {
       navigate("/colaborador");
+      return true;
     }
+
+    // 2) Not linked yet -> try linking by email (common when the account already existed)
+    if (userEmail) {
+      const linked = await tryLinkCollaboratorByEmail(userId, userEmail);
+      if (linked) {
+        navigate("/colaborador");
+        return true;
+      }
+    }
+
+    return false;
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -85,8 +124,10 @@ const PortalLogin = () => {
     setIsLoading(true);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
+      const normalizedEmail = normalizeEmail(email);
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
         password,
       });
 
@@ -108,7 +149,21 @@ const PortalLogin = () => {
         description: "Bem-vindo ao Portal do Colaborador!",
       });
 
-      navigate("/colaborador");
+      const ok = await checkAndRedirect(
+        data.user?.id ?? "",
+        data.user?.email ?? normalizedEmail
+      );
+
+      if (!ok) {
+        // Evita loop: mantém o usuário fora do portal até o vínculo existir.
+        await supabase.auth.signOut();
+        toast({
+          title: "Acesso não liberado",
+          description:
+            "Sua conta foi encontrada, mas ainda não está vinculada a um colaborador. Verifique com o RH.",
+          variant: "destructive",
+        });
+      }
     } catch (error: any) {
       toast({
         title: "Erro ao fazer login",
@@ -160,7 +215,7 @@ const PortalLogin = () => {
     setIsLoading(true);
 
     try {
-      const normalizedEmail = email.toLowerCase().trim();
+      const normalizedEmail = normalizeEmail(email);
 
       // Create user in Supabase Auth
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
@@ -183,18 +238,9 @@ const PortalLogin = () => {
         password,
       });
 
-      // Link user to collaborator by EMAIL (no pre-select needed; update policy checks auth email)
-      const { data: linkedCollab, error: linkError } = await supabase
-        .from("collaborators")
-        .update({ user_id: authData.user.id })
-        .eq("email", normalizedEmail)
-        .is("user_id", null)
-        .select("id, name")
-        .maybeSingle();
-
-      if (linkError) throw linkError;
-
-      if (!linkedCollab) {
+      // Link user to collaborator by EMAIL (update policy checks auth.jwt email)
+      const linked = await tryLinkCollaboratorByEmail(authData.user.id, normalizedEmail);
+      if (!linked) {
         await supabase.auth.signOut();
         toast({
           title: "Email não encontrado",
@@ -204,6 +250,14 @@ const PortalLogin = () => {
         });
         return;
       }
+
+      const { data: linkedCollab, error: linkedReadError } = await supabase
+        .from("collaborators")
+        .select("id, name")
+        .eq("user_id", authData.user.id)
+        .maybeSingle();
+
+      if (linkedReadError) throw linkedReadError;
 
       setCollaboratorName(linkedCollab.name ?? "");
       setCollaboratorId(linkedCollab.id);
@@ -216,12 +270,47 @@ const PortalLogin = () => {
       navigate("/colaborador");
     } catch (error: any) {
       if (error.message?.includes("User already registered")) {
-        toast({
-          title: "Email já cadastrado",
-          description: "Este email já possui uma conta. Tente fazer login.",
-          variant: "destructive",
-        });
-        setStep("login");
+        // Se o usuário já existe, tentamos entrar com a senha digitada e fazer o vínculo.
+        try {
+          const normalizedEmail = normalizeEmail(email);
+          const { data, error: signInError } = await supabase.auth.signInWithPassword({
+            email: normalizedEmail,
+            password,
+          });
+
+          if (signInError) {
+            toast({
+              title: "Email já cadastrado",
+              description: "Este email já possui uma conta. Tente fazer login.",
+              variant: "destructive",
+            });
+            setStep("login");
+            return;
+          }
+
+          const ok = await checkAndRedirect(
+            data.user?.id ?? "",
+            data.user?.email ?? normalizedEmail
+          );
+
+          if (!ok) {
+            await supabase.auth.signOut();
+            toast({
+              title: "Acesso não liberado",
+              description:
+                "Sua conta existe, mas ainda não está vinculada ao seu cadastro de colaborador. Verifique com o RH.",
+              variant: "destructive",
+            });
+            return;
+          }
+        } catch {
+          toast({
+            title: "Email já cadastrado",
+            description: "Este email já possui uma conta. Tente fazer login.",
+            variant: "destructive",
+          });
+          setStep("login");
+        }
       } else {
         toast({
           title: "Erro ao criar acesso",
@@ -265,7 +354,7 @@ const PortalLogin = () => {
               {step === "choice" && "Portal do Colaborador"}
               {step === "login" && "Entrar"}
               {step === "first-access-email" && "Primeiro Acesso"}
-              {step === "first-access-password" && `Olá, ${collaboratorName}!`}
+              {step === "first-access-password" && (collaboratorName ? `Olá, ${collaboratorName}!` : "Definir senha")}
             </h1>
             <p className="text-muted-foreground mt-2">
               {step === "choice" && "Acesse sua área exclusiva"}
