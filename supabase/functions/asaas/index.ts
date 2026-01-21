@@ -5,7 +5,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const ASAAS_API_URL = 'https://sandbox.asaas.com/api/v3';
+// Will be set dynamically based on system_settings
+let ASAAS_API_URL = 'https://sandbox.asaas.com/api/v3';
+let ASAAS_API_KEY = '';
 
 interface AsaasCustomer {
   id: string;
@@ -30,17 +32,47 @@ const PLAN_PRICING = {
   empresa_plus: { value: 399.90, description: 'Meu RH Empresa+ - Até 100 colaboradores' },
 };
 
+// Load Asaas configuration from system_settings
+async function loadAsaasConfig(supabase: any) {
+  const { data: settings } = await supabase
+    .from('system_settings')
+    .select('setting_key, setting_value')
+    .in('setting_key', ['asaas_environment', 'asaas_sandbox_key', 'asaas_production_key']);
+
+  if (settings && settings.length > 0) {
+    const settingsMap: Record<string, string> = {};
+    for (const s of settings) {
+      settingsMap[s.setting_key] = s.setting_value;
+    }
+    
+    const environment = settingsMap['asaas_environment'] || 'sandbox';
+    
+    if (environment === 'production') {
+      ASAAS_API_URL = 'https://api.asaas.com/v3';
+      ASAAS_API_KEY = settingsMap['asaas_production_key'] || '';
+    } else {
+      ASAAS_API_URL = 'https://sandbox.asaas.com/api/v3';
+      ASAAS_API_KEY = settingsMap['asaas_sandbox_key'] || '';
+    }
+    
+    console.log('Asaas environment:', environment, '| URL:', ASAAS_API_URL);
+  } else {
+    // Fallback to env variable if no settings found
+    ASAAS_API_KEY = Deno.env.get('ASAAS_API_KEY') || '';
+    console.log('Using fallback ASAAS_API_KEY from env');
+  }
+}
+
 async function asaasRequest(endpoint: string, options: RequestInit = {}) {
-  const apiKey = Deno.env.get('ASAAS_API_KEY');
-  if (!apiKey) {
-    throw new Error('ASAAS_API_KEY not configured');
+  if (!ASAAS_API_KEY) {
+    throw new Error('Chave de API do Asaas não configurada. Configure nas Configurações do Master.');
   }
 
   const response = await fetch(`${ASAAS_API_URL}${endpoint}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
-      'access_token': apiKey,
+      'access_token': ASAAS_API_KEY,
       ...options.headers,
     },
   });
@@ -175,6 +207,9 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Load Asaas configuration before processing request
+    await loadAsaasConfig(supabase);
 
     const { action, ...params } = await req.json();
     console.log('Asaas action:', action, params);
