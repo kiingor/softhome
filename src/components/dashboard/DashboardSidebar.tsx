@@ -17,13 +17,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 interface MenuItem {
   icon: React.ComponentType<{ className?: string }>;
@@ -32,38 +25,57 @@ interface MenuItem {
   roles: AppRole[];
 }
 
-const menuItems: MenuItem[] = [
-  { icon: LayoutDashboard, label: "Visão Geral", href: "/dashboard", roles: ["admin", "rh", "gestor", "contador", "colaborador"] },
-  { icon: Users, label: "Colaboradores", href: "/dashboard/colaboradores", roles: ["admin", "rh", "gestor"] },
-  { icon: FolderTree, label: "Setores", href: "/dashboard/setores", roles: ["admin", "rh", "gestor"] },
-  { icon: Briefcase, label: "Cargos", href: "/dashboard/cargos", roles: ["admin", "rh"] },
-  { icon: Building2, label: "Empresas", href: "/dashboard/empresas", roles: ["admin"] },
-  { icon: Gift, label: "Benefícios", href: "/dashboard/beneficios", roles: ["admin", "rh"] },
-  { icon: DollarSign, label: "Lançamentos", href: "/dashboard/financeiro", roles: ["admin", "rh", "contador"] },
-  { icon: BarChart3, label: "Relatórios", href: "/dashboard/relatorios", roles: ["admin", "rh", "contador"] },
-  { icon: FileText, label: "Contabilidade", href: "/dashboard/contabilidade", roles: ["admin", "rh", "contador"] },
+interface MenuCategory {
+  label: string;
+  items: MenuItem[];
+}
+
+const menuCategories: MenuCategory[] = [
+  {
+    label: "Principal",
+    items: [
+      { icon: LayoutDashboard, label: "Visão Geral", href: "/dashboard", roles: ["admin", "rh", "gestor", "contador", "colaborador"] },
+    ],
+  },
+  {
+    label: "Cadastros",
+    items: [
+      { icon: Users, label: "Colaboradores", href: "/dashboard/colaboradores", roles: ["admin", "rh", "gestor"] },
+      { icon: FolderTree, label: "Setores", href: "/dashboard/setores", roles: ["admin", "rh", "gestor"] },
+      { icon: Briefcase, label: "Cargos", href: "/dashboard/cargos", roles: ["admin", "rh"] },
+      { icon: Building2, label: "Empresas", href: "/dashboard/empresas", roles: ["admin"] },
+      { icon: Gift, label: "Benefícios", href: "/dashboard/beneficios", roles: ["admin", "rh"] },
+    ],
+  },
+  {
+    label: "Gestão",
+    items: [
+      { icon: DollarSign, label: "Lançamentos", href: "/dashboard/financeiro", roles: ["admin", "rh", "contador"] },
+      { icon: BarChart3, label: "Relatórios", href: "/dashboard/relatorios", roles: ["admin", "rh", "contador"] },
+      { icon: FileText, label: "Contabilidade", href: "/dashboard/contabilidade", roles: ["admin", "rh", "contador"] },
+    ],
+  },
 ];
 
 export default function DashboardSidebar() {
-  const { companies, currentCompany, setCurrentCompany, hasAnyRole } = useDashboard();
+  const { hasAnyRole } = useDashboard();
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const visibleMenuItems = menuItems.filter(item => hasAnyRole(item.roles));
+  // Filter categories and items based on roles
+  const visibleCategories = menuCategories
+    .map(category => ({
+      ...category,
+      items: category.items.filter(item => hasAnyRole(item.roles)),
+    }))
+    .filter(category => category.items.length > 0);
 
   async function handleLogout() {
     await supabase.auth.signOut();
     toast({ title: "Logout realizado com sucesso" });
     navigate("/login");
   }
-
-  const handleCompanyChange = (companyId: string) => {
-    const company = companies.find(c => c.id === companyId);
-    if (company) {
-      setCurrentCompany(company);
-    }
-  };
 
   return (
     <aside className="w-64 border-r border-border bg-card flex flex-col">
@@ -80,48 +92,39 @@ export default function DashboardSidebar() {
         </div>
       </div>
 
-      {/* Seletor de empresa */}
-      {companies.length > 0 && (
-        <div className="p-4 border-b border-border">
-          <label className="text-xs font-medium text-muted-foreground mb-2 block">
-            Empresa
-          </label>
-          <Select value={currentCompany?.id || ""} onValueChange={handleCompanyChange}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Selecione uma empresa" />
-            </SelectTrigger>
-            <SelectContent>
-              {companies.map((company) => (
-                <SelectItem key={company.id} value={company.id}>
-                  {company.company_name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
-
       {/* Menu de navegação */}
-      <nav className="flex-1 p-4 space-y-1 overflow-auto">
-        {visibleMenuItems.map((item) => {
-          const isActive = location.pathname === item.href || 
-            (item.href !== "/dashboard" && location.pathname.startsWith(item.href));
-          return (
-            <Link
-              key={item.href}
-              to={item.href}
-              className={cn(
-                "flex items-center gap-3 px-4 py-3 rounded-lg transition-colors",
-                isActive
-                  ? "bg-primary/10 text-primary font-medium"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              )}
-            >
-              <item.icon className="w-5 h-5" />
-              {item.label}
-            </Link>
-          );
-        })}
+      <nav className="flex-1 p-4 overflow-auto">
+        {visibleCategories.map((category, categoryIndex) => (
+          <div key={category.label}>
+            {categoryIndex > 0 && (
+              <div className="my-3 border-t border-border" />
+            )}
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 px-4">
+              {category.label}
+            </p>
+            <div className="space-y-1">
+              {category.items.map((item) => {
+                const isActive = location.pathname === item.href || 
+                  (item.href !== "/dashboard" && location.pathname.startsWith(item.href));
+                return (
+                  <Link
+                    key={item.href}
+                    to={item.href}
+                    className={cn(
+                      "flex items-center gap-3 px-4 py-3 rounded-lg transition-colors",
+                      isActive
+                        ? "bg-primary/10 text-primary font-medium"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    )}
+                  >
+                    <item.icon className="w-5 h-5" />
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
       {/* Footer */}
