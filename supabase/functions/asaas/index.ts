@@ -70,7 +70,50 @@ async function createCustomer(name: string, email: string, cpfCnpj?: string): Pr
   });
 }
 
-// Create subscription in Asaas
+// Create subscription with credit card
+async function createSubscriptionWithCreditCard(
+  customerId: string, 
+  plan: string,
+  creditCard: {
+    holderName: string;
+    number: string;
+    expiryMonth: string;
+    expiryYear: string;
+    ccv: string;
+  },
+  creditCardHolderInfo: {
+    name: string;
+    email: string;
+    cpfCnpj: string;
+    postalCode: string;
+    addressNumber: string;
+    phone: string;
+  }
+): Promise<AsaasSubscription> {
+  const planConfig = PLAN_PRICING[plan as keyof typeof PLAN_PRICING] || PLAN_PRICING.essencial;
+  
+  console.log('Creating Asaas subscription with credit card:', { customerId, plan, value: planConfig.value });
+  
+  // Calculate next due date (today for first charge)
+  const now = new Date();
+  const nextDueDate = now.toISOString().split('T')[0];
+  
+  return await asaasRequest('/subscriptions', {
+    method: 'POST',
+    body: JSON.stringify({
+      customer: customerId,
+      billingType: 'CREDIT_CARD',
+      value: planConfig.value,
+      nextDueDate,
+      description: planConfig.description,
+      cycle: 'MONTHLY',
+      creditCard,
+      creditCardHolderInfo,
+    }),
+  });
+}
+
+// Create subscription with boleto (legacy)
 async function createSubscription(customerId: string, plan: string): Promise<AsaasSubscription> {
   const planConfig = PLAN_PRICING[plan as keyof typeof PLAN_PRICING] || PLAN_PRICING.essencial;
   
@@ -150,6 +193,47 @@ Deno.serve(async (req) => {
           .eq('id', companyId);
         
         result = customer;
+        break;
+      }
+
+      case 'create_subscription_credit_card': {
+        const { customerId, plan, companyId, creditCard, creditCardHolderInfo } = params;
+        const subscription = await createSubscriptionWithCreditCard(
+          customerId, 
+          plan, 
+          creditCard, 
+          creditCardHolderInfo
+        );
+        
+        // Update company with subscription info - mark as active since card was charged
+        await supabase
+          .from('companies')
+          .update({ 
+            asaas_subscription_id: subscription.id,
+            subscription_status: 'active',
+            subscription_due_date: subscription.nextDueDate,
+            trial_ends_at: null, // Clear trial since user subscribed
+            plan_type: plan,
+          })
+          .eq('id', companyId);
+
+        // Record in subscription history
+        const { data: company } = await supabase
+          .from('companies')
+          .select('plan_type')
+          .eq('id', companyId)
+          .single();
+
+        await supabase
+          .from('subscription_history')
+          .insert({
+            company_id: companyId,
+            previous_plan: company?.plan_type || 'trial',
+            new_plan: plan,
+            change_reason: 'Subscription created with credit card',
+          });
+        
+        result = subscription;
         break;
       }
 

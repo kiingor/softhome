@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import RoleGuard from "@/components/dashboard/RoleGuard";
 import { useDashboard } from "@/contexts/DashboardContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -33,17 +34,32 @@ import {
   Loader2,
   Save,
   Users,
+  Clock,
 } from "lucide-react";
 import { toast } from "sonner";
-import { PLANS, getPlanById } from "@/lib/planUtils";
+import { PLANS, getPlanById, PlanId } from "@/lib/planUtils";
 import { UsersAccessTab } from "@/components/dashboard/UsersAccessTab";
 import { useIsCompanyAdmin } from "@/hooks/usePermissions";
+import { PaymentModal } from "@/components/subscription/PaymentModal";
+import { differenceInDays } from "date-fns";
 
 const ConfiguracoesPage = () => {
   const { currentCompany } = useDashboard();
   const queryClient = useQueryClient();
   const { isAdmin } = useIsCompanyAdmin();
+  const [searchParams] = useSearchParams();
   const [isEditing, setIsEditing] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedPlanForPayment, setSelectedPlanForPayment] = useState<PlanId>("essencial");
+  const [activeTab, setActiveTab] = useState("conta");
+
+  // Handle tab from URL params
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab && ["conta", "usuarios", "plano", "notificacoes", "seguranca"].includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
 
   // Form state for company data
   const [formData, setFormData] = useState({
@@ -156,9 +172,26 @@ const ConfiguracoesPage = () => {
     },
   });
 
+  // Calculate trial info
+  const trialDaysRemaining = company?.trial_ends_at 
+    ? Math.max(0, differenceInDays(new Date(company.trial_ends_at), new Date()))
+    : 0;
+  const isTrial = company?.subscription_status !== 'active' && company?.trial_ends_at && trialDaysRemaining >= 0;
+
   const currentPlanData = company?.plan_type ? getPlanById(company.plan_type) : PLANS.essencial;
   const planLimit = currentPlanData.collaboratorLimit;
   const usagePercent = Math.min((collaboratorCount / planLimit) * 100, 100);
+
+  const handleSubscribe = (planId: PlanId) => {
+    setSelectedPlanForPayment(planId);
+    setShowPaymentModal(true);
+  };
+
+  const handlePaymentSuccess = () => {
+    setShowPaymentModal(false);
+    queryClient.invalidateQueries({ queryKey: ["company-settings"] });
+    window.location.reload();
+  };
 
   const handleSave = () => {
     updateCompanyMutation.mutate(formData);
@@ -207,7 +240,7 @@ const ConfiguracoesPage = () => {
           </p>
         </div>
 
-        <Tabs defaultValue="conta" className="space-y-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="flex-wrap">
             <TabsTrigger value="conta" className="gap-2">
               <Building2 className="w-4 h-4" />
@@ -222,6 +255,11 @@ const ConfiguracoesPage = () => {
             <TabsTrigger value="plano" className="gap-2">
               <CreditCard className="w-4 h-4" />
               Plano e Assinatura
+              {isTrial && (
+                <Badge variant="outline" className="ml-1 text-xs border-primary/50 text-primary">
+                  Trial
+                </Badge>
+              )}
             </TabsTrigger>
             <TabsTrigger value="notificacoes" className="gap-2">
               <Bell className="w-4 h-4" />
@@ -365,7 +403,7 @@ const ConfiguracoesPage = () => {
             {/* Current Plan Card */}
             <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
               <CardHeader>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-4">
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center">
                       <Crown className="w-6 h-6 text-primary" />
@@ -382,8 +420,8 @@ const ConfiguracoesPage = () => {
                         >
                           {company?.subscription_status === "active"
                             ? "Ativo"
-                            : company?.subscription_status === "trialing"
-                            ? "Em teste"
+                            : isTrial
+                            ? "Trial"
                             : "Inativo"}
                         </Badge>
                       </CardTitle>
@@ -392,6 +430,20 @@ const ConfiguracoesPage = () => {
                       </CardDescription>
                     </div>
                   </div>
+                  
+                  {/* Subscribe Button for Trial Users */}
+                  {isTrial && (
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Clock className="w-4 h-4" />
+                        <span>{trialDaysRemaining} dia{trialDaysRemaining !== 1 ? 's' : ''} restantes</span>
+                      </div>
+                      <Button onClick={() => handleSubscribe(company?.plan_type as PlanId || "essencial")}>
+                        <CreditCard className="w-4 h-4 mr-2" />
+                        Assinar Plano
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -491,8 +543,11 @@ const ConfiguracoesPage = () => {
                             variant="outline"
                             size="sm"
                             className="w-full mt-3"
+                            onClick={() => handleSubscribe(plan.id as PlanId)}
                           >
-                            {plan.price > currentPlanData.price
+                            {isTrial
+                              ? "Assinar"
+                              : plan.price > currentPlanData.price
                               ? "Fazer Upgrade"
                               : "Alterar Plano"}
                           </Button>
@@ -638,6 +693,14 @@ const ConfiguracoesPage = () => {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* Payment Modal */}
+        <PaymentModal
+          open={showPaymentModal}
+          onClose={() => setShowPaymentModal(false)}
+          planId={selectedPlanForPayment}
+          onSuccess={handlePaymentSuccess}
+        />
       </div>
     </RoleGuard>
   );
