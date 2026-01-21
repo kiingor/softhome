@@ -97,7 +97,10 @@ const CollaboratorModal = ({
     admission_date: "",
     status: "ativo" as "ativo" | "inativo",
     is_temp: false,
+    password: "",
   });
+  const [showPasswordField, setShowPasswordField] = useState(false);
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   // Pending entries/benefits for new collaborators
@@ -255,7 +258,10 @@ const CollaboratorModal = ({
           admission_date: collaborator.admission_date || "",
           status: collaborator.status || "ativo",
           is_temp: collaborator.is_temp || false,
+          password: "",
         });
+        // Only show password field for collaborators without user_id
+        setShowPasswordField(!collaborator.user_id);
       } else {
         setFormData({
           name: "",
@@ -268,7 +274,9 @@ const CollaboratorModal = ({
           admission_date: "",
           status: "ativo",
           is_temp: false,
+          password: "",
         });
+        setShowPasswordField(false);
         setPendingEntries([]);
         setPendingBenefits([]);
       }
@@ -378,12 +386,51 @@ const CollaboratorModal = ({
       return;
     }
 
+    // Validate password if provided
+    if (formData.password && formData.password.length < 6) {
+      toast.error("A senha deve ter no mínimo 6 caracteres");
+      return;
+    }
+
     setIsSaving(true);
     try {
+      let userId: string | null = null;
+
+      // Create auth user if email and password are provided
+      if (formData.email.trim() && formData.password) {
+        setIsCreatingUser(true);
+        const normalizedEmail = formData.email.trim().toLowerCase();
+        
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+          email: normalizedEmail,
+          password: formData.password,
+          options: {
+            emailRedirectTo: `${window.location.origin}/colaborador`,
+          },
+        });
+
+        if (authError) {
+          if (authError.message?.includes("User already registered")) {
+            toast.error("Este email já possui uma conta. O colaborador será cadastrado sem acesso ao portal.");
+          } else {
+            throw authError;
+          }
+        } else if (authData.user) {
+          userId = authData.user.id;
+          
+          // Add collaborator role to the user
+          await supabase.from("user_roles").insert({
+            user_id: userId,
+            role: "colaborador",
+          });
+        }
+        setIsCreatingUser(false);
+      }
+
       const saveData = {
         name: formData.name.trim(),
         cpf: cleanedCPF,
-        email: formData.email.trim() || null,
+        email: formData.email.trim().toLowerCase() || null,
         phone: formData.phone.replace(/\D/g, "") || null,
         position_id: formData.position_id || null,
         store_id: formData.store_id || null,
@@ -393,6 +440,7 @@ const CollaboratorModal = ({
         is_temp: formData.is_temp,
         company_id: currentCompany!.id,
         position: positions.find((p) => p.id === formData.position_id)?.name || null,
+        ...(userId && { user_id: userId }),
       };
 
       if (isNew) {
@@ -435,12 +483,25 @@ const CollaboratorModal = ({
           await supabase.from("benefits_assignments").insert(assignmentsToCreate);
         }
 
-        toast.success("Colaborador criado com sucesso!");
+        const message = userId 
+          ? `${formData.name} foi cadastrado com acesso ao Portal!`
+          : "Colaborador criado com sucesso!";
+        toast.success(message);
       } else {
         // Update existing collaborator
+        const updateData = {
+          ...saveData,
+          // Only update user_id if we created a new user
+          ...(userId ? { user_id: userId } : {}),
+        };
+        delete (updateData as any).user_id; // Remove if not set
+        if (userId) {
+          (updateData as any).user_id = userId;
+        }
+        
         const { error } = await supabase
           .from("collaborators")
-          .update(saveData)
+          .update(updateData)
           .eq("id", collaboratorId);
 
         if (error) {
@@ -451,7 +512,10 @@ const CollaboratorModal = ({
           throw error;
         }
 
-        toast.success("Colaborador atualizado!");
+        const message = userId 
+          ? "Colaborador atualizado e acesso ao portal criado!"
+          : "Colaborador atualizado!";
+        toast.success(message);
       }
 
       queryClient.invalidateQueries({ queryKey: ["collaborators"] });
@@ -461,6 +525,7 @@ const CollaboratorModal = ({
       toast.error("Erro ao salvar: " + error.message);
     } finally {
       setIsSaving(false);
+      setIsCreatingUser(false);
     }
   };
 
@@ -747,7 +812,13 @@ const CollaboratorModal = ({
                         id="email"
                         type="email"
                         value={formData.email}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
+                        onChange={(e) => {
+                          setFormData((prev) => ({ ...prev, email: e.target.value }));
+                          // Show password field when email is entered (for new collaborators or those without user_id)
+                          if (e.target.value.trim() && (isNew || showPasswordField)) {
+                            setShowPasswordField(true);
+                          }
+                        }}
                         placeholder="email@exemplo.com"
                       />
                     </div>
@@ -762,6 +833,31 @@ const CollaboratorModal = ({
                       />
                     </div>
                   </div>
+
+                  {/* Password Field - Only shown when email is entered and user doesn't have access yet */}
+                  {formData.email.trim() && showPasswordField && (
+                    <div className="space-y-2 p-4 bg-muted/50 rounded-lg border border-dashed">
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="password" className="text-sm font-medium">
+                          Senha de Acesso ao Portal
+                        </Label>
+                        <Badge variant="secondary" className="text-xs">
+                          Opcional
+                        </Badge>
+                      </div>
+                      <Input
+                        id="password"
+                        type="password"
+                        value={formData.password}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
+                        placeholder="Mínimo 6 caracteres"
+                        minLength={6}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Se preenchida, o colaborador poderá acessar o Portal do Colaborador com este email e senha.
+                      </p>
+                    </div>
+                  )}
 
                   <Separator />
 
