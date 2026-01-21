@@ -41,7 +41,14 @@ import MasterMensagensPage from "./pages/master/MasterMensagensPage";
 import MasterConfiguracoesPage from "./pages/master/MasterConfiguracoesPage";
 import MasterLoginPage from "./pages/master/MasterLoginPage";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      staleTime: 1000 * 60 * 5, // 5 minutes
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
