@@ -132,55 +132,16 @@ const PortalLogin = () => {
       return;
     }
 
-    setIsLoading(true);
+    // OBS: não fazemos lookup por email aqui pois a tabela de colaboradores é protegida por RLS.
+    // A validação/vínculo acontece no passo seguinte após autenticar o usuário.
+    setCollaboratorName("");
+    setCollaboratorId("");
+    setStep("first-access-password");
 
-    try {
-      // Check if email exists in collaborators table (case-insensitive)
-      const { data: collab, error } = await supabase
-        .from("collaborators")
-        .select("id, name, user_id, email")
-        .ilike("email", email.trim())
-        .maybeSingle();
-
-      if (error) throw error;
-
-      if (!collab) {
-        toast({
-          title: "Email não encontrado",
-          description: "Este email não está cadastrado como colaborador. Verifique com o RH da sua empresa.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      if (collab.user_id) {
-        toast({
-          title: "Acesso já configurado",
-          description: "Este email já possui um acesso. Use a opção de login.",
-          variant: "destructive",
-        });
-        setStep("login");
-        return;
-      }
-
-      // Email found and no user linked yet
-      setCollaboratorName(collab.name);
-      setCollaboratorId(collab.id);
-      setStep("first-access-password");
-      
-      toast({
-        title: `Olá, ${collab.name}!`,
-        description: "Agora defina sua senha de acesso.",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Erro ao verificar email",
-        description: error.message || "Tente novamente mais tarde.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
+    toast({
+      title: "Continuar",
+      description: "Agora defina sua senha. Se o email não estiver cadastrado pelo RH, avisaremos.",
+    });
   };
 
   const handleCreateAccess = async (e: React.FormEvent) => {
@@ -199,9 +160,11 @@ const PortalLogin = () => {
     setIsLoading(true);
 
     try {
+      const normalizedEmail = email.toLowerCase().trim();
+
       // Create user in Supabase Auth
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
-        email: email.toLowerCase().trim(),
+        email: normalizedEmail,
         password,
         options: {
           emailRedirectTo: `${window.location.origin}/colaborador`,
@@ -214,23 +177,40 @@ const PortalLogin = () => {
         throw new Error("Erro ao criar usuário");
       }
 
-      // Link user to collaborator - the trigger will automatically add the "colaborador" role
-      const { error: updateError } = await supabase
+      // Ensure we have an authenticated session (some setups may not auto-login on signup)
+      await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password,
+      });
+
+      // Link user to collaborator by EMAIL (no pre-select needed; update policy checks auth email)
+      const { data: linkedCollab, error: linkError } = await supabase
         .from("collaborators")
         .update({ user_id: authData.user.id })
-        .eq("id", collaboratorId);
+        .eq("email", normalizedEmail)
+        .is("user_id", null)
+        .select("id, name")
+        .maybeSingle();
 
-      if (updateError) throw updateError;
+      if (linkError) throw linkError;
+
+      if (!linkedCollab) {
+        await supabase.auth.signOut();
+        toast({
+          title: "Email não encontrado",
+          description:
+            "Este email não está cadastrado como colaborador (ou já possui acesso). Verifique com o RH.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setCollaboratorName(linkedCollab.name ?? "");
+      setCollaboratorId(linkedCollab.id);
 
       toast({
         title: "Acesso criado com sucesso! 🎉",
         description: "Você já pode acessar o portal do colaborador.",
-      });
-
-      // Auto login
-      await supabase.auth.signInWithPassword({
-        email: email.toLowerCase().trim(),
-        password,
       });
 
       navigate("/colaborador");
