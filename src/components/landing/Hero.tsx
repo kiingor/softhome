@@ -1,9 +1,33 @@
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Play } from "lucide-react";
-import heroImage from "@/assets/hero-illustration.png";
+import { supabase } from "@/integrations/supabase/client";
+import defaultHeroImage from "@/assets/hero-illustration.png";
 
 const Hero = () => {
+  const [heroImage, setHeroImage] = useState<string>(defaultHeroImage);
+
+  useEffect(() => {
+    async function loadHeroImage() {
+      try {
+        const { data } = await supabase
+          .from('system_settings')
+          .select('setting_value')
+          .eq('setting_key', 'hero_image_url')
+          .single();
+
+        if (data?.setting_value) {
+          setHeroImage(data.setting_value);
+        }
+      } catch (error) {
+        // Keep default image on error
+      }
+    }
+
+    loadHeroImage();
+  }, []);
+
   return (
     <section className="pt-32 pb-20 gradient-warm overflow-hidden">
       <div className="container mx-auto px-6">
