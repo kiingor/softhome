@@ -20,7 +20,7 @@ const PortalGuard = ({ children }: PortalGuardProps) => {
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/portal/login" replace />;
   }
 
   if (!collaborator) {
@@ -50,7 +50,7 @@ const PortalGuard = ({ children }: PortalGuardProps) => {
             o RH da sua empresa.
           </p>
           <a
-            href="/login"
+            href="/portal/login"
             className="text-primary hover:underline font-medium"
           >
             Voltar ao login

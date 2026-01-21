@@ -25,6 +25,7 @@ import ContabilidadePage from "./pages/dashboard/ContabilidadePage";
 import { PortalProvider } from "./contexts/PortalContext";
 import PortalLayout from "./components/portal/PortalLayout";
 import PortalGuard from "./components/portal/PortalGuard";
+import PortalLogin from "./pages/colaborador/PortalLogin";
 import PortalHome from "./pages/colaborador/PortalHome";
 import MeuExtratoPage from "./pages/colaborador/MeuExtratoPage";
 import MeusBeneficiosPage from "./pages/colaborador/MeusBeneficiosPage";
@@ -69,6 +70,9 @@ const App = () => (
             <Route path="contabilidade" element={<ContabilidadePage />} />
           </Route>
 
+          {/* Portal do Colaborador - Login */}
+          <Route path="/portal/login" element={<PortalLogin />} />
+          
           {/* Portal do Colaborador - Layout isolado */}
           <Route
             path="/colaborador"
