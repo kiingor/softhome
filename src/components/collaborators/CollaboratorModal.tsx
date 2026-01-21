@@ -285,28 +285,36 @@ const CollaboratorModal = ({
 
   // When position changes, update pending salary entry (for new collaborators)
   useEffect(() => {
-    if (!isNew) return;
+    if (!isNew || !open) return;
 
     const position = positions.find((p) => p.id === formData.position_id);
     
-    // Remove old position-based salary entry
-    setPendingEntries((prev) => prev.filter((e) => e.source !== "position"));
-    
-    // Add new one if position has salary
-    if (position && position.salary > 0) {
-      setPendingEntries((prev) => [
-        ...prev,
-        {
-          id: `position-${position.id}`,
-          type: "salario",
-          description: `Salário Base - ${position.name}`,
-          value: position.salary,
-          is_fixed: true,
-          source: "position",
-        },
-      ]);
-    }
-  }, [formData.position_id, positions, isNew]);
+    setPendingEntries((prev) => {
+      // Remove old position-based salary entry
+      const filtered = prev.filter((e) => e.source !== "position");
+      
+      // Add new one if position has salary
+      if (position && position.salary > 0) {
+        // Check if already exists with same position id
+        const existingPositionEntry = filtered.find((e) => e.id === `position-${position.id}`);
+        if (existingPositionEntry) return filtered;
+        
+        return [
+          ...filtered,
+          {
+            id: `position-${position.id}`,
+            type: "salario" as const,
+            description: `Salário Base - ${position.name}`,
+            value: position.salary,
+            is_fixed: true,
+            source: "position" as const,
+          },
+        ];
+      }
+      
+      return filtered;
+    });
+  }, [formData.position_id, positions.length, isNew, open]);
 
   // Handle CPF input with mask
   const handleCPFChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -384,6 +392,15 @@ const CollaboratorModal = ({
     if (!validateCPF(cleanedCPF)) {
       toast.error("CPF inválido");
       return;
+    }
+
+    // Validate email if provided
+    if (formData.email.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email.trim())) {
+        toast.error("Email inválido. Por favor, insira um email válido.");
+        return;
+      }
     }
 
     // Validate password if provided

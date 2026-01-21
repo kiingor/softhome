@@ -6,10 +6,12 @@ import { Badge } from "@/components/ui/badge";
 import { Gift, Info } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, getCurrentCompetencia } from "@/lib/formatters";
+import { calculateMonthlyBenefitValue, dayLabels, DayAbbrev } from "@/lib/workingDays";
 
 const MeusBeneficiosPage = () => {
   const { collaborator } = usePortal();
+  const { month: currentMonth, year: currentYear } = getCurrentCompetencia();
 
   // Fetch benefits assigned to the collaborator
   const { data: myBenefits = [], isLoading } = useQuery({
@@ -20,7 +22,7 @@ const MeusBeneficiosPage = () => {
         .from("benefits_assignments")
         .select(`
           *,
-          benefit:benefits(id, name, description, value, value_type)
+          benefit:benefits(id, name, description, value, value_type, applicable_days)
         `)
         .eq("collaborator_id", collaborator.id)
         .order("assigned_at", { ascending: false });
@@ -29,6 +31,26 @@ const MeusBeneficiosPage = () => {
     },
     enabled: !!collaborator?.id,
   });
+
+  // Calculate monthly value for a benefit
+  const getMonthlyValue = (benefit: any) => {
+    if (!benefit) return 0;
+    const valueType = (benefit.value_type || "monthly") as "monthly" | "daily";
+    const applicableDays = (benefit.applicable_days || ["mon", "tue", "wed", "thu", "fri"]) as DayAbbrev[];
+    return calculateMonthlyBenefitValue(
+      benefit.value || 0,
+      valueType,
+      applicableDays,
+      currentMonth,
+      currentYear
+    );
+  };
+
+  // Format applicable days for display
+  const formatApplicableDays = (days: string[] | null) => {
+    if (!days || days.length === 0) return "";
+    return days.map((d) => dayLabels[d as DayAbbrev] || d).join(", ");
+  };
 
   if (!collaborator) {
     return (
@@ -99,13 +121,25 @@ const MeusBeneficiosPage = () => {
               </CardHeader>
               <CardContent className="space-y-3">
                 {/* Valor do benefício */}
-                <div className="flex items-center justify-between">
-                  <span className="text-2xl font-bold text-primary">
-                    {formatCurrency(item.benefit?.value || 0)}
-                  </span>
-                  <Badge variant="outline">
-                    {item.benefit?.value_type === "daily" ? "Por dia" : "Mensal"}
-                  </Badge>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-2xl font-bold text-primary">
+                      {formatCurrency(getMonthlyValue(item.benefit))}
+                    </span>
+                    <Badge variant="outline">
+                      {item.benefit?.value_type === "daily" ? "Por dia" : "Mensal"}
+                    </Badge>
+                  </div>
+                  
+                  {/* Show calculation for daily benefits */}
+                  {item.benefit?.value_type === "daily" && (
+                    <div className="text-sm text-muted-foreground bg-muted/50 rounded-md p-2">
+                      <p>{formatCurrency(item.benefit.value || 0)} × dias úteis do mês</p>
+                      <p className="text-xs mt-1">
+                        Dias: {formatApplicableDays(item.benefit.applicable_days)}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {item.benefit?.description && (

@@ -43,6 +43,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Lock,
+  Gift,
 } from "lucide-react";
 import { useDashboard } from "@/contexts/DashboardContext";
 import { useClosedPeriods } from "@/hooks/useClosedPeriods";
@@ -54,11 +55,12 @@ import {
   getMonthName,
   formatCompetencia,
 } from "@/lib/formatters";
+import { calculateMonthlyBenefitValue, DayAbbrev } from "@/lib/workingDays";
 import PayrollEntryForm from "@/components/payroll/PayrollEntryForm";
 
 interface PayrollEntry {
   id: string;
-  type: "salario" | "vale" | "custo" | "despesa" | "adicional";
+  type: "salario" | "vale" | "custo" | "despesa" | "adicional" | "beneficio";
   description: string | null;
   value: number;
   month: number;
@@ -66,11 +68,24 @@ interface PayrollEntry {
   is_fixed: boolean;
   collaborator_id: string;
   created_at: string;
+  isBenefit?: boolean;
 }
 
 interface Collaborator {
   id: string;
   name: string;
+}
+
+interface BenefitAssignment {
+  id: string;
+  collaborator_id: string;
+  benefit: {
+    id: string;
+    name: string;
+    value: number;
+    value_type: string;
+    applicable_days: string[] | null;
+  } | null;
 }
 
 const typeLabels: Record<string, string> = {
@@ -79,6 +94,7 @@ const typeLabels: Record<string, string> = {
   custo: "Custo",
   despesa: "Despesa",
   adicional: "Adicional",
+  beneficio: "Benefício",
 };
 
 const typeColors: Record<string, string> = {
@@ -87,6 +103,7 @@ const typeColors: Record<string, string> = {
   custo: "bg-orange-100 text-orange-700",
   despesa: "bg-red-100 text-red-700",
   adicional: "bg-purple-100 text-purple-700",
+  beneficio: "bg-teal-100 text-teal-700",
 };
 
 const FinanceiroPage = () => {
@@ -98,6 +115,7 @@ const FinanceiroPage = () => {
 
   const [entries, setEntries] = useState<PayrollEntry[]>([]);
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
+  const [benefitAssignments, setBenefitAssignments] = useState<BenefitAssignment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<PayrollEntry | null>(null);
@@ -118,7 +136,7 @@ const FinanceiroPage = () => {
   }, [currentCompany, month, year]);
 
   const loadData = async () => {
-    await Promise.all([loadEntries(), loadCollaborators()]);
+    await Promise.all([loadEntries(), loadCollaborators(), loadBenefitAssignments()]);
   };
 
   const loadEntries = async () => {
@@ -164,6 +182,40 @@ const FinanceiroPage = () => {
     } catch (error) {
       console.error("Error loading collaborators:", error);
     }
+  };
+
+  const loadBenefitAssignments = async () => {
+    if (!currentCompany) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("benefits_assignments")
+        .select(`
+          id,
+          collaborator_id,
+          benefit:benefits(id, name, value, value_type, applicable_days)
+        `)
+        .eq("benefit.company_id", currentCompany.id);
+
+      if (error) throw error;
+      setBenefitAssignments(data || []);
+    } catch (error) {
+      console.error("Error loading benefit assignments:", error);
+    }
+  };
+
+  // Calculate benefit monthly value
+  const calculateBenefitValue = (benefit: BenefitAssignment["benefit"]) => {
+    if (!benefit) return 0;
+    const valueType = (benefit.value_type || "monthly") as "monthly" | "daily";
+    const applicableDays = (benefit.applicable_days || ["mon", "tue", "wed", "thu", "fri"]) as DayAbbrev[];
+    return calculateMonthlyBenefitValue(
+      benefit.value || 0,
+      valueType,
+      applicableDays,
+      month,
+      year
+    );
   };
 
   const handleEdit = (entry: PayrollEntry) => {
@@ -227,15 +279,36 @@ const FinanceiroPage = () => {
     return collaborators.find((c) => c.id === id)?.name || "Colaborador removido";
   };
 
+  // Combine entries with benefit assignments as virtual entries
+  const combinedEntries = useMemo(() => {
+    // Map benefit assignments to virtual payroll entries
+    const benefitEntries = benefitAssignments
+      .filter((ba) => ba.benefit)
+      .map((ba) => ({
+        id: `benefit-${ba.id}`,
+        type: "beneficio" as const,
+        description: ba.benefit!.name,
+        value: calculateBenefitValue(ba.benefit),
+        month,
+        year,
+        is_fixed: true,
+        collaborator_id: ba.collaborator_id,
+        created_at: "",
+        isBenefit: true,
+      }));
+
+    return [...entries, ...benefitEntries];
+  }, [entries, benefitAssignments, month, year]);
+
   // Filter entries
   const filteredEntries = useMemo(() => {
-    return entries.filter((entry) => {
+    return combinedEntries.filter((entry) => {
       if (typeFilter !== "all" && entry.type !== typeFilter) return false;
       if (collaboratorFilter !== "all" && entry.collaborator_id !== collaboratorFilter)
         return false;
       return true;
     });
-  }, [entries, typeFilter, collaboratorFilter]);
+  }, [combinedEntries, typeFilter, collaboratorFilter]);
 
   // Calculate totals
   const totals = useMemo(() => {
@@ -466,26 +539,33 @@ const FinanceiroPage = () => {
                         )}
                       </TableCell>
                       <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <MoreHorizontal className="w-4 h-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleEdit(entry)}>
-                              <Edit className="w-4 h-4 mr-2" />
-                              Editar
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => handleDelete(entry)}
-                              className="text-destructive focus:text-destructive"
-                            >
-                              <Trash2 className="w-4 h-4 mr-2" />
-                              Excluir
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        {entry.isBenefit ? (
+                          <Badge variant="outline" className="text-teal-600">
+                            <Gift className="w-3 h-3 mr-1" />
+                            Benefício
+                          </Badge>
+                        ) : (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <MoreHorizontal className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleEdit(entry as PayrollEntry)}>
+                                <Edit className="w-4 h-4 mr-2" />
+                                Editar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleDelete(entry as PayrollEntry)}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Excluir
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
