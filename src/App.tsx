@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { ThemeProvider } from "@/components/ThemeProvider";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -29,7 +30,6 @@ import MeuExtratoPage from "./pages/colaborador/MeuExtratoPage";
 import MeusBeneficiosPage from "./pages/colaborador/MeusBeneficiosPage";
 import MeusContracheques from "./pages/colaborador/MeusContracheques";
 
-// Portal Master
 import { MasterProvider } from "./contexts/MasterContext";
 import { MasterGuard } from "./components/master/MasterGuard";
 import { MasterLayout } from "./components/master/MasterLayout";
@@ -37,16 +37,18 @@ import MasterDashboard from "./pages/master/MasterDashboard";
 import MasterEmpresasPage from "./pages/master/MasterEmpresasPage";
 import MasterCompanyDetailsPage from "./pages/master/MasterCompanyDetailsPage";
 import MasterMensagensPage from "./pages/master/MasterMensagensPage";
+import MasterConfiguracoesPage from "./pages/master/MasterConfiguracoesPage";
 import MasterLoginPage from "./pages/master/MasterLoginPage";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
+    <ThemeProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/login" element={<Login />} />
@@ -167,12 +169,23 @@ const App = () => (
               </MasterProvider>
             }
           />
+          <Route
+            path="/master/configuracoes"
+            element={
+              <MasterProvider>
+                <MasterGuard>
+                  <MasterConfiguracoesPage />
+                </MasterGuard>
+              </MasterProvider>
+            }
+          />
           
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
     </TooltipProvider>
-  </QueryClientProvider>
+  </ThemeProvider>
+</QueryClientProvider>
 );
 
 export default App;
