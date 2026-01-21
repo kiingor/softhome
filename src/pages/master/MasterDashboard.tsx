@@ -16,11 +16,12 @@ export default function MasterDashboard() {
         .from('companies')
         .select('*', { count: 'exact', head: true });
 
-      // Get active subscriptions
+      // Get active subscriptions (excluding trial - only paid)
       const { count: activeSubscriptions } = await supabase
         .from('companies')
         .select('*', { count: 'exact', head: true })
-        .eq('subscription_status', 'active');
+        .eq('subscription_status', 'active')
+        .or('trial_ends_at.is.null,trial_ends_at.lt.' + new Date().toISOString());
 
       // Get blocked companies
       const { count: blockedCompanies } = await supabase
@@ -236,7 +237,7 @@ export default function MasterDashboard() {
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-xs">
+                      <Badge variant="outline" className="text-xs capitalize">
                         {PLANS[company.plan_type as PlanId]?.name || company.plan_type}
                       </Badge>
                       <Badge variant={getTrialBadgeVariant(daysRemaining)} className="text-xs">
@@ -399,7 +400,9 @@ export default function MasterDashboard() {
                                message.message_type === 'warning' ? 'secondary' : 'outline'}
                       className="text-xs"
                     >
-                      {message.message_type}
+                      {message.message_type === 'info' && 'Informação'}
+                      {message.message_type === 'warning' && 'Aviso'}
+                      {message.message_type === 'alert' && 'Alerta'}
                     </Badge>
                     {message.is_read && (
                       <CheckCircle className="w-4 h-4 text-green-500" />
