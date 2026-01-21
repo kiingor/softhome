@@ -7,12 +7,12 @@ import {
 
 const faqs = [
   {
-    question: "Meus dados estão seguros no RH360?",
+    question: "Meus dados estão seguros no Meu RH?",
     answer: "Absolutamente. Utilizamos criptografia de ponta a ponta, servidores em território nacional e seguimos rigorosamente todas as diretrizes da LGPD. Realizamos backups diários e auditorias de segurança regulares.",
   },
   {
     question: "Como funciona a integração com a contabilidade?",
-    answer: "O RH360 exporta automaticamente os dados de folha de pagamento em formatos compatíveis com os principais sistemas contábeis do mercado (Domínio, Alterdata, Fortes, etc). Também oferecemos API para integrações personalizadas.",
+    answer: "O Meu RH exporta automaticamente os dados de folha de pagamento em formatos compatíveis com os principais sistemas contábeis do mercado (Domínio, Alterdata, Fortes, etc). Também oferecemos API para integrações personalizadas.",
   },
   {
     question: "Posso migrar os dados do meu sistema atual?",
@@ -42,7 +42,7 @@ const FAQ = () => {
             <span className="text-gradient">frequentes</span>
           </h2>
           <p className="text-lg text-muted-foreground">
-            Tire suas dúvidas sobre o RH360. Não encontrou o que procura? Fale com nosso time.
+            Tire suas dúvidas sobre o Meu RH. Não encontrou o que procura? Fale com nosso time.
           </p>
         </div>
 

@@ -138,10 +138,10 @@ const DashboardSidebar = () => {
       <SidebarHeader className="p-4 border-b border-border">
         <Link to="/dashboard" className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl gradient-hero flex items-center justify-center shadow-soft flex-shrink-0">
-            <span className="text-primary-foreground font-bold text-lg">R</span>
+            <span className="text-primary-foreground font-bold text-lg">M</span>
           </div>
           {!isCollapsed && (
-            <span className="text-lg font-bold text-foreground">RH360</span>
+            <span className="text-lg font-bold text-foreground">Meu RH</span>
           )}
         </Link>
       </SidebarHeader>

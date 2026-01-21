@@ -29,7 +29,7 @@ export function MasterGuard({ children }: MasterGuardProps) {
           <h1 className="text-2xl font-bold text-foreground mb-2">Acesso Negado</h1>
           <p className="text-muted-foreground mb-6">
             Você não possui permissão para acessar o Portal Master. 
-            Este portal é exclusivo para administradores do RH360.
+            Este portal é exclusivo para administradores do Meu RH.
           </p>
           <a href="/" className="text-primary hover:underline">
             Voltar ao site

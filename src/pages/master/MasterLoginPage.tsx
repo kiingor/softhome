@@ -128,7 +128,7 @@ export default function MasterLoginPage() {
             </div>
             <h1 className="text-2xl font-bold text-foreground">Portal Master</h1>
             <p className="text-muted-foreground mt-2">
-              Acesso restrito à equipe RH360
+              Acesso restrito à equipe Meu RH
             </p>
           </div>
 
@@ -138,7 +138,7 @@ export default function MasterLoginPage() {
               <Input
                 id="email"
                 type="email"
-                placeholder="admin@rh360.com.br"
+                placeholder="admin@meurh.com.br"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -186,7 +186,7 @@ export default function MasterLoginPage() {
           </form>
 
           <p className="text-center text-xs text-muted-foreground mt-6">
-            Este portal é exclusivo para administradores autorizados do RH360.
+            Este portal é exclusivo para administradores autorizados do Meu RH.
             <br />
             Se você é um cliente, acesse o{" "}
             <a href="/login" className="text-primary hover:underline">painel do cliente</a>.
