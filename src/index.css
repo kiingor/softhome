@@ -72,6 +72,11 @@
     font-family: 'Nunito', sans-serif;
   }
 
+  /* Prevenir flash de cor enquanto carrega tema */
+  body.theme-loading {
+    visibility: hidden;
+  }
+
   h1, h2, h3, h4, h5, h6 {
     font-family: 'Nunito', sans-serif;
     @apply font-bold tracking-tight;

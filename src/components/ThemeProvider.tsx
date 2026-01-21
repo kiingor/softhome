@@ -17,6 +17,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
+    // Esconder body enquanto carrega
+    document.body.classList.add('theme-loading');
+
     async function loadTheme() {
       try {
         const { data } = await supabase
@@ -27,10 +30,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
         if (data?.setting_value) {
           applyPrimaryColor(data.setting_value);
+        } else {
+          applyPrimaryColor(DEFAULT_PRIMARY_COLOR);
         }
       } catch (error) {
         console.error('Erro ao carregar tema:', error);
+        applyPrimaryColor(DEFAULT_PRIMARY_COLOR);
       } finally {
+        // Mostrar body após aplicar tema
+        document.body.classList.remove('theme-loading');
         setLoaded(true);
       }
     }
@@ -38,6 +46,5 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     loadTheme();
   }, []);
 
-  // Renderiza imediatamente, o tema será aplicado assim que carregar
   return <>{children}</>;
 }
