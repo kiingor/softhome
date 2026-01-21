@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useSystemTheme, PRESET_COLORS, hexToHSL } from "@/hooks/useSystemTheme";
-import { Check, Settings, Loader2, Upload, X, ImageIcon } from "lucide-react";
+import { Check, Settings, Loader2, Upload, X, ImageIcon, CreditCard, Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { Switch } from "@/components/ui/switch";
 
 export default function MasterConfiguracoesPage() {
   const { toast } = useToast();
@@ -21,20 +22,49 @@ export default function MasterConfiguracoesPage() {
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load hero image URL
+  // Asaas configuration state
+  const [asaasEnvironment, setAsaasEnvironment] = useState<'sandbox' | 'production'>('sandbox');
+  const [asaasSandboxKey, setAsaasSandboxKey] = useState("");
+  const [asaasProductionKey, setAsaasProductionKey] = useState("");
+  const [showSandboxKey, setShowSandboxKey] = useState(false);
+  const [showProductionKey, setShowProductionKey] = useState(false);
+  const [isSavingAsaas, setIsSavingAsaas] = useState(false);
+  const [isLoadingAsaas, setIsLoadingAsaas] = useState(true);
+
+  // Load hero image URL and Asaas settings
   useEffect(() => {
-    async function loadHeroImage() {
-      const { data } = await supabase
+    async function loadSettings() {
+      // Load hero image
+      const { data: heroData } = await supabase
         .from('system_settings')
         .select('setting_value')
         .eq('setting_key', 'hero_image_url')
         .single();
       
-      if (data?.setting_value) {
-        setHeroImageUrl(data.setting_value);
+      if (heroData?.setting_value) {
+        setHeroImageUrl(heroData.setting_value);
       }
+
+      // Load Asaas settings
+      const { data: asaasData } = await supabase
+        .from('system_settings')
+        .select('setting_key, setting_value')
+        .in('setting_key', ['asaas_environment', 'asaas_sandbox_key', 'asaas_production_key']);
+      
+      if (asaasData && asaasData.length > 0) {
+        for (const setting of asaasData) {
+          if (setting.setting_key === 'asaas_environment') {
+            setAsaasEnvironment(setting.setting_value as 'sandbox' | 'production');
+          } else if (setting.setting_key === 'asaas_sandbox_key') {
+            setAsaasSandboxKey(setting.setting_value);
+          } else if (setting.setting_key === 'asaas_production_key') {
+            setAsaasProductionKey(setting.setting_value);
+          }
+        }
+      }
+      setIsLoadingAsaas(false);
     }
-    loadHeroImage();
+    loadSettings();
   }, []);
 
   function handlePresetClick(color: typeof PRESET_COLORS[0]) {
@@ -177,7 +207,52 @@ export default function MasterConfiguracoesPage() {
     }
   }
 
-  if (isLoading) {
+  async function upsertSetting(key: string, value: string) {
+    // Try to update first
+    const { data: existing } = await supabase
+      .from('system_settings')
+      .select('id')
+      .eq('setting_key', key)
+      .single();
+
+    if (existing) {
+      await supabase
+        .from('system_settings')
+        .update({ setting_value: value })
+        .eq('setting_key', key);
+    } else {
+      await supabase
+        .from('system_settings')
+        .insert({ setting_key: key, setting_value: value });
+    }
+  }
+
+  async function handleSaveAsaas() {
+    setIsSavingAsaas(true);
+    try {
+      await Promise.all([
+        upsertSetting('asaas_environment', asaasEnvironment),
+        upsertSetting('asaas_sandbox_key', asaasSandboxKey),
+        upsertSetting('asaas_production_key', asaasProductionKey),
+      ]);
+
+      toast({
+        title: "Configurações do Asaas salvas",
+        description: `Ambiente atual: ${asaasEnvironment === 'sandbox' ? 'Sandbox (Testes)' : 'Produção'}`,
+      });
+    } catch (error) {
+      console.error('Erro ao salvar configurações do Asaas:', error);
+      toast({
+        title: "Erro ao salvar",
+        description: "Não foi possível salvar as configurações do Asaas.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingAsaas(false);
+    }
+  }
+
+  if (isLoading || isLoadingAsaas) {
     return (
       <MasterLayout>
         <div className="flex items-center justify-center h-64">
@@ -202,6 +277,118 @@ export default function MasterConfiguracoesPage() {
             Gerencie as configurações globais do sistema
           </p>
         </div>
+
+        {/* Card de Configurações do Asaas */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CreditCard className="w-5 h-5" />
+              Integração Asaas (Pagamentos)
+            </CardTitle>
+            <CardDescription>
+              Configure as chaves de API do Asaas para processamento de pagamentos. Alterne entre ambiente de testes (sandbox) e produção.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Environment Toggle */}
+            <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/30">
+              <div className="space-y-0.5">
+                <Label className="text-base font-medium">Ambiente Atual</Label>
+                <p className="text-sm text-muted-foreground">
+                  {asaasEnvironment === 'sandbox' 
+                    ? 'Sandbox - Ambiente de testes (não processa pagamentos reais)' 
+                    : 'Produção - Ambiente real (processa pagamentos de verdade)'}
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className={`text-sm font-medium ${asaasEnvironment === 'sandbox' ? 'text-primary' : 'text-muted-foreground'}`}>
+                  Sandbox
+                </span>
+                <Switch
+                  checked={asaasEnvironment === 'production'}
+                  onCheckedChange={(checked) => setAsaasEnvironment(checked ? 'production' : 'sandbox')}
+                />
+                <span className={`text-sm font-medium ${asaasEnvironment === 'production' ? 'text-primary' : 'text-muted-foreground'}`}>
+                  Produção
+                </span>
+              </div>
+            </div>
+
+            {/* Sandbox Key */}
+            <div className="space-y-2">
+              <Label htmlFor="sandbox-key" className="flex items-center gap-2">
+                Chave API Sandbox
+                {asaasEnvironment === 'sandbox' && (
+                  <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">Em uso</span>
+                )}
+              </Label>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    id="sandbox-key"
+                    type={showSandboxKey ? "text" : "password"}
+                    value={asaasSandboxKey}
+                    onChange={(e) => setAsaasSandboxKey(e.target.value)}
+                    placeholder="$aact_YTU5YTE0M2M2..."
+                    className="pr-10"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
+                    onClick={() => setShowSandboxKey(!showSandboxKey)}
+                  >
+                    {showSandboxKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Chave de testes do Asaas (inicia com $aact_)
+              </p>
+            </div>
+
+            {/* Production Key */}
+            <div className="space-y-2">
+              <Label htmlFor="production-key" className="flex items-center gap-2">
+                Chave API Produção
+                {asaasEnvironment === 'production' && (
+                  <span className="text-xs bg-destructive/10 text-destructive px-2 py-0.5 rounded-full">Em uso</span>
+                )}
+              </Label>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    id="production-key"
+                    type={showProductionKey ? "text" : "password"}
+                    value={asaasProductionKey}
+                    onChange={(e) => setAsaasProductionKey(e.target.value)}
+                    placeholder="$aact_YTU5YTE0M2M2..."
+                    className="pr-10"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
+                    onClick={() => setShowProductionKey(!showProductionKey)}
+                  >
+                    {showProductionKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Chave de produção do Asaas (inicia com $aact_)
+              </p>
+            </div>
+
+            {/* Save Button */}
+            <Button onClick={handleSaveAsaas} disabled={isSavingAsaas}>
+              {isSavingAsaas && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Salvar Configurações do Asaas
+            </Button>
+          </CardContent>
+        </Card>
 
         {/* Card de Tema */}
         <Card>
