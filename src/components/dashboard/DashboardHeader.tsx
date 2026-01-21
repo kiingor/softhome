@@ -58,18 +58,7 @@ const DashboardHeader = () => {
   return (
     <header className="h-16 border-b border-border bg-card flex items-center justify-between px-6 sticky top-0 z-40">
       <div className="flex items-center gap-4">
-        <div className="hidden sm:block">
-          {currentCompany && (
-            <div>
-              <h1 className="font-bold text-foreground">{currentCompany.company_name}</h1>
-              <p className="text-xs text-muted-foreground">
-                Plano {currentCompany.plan_type === "essencial" ? "Essencial" : 
-                       currentCompany.plan_type === "crescer" ? "Crescer" :
-                       currentCompany.plan_type === "profissional" ? "Profissional" : "Empresa+"}
-              </p>
-            </div>
-          )}
-        </div>
+        {/* Espaço reservado para breadcrumbs ou outros elementos futuros */}
       </div>
 
       <div className="flex items-center gap-3">

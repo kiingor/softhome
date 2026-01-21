@@ -25,8 +25,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   Building2,
-  Bell,
-  Shield,
   CreditCard,
   Crown,
   AlertTriangle,
@@ -56,7 +54,7 @@ const ConfiguracoesPage = () => {
   // Handle tab from URL params
   useEffect(() => {
     const tab = searchParams.get("tab");
-    if (tab && ["conta", "usuarios", "plano", "notificacoes", "seguranca"].includes(tab)) {
+    if (tab && ["conta", "usuarios", "plano"].includes(tab)) {
       setActiveTab(tab);
     }
   }, [searchParams]);
@@ -260,14 +258,6 @@ const ConfiguracoesPage = () => {
                   Trial
                 </Badge>
               )}
-            </TabsTrigger>
-            <TabsTrigger value="notificacoes" className="gap-2">
-              <Bell className="w-4 h-4" />
-              Notificações
-            </TabsTrigger>
-            <TabsTrigger value="seguranca" className="gap-2">
-              <Shield className="w-4 h-4" />
-              Segurança
             </TabsTrigger>
           </TabsList>
 
@@ -607,91 +597,6 @@ const ConfiguracoesPage = () => {
             </Card>
           </TabsContent>
 
-          {/* Tab: Notificações */}
-          <TabsContent value="notificacoes">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Bell className="w-5 h-5 text-primary" />
-                  Preferências de Notificação
-                </CardTitle>
-                <CardDescription>
-                  Configure como deseja receber atualizações
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label htmlFor="email-notifications">
-                      Notificações por e-mail
-                    </Label>
-                    <p className="text-sm text-muted-foreground">
-                      Receba atualizações importantes por e-mail
-                    </p>
-                  </div>
-                  <Switch id="email-notifications" defaultChecked />
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label htmlFor="vacation-alerts">Alertas de férias</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Notificações sobre férias próximas
-                    </p>
-                  </div>
-                  <Switch id="vacation-alerts" defaultChecked />
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label htmlFor="doc-expiry">Documentos vencendo</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Alertas de documentos próximos do vencimento
-                    </p>
-                  </div>
-                  <Switch id="doc-expiry" defaultChecked />
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Tab: Segurança */}
-          <TabsContent value="seguranca">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Shield className="w-5 h-5 text-primary" />
-                  Configurações de Segurança
-                </CardTitle>
-                <CardDescription>
-                  Proteja sua conta e seus dados
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label htmlFor="two-factor">
-                      Autenticação em 2 fatores
-                    </Label>
-                    <p className="text-sm text-muted-foreground">
-                      Adicione uma camada extra de segurança
-                    </p>
-                  </div>
-                  <Switch id="two-factor" />
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label htmlFor="session-timeout">Timeout de sessão</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Encerrar sessão após inatividade
-                    </p>
-                  </div>
-                  <Switch id="session-timeout" defaultChecked />
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
         </Tabs>
 
         {/* Payment Modal */}
