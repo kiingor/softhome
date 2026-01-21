@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Gift, Info } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { formatCurrency } from "@/lib/formatters";
 
 const MeusBeneficiosPage = () => {
   const { collaborator } = usePortal();
@@ -19,7 +20,7 @@ const MeusBeneficiosPage = () => {
         .from("benefits_assignments")
         .select(`
           *,
-          benefit:benefits(id, name, description)
+          benefit:benefits(id, name, description, value, value_type)
         `)
         .eq("collaborator_id", collaborator.id)
         .order("assigned_at", { ascending: false });
@@ -97,6 +98,16 @@ const MeusBeneficiosPage = () => {
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
+                {/* Valor do benefício */}
+                <div className="flex items-center justify-between">
+                  <span className="text-2xl font-bold text-primary">
+                    {formatCurrency(item.benefit?.value || 0)}
+                  </span>
+                  <Badge variant="outline">
+                    {item.benefit?.value_type === "daily" ? "Por dia" : "Mensal"}
+                  </Badge>
+                </div>
+
                 {item.benefit?.description && (
                   <p className="text-sm text-muted-foreground">
                     {item.benefit.description}
