@@ -91,7 +91,8 @@ const Hero = () => {
             {heroImage && (
               <img
                 src={heroImage}
-                alt="Equipe colaborando feliz com o Meu RH"
+                alt="Sistema de RH Meu RH - Dashboard de gestão de pessoas, folha de pagamento, férias e benefícios para empresas"
+                title="Meu RH - Sistema de Gestão de RH em Nuvem"
                 className={`relative w-full rounded-2xl shadow-card transition-opacity duration-300 ${
                   imageLoaded ? "opacity-100" : "opacity-0"
                 }`}
