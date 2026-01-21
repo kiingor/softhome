@@ -11,8 +11,12 @@
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Meu RH – Sistema de RH em nuvem" />
+    <!-- Evita flash de tema (cor antiga) antes do app carregar o tema salvo -->
+    <style>
+      body.theme-loading { visibility: hidden; }
+    </style>
   </head>
-  <body>
+  <body class="theme-loading">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -6,7 +6,9 @@ import { supabase } from "@/integrations/supabase/client";
 import defaultHeroImage from "@/assets/hero-illustration.png";
 
 const Hero = () => {
-  const [heroImage, setHeroImage] = useState<string>(defaultHeroImage);
+  // Começa vazio para não mostrar a imagem antiga/padrão e trocar bruscamente
+  const [heroImage, setHeroImage] = useState<string | null>(null);
+  const [imageLoaded, setImageLoaded] = useState(false);
 
   useEffect(() => {
     async function loadHeroImage() {
@@ -17,11 +19,12 @@ const Hero = () => {
           .eq('setting_key', 'hero_image_url')
           .single();
 
-        if (data?.setting_value) {
-          setHeroImage(data.setting_value);
-        }
+        const url = data?.setting_value ? data.setting_value : defaultHeroImage;
+        setHeroImage(url);
+        setImageLoaded(false);
       } catch (error) {
-        // Keep default image on error
+        setHeroImage(defaultHeroImage);
+        setImageLoaded(false);
       }
     }
 
@@ -79,11 +82,24 @@ const Hero = () => {
 
           <div className="relative animate-float">
             <div className="absolute -inset-4 gradient-hero rounded-3xl opacity-20 blur-3xl" />
-            <img 
-              src={heroImage} 
-              alt="Equipe colaborando feliz com o Meu RH" 
-              className="relative w-full rounded-2xl shadow-card"
-            />
+
+            {/* Skeleton para evitar troca brusca de imagem */}
+            {(!heroImage || !imageLoaded) && (
+              <div className="relative w-full rounded-2xl shadow-card bg-muted animate-pulse aspect-[4/3]" />
+            )}
+
+            {heroImage && (
+              <img
+                src={heroImage}
+                alt="Equipe colaborando feliz com o Meu RH"
+                className={`relative w-full rounded-2xl shadow-card transition-opacity duration-300 ${
+                  imageLoaded ? "opacity-100" : "opacity-0"
+                }`}
+                loading="eager"
+                decoding="async"
+                onLoad={() => setImageLoaded(true)}
+              />
+            )}
           </div>
         </div>
       </div>
