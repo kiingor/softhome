@@ -1,6 +1,5 @@
 import { useDashboard } from "@/contexts/DashboardContext";
 import { Button } from "@/components/ui/button";
-import { SidebarTrigger } from "@/components/ui/sidebar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,10 +46,8 @@ const DashboardHeader = () => {
   const primaryRole = roles[0];
 
   return (
-    <header className="h-16 border-b border-border bg-card flex items-center justify-between px-4 sticky top-0 z-40">
+    <header className="h-16 border-b border-border bg-card flex items-center justify-between px-6 sticky top-0 z-40">
       <div className="flex items-center gap-4">
-        <SidebarTrigger className="lg:hidden" />
-        
         <div className="hidden sm:block">
           {currentCompany && (
             <div>
