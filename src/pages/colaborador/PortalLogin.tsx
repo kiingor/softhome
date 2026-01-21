@@ -42,7 +42,9 @@ const PortalLogin = () => {
         if (session) {
           // Check if user has collaborator role
           setTimeout(() => {
-            checkAndRedirect(session.user.id, session.user.email ?? undefined);
+            void checkAndRedirect(session.user.id, session.user.email ?? undefined).catch(() => {
+              // avoid unhandled promise rejections in auth listener
+            });
           }, 0);
         }
       }
@@ -50,7 +52,9 @@ const PortalLogin = () => {
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
-        checkAndRedirect(session.user.id, session.user.email ?? undefined);
+        void checkAndRedirect(session.user.id, session.user.email ?? undefined).catch(() => {
+          // ignore here; user will see errors during explicit actions
+        });
       }
     });
 
@@ -71,15 +75,24 @@ const PortalLogin = () => {
 
       q = mode === "eq" ? q.eq("email", normalizedEmail) : q.ilike("email", normalizedEmail);
 
-      return q.select("id").maybeSingle();
+      // IMPORTANT: do NOT use .single()/.maybeSingle() on UPDATE/PATCH.
+      // When 0 rows are affected PostgREST returns 406 (PGRST116) for object coercion.
+      // Returning an array avoids that and lets us handle 0/1/n rows safely.
+      const { data, error } = await q.select("id");
+      if (error) throw error;
+      if (!data || data.length === 0) return null;
+      if (data.length > 1) {
+        throw new Error(
+          "Encontramos mais de um colaborador com este email. Peça ao RH para corrigir o cadastro (email duplicado)."
+        );
+      }
+      return data[0];
     };
 
-    const { data: linkedEq, error: eqError } = await tryUpdate("eq");
-    if (eqError) throw eqError;
+    const linkedEq = await tryUpdate("eq");
     if (linkedEq) return linkedEq;
 
-    const { data: linkedIlike, error: ilikeError } = await tryUpdate("ilike");
-    if (ilikeError) throw ilikeError;
+    const linkedIlike = await tryUpdate("ilike");
     return linkedIlike;
   };
 
