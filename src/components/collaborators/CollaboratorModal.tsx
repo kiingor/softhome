@@ -396,34 +396,37 @@ const CollaboratorModal = ({
     try {
       let userId: string | null = null;
 
-      // Create auth user if email and password are provided
+      // Create auth user via edge function if email and password are provided
       if (formData.email.trim() && formData.password) {
         setIsCreatingUser(true);
         const normalizedEmail = formData.email.trim().toLowerCase();
         
-        const { data: authData, error: authError } = await supabase.auth.signUp({
-          email: normalizedEmail,
-          password: formData.password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/colaborador`,
-          },
-        });
-
-        if (authError) {
-          if (authError.message?.includes("User already registered")) {
-            toast.error("Este email já possui uma conta. O colaborador será cadastrado sem acesso ao portal.");
-          } else {
-            throw authError;
+        // Use edge function to create user without logging in as them
+        const { data: createData, error: createError } = await supabase.functions.invoke(
+          "create-collaborator-user",
+          {
+            body: {
+              email: normalizedEmail,
+              password: formData.password,
+            },
           }
-        } else if (authData.user) {
-          userId = authData.user.id;
-          
-          // Add collaborator role to the user
-          await supabase.from("user_roles").insert({
-            user_id: userId,
-            role: "colaborador",
-          });
+        );
+
+        if (createError) {
+          console.error("Edge function error:", createError);
+          toast.error("Erro ao criar acesso: " + createError.message);
+          setIsCreatingUser(false);
+          return;
         }
+
+        if (createData?.error) {
+          toast.error(createData.error);
+          setIsCreatingUser(false);
+          // Continue without user - collaborator will be created without portal access
+        } else if (createData?.user_id) {
+          userId = createData.user_id;
+        }
+        
         setIsCreatingUser(false);
       }
 
