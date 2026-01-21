@@ -214,25 +214,13 @@ const PortalLogin = () => {
         throw new Error("Erro ao criar usuário");
       }
 
-      // Link user to collaborator
+      // Link user to collaborator - the trigger will automatically add the "colaborador" role
       const { error: updateError } = await supabase
         .from("collaborators")
         .update({ user_id: authData.user.id })
         .eq("id", collaboratorId);
 
       if (updateError) throw updateError;
-
-      // Add collaborator role
-      const { error: roleError } = await supabase
-        .from("user_roles")
-        .insert({
-          user_id: authData.user.id,
-          role: "colaborador",
-        });
-
-      if (roleError && roleError.code !== "23505") {
-        console.error("Error adding role:", roleError);
-      }
 
       toast({
         title: "Acesso criado com sucesso! 🎉",
