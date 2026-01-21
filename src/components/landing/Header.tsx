@@ -1,7 +1,29 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 
+const navLinks = [
+  { label: "Recursos", href: "#recursos" },
+  { label: "Planos", href: "#planos" },
+  { label: "Dúvidas", href: "#faq" },
+];
+
 const Header = () => {
+  const scrollToSection = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+    e.preventDefault();
+    const targetId = href.replace("#", "");
+    const element = document.getElementById(targetId);
+    if (element) {
+      const headerOffset = 80; // Account for fixed header height
+      const elementPosition = element.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.scrollY - headerOffset;
+      
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: "smooth",
+      });
+    }
+  };
+
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
       <div className="container mx-auto px-6 h-16 flex items-center justify-between">
@@ -13,15 +35,16 @@ const Header = () => {
         </Link>
 
         <nav className="hidden md:flex items-center gap-8">
-          <a href="#recursos" className="text-muted-foreground hover:text-foreground transition-colors font-medium">
-            Recursos
-          </a>
-          <a href="#planos" className="text-muted-foreground hover:text-foreground transition-colors font-medium">
-            Planos
-          </a>
-          <a href="#faq" className="text-muted-foreground hover:text-foreground transition-colors font-medium">
-            Dúvidas
-          </a>
+          {navLinks.map((link) => (
+            <a
+              key={link.href}
+              href={link.href}
+              onClick={(e) => scrollToSection(e, link.href)}
+              className="text-muted-foreground hover:text-foreground transition-colors font-medium cursor-pointer"
+            >
+              {link.label}
+            </a>
+          ))}
         </nav>
 
         <div className="flex items-center gap-3">
