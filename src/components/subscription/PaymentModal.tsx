@@ -252,32 +252,72 @@ export function PaymentModal({ open, onClose, planId, onSuccess }: PaymentModalP
               <X className="w-5 h-5" />
             </button>
 
-            <form onSubmit={handleSubmit} className="flex-1 flex flex-col">
+            <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-y-auto">
               <h3 className="text-lg font-semibold mb-6">Dados de pagamento</h3>
 
-              {/* Email */}
-              <div className="space-y-2 mb-4">
-                <Label htmlFor="email" className="text-sm text-muted-foreground">
-                  E-mail
-                </Label>
+              {/* Billing Information - First */}
+              <div className="space-y-3 mb-5">
+                <Label className="text-sm font-medium">Dados de cobrança</Label>
+                <Input
+                  placeholder="Nome completo do titular"
+                  value={holderName}
+                  onChange={(e) => setHolderName(e.target.value.toUpperCase())}
+                  className="h-11"
+                  required
+                />
                 <Input
                   id="email"
                   type="email"
-                  placeholder="email@empresa.com"
+                  placeholder="E-mail"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="h-11"
                   required
                 />
+                <div className="grid grid-cols-2 gap-3">
+                  <Input
+                    placeholder="CPF ou CNPJ"
+                    value={cpfCnpj}
+                    onChange={(e) => setCpfCnpj(formatCPFCNPJ(e.target.value))}
+                    maxLength={18}
+                    className="h-11"
+                    required
+                  />
+                  <Input
+                    placeholder="Telefone"
+                    value={phone}
+                    onChange={(e) => setPhone(formatPhone(e.target.value))}
+                    maxLength={15}
+                    className="h-11"
+                    required
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Input
+                    placeholder="CEP"
+                    value={postalCode}
+                    onChange={(e) => setPostalCode(formatCEP(e.target.value))}
+                    maxLength={9}
+                    className="h-11"
+                    required
+                  />
+                  <Input
+                    placeholder="Número do endereço"
+                    value={addressNumber}
+                    onChange={(e) => setAddressNumber(e.target.value)}
+                    className="h-11"
+                    required
+                  />
+                </div>
               </div>
 
-              {/* Card Information */}
-              <div className="space-y-2 mb-4">
-                <Label className="text-sm text-muted-foreground">Dados do cartão</Label>
+              {/* Card Information - Second */}
+              <div className="space-y-3 mb-4">
+                <Label className="text-sm font-medium">Dados do cartão</Label>
                 <div className="border rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-ring">
                   <div className="relative">
                     <Input
-                      placeholder="1234 1234 1234 1234"
+                      placeholder="Número do cartão"
                       value={cardNumber}
                       onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
                       maxLength={19}
@@ -306,7 +346,7 @@ export function PaymentModal({ open, onClose, planId, onSuccess }: PaymentModalP
                       required
                     />
                     <Input
-                      placeholder="CVC"
+                      placeholder="CVV"
                       value={cvv}
                       onChange={(e) => setCvv(e.target.value.replace(/\D/g, "").slice(0, 4))}
                       maxLength={4}
@@ -315,61 +355,6 @@ export function PaymentModal({ open, onClose, planId, onSuccess }: PaymentModalP
                       required
                     />
                   </div>
-                </div>
-              </div>
-
-              {/* Holder Name */}
-              <div className="space-y-2 mb-4">
-                <Label htmlFor="holderName" className="text-sm text-muted-foreground">
-                  Nome no cartão
-                </Label>
-                <Input
-                  id="holderName"
-                  placeholder="NOME COMO ESTÁ NO CARTÃO"
-                  value={holderName}
-                  onChange={(e) => setHolderName(e.target.value.toUpperCase())}
-                  className="h-11"
-                  required
-                />
-              </div>
-
-              {/* Billing Information */}
-              <div className="space-y-2 mb-4">
-                <Label className="text-sm text-muted-foreground">Dados de cobrança</Label>
-                <div className="grid grid-cols-2 gap-3">
-                  <Input
-                    placeholder="CPF ou CNPJ"
-                    value={cpfCnpj}
-                    onChange={(e) => setCpfCnpj(formatCPFCNPJ(e.target.value))}
-                    maxLength={18}
-                    className="h-11"
-                    required
-                  />
-                  <Input
-                    placeholder="(00) 00000-0000"
-                    value={phone}
-                    onChange={(e) => setPhone(formatPhone(e.target.value))}
-                    maxLength={15}
-                    className="h-11"
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <Input
-                    placeholder="CEP"
-                    value={postalCode}
-                    onChange={(e) => setPostalCode(formatCEP(e.target.value))}
-                    maxLength={9}
-                    className="h-11"
-                    required
-                  />
-                  <Input
-                    placeholder="Número"
-                    value={addressNumber}
-                    onChange={(e) => setAddressNumber(e.target.value)}
-                    className="h-11"
-                    required
-                  />
                 </div>
               </div>
 
