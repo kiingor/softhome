@@ -44,8 +44,8 @@ export function MasterLayout({ children }: MasterLayoutProps) {
       <aside className="w-64 border-r border-border bg-card flex flex-col">
         <div className="p-6 border-b border-border">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-destructive/10 flex items-center justify-center">
-              <Shield className="w-5 h-5 text-destructive" />
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+              <Shield className="w-5 h-5 text-primary" />
             </div>
             <div>
               <h1 className="font-bold text-foreground">Portal Master</h1>
@@ -65,7 +65,7 @@ export function MasterLayout({ children }: MasterLayoutProps) {
                 className={cn(
                   "flex items-center gap-3 px-4 py-3 rounded-lg transition-colors",
                   isActive 
-                    ? "bg-destructive/10 text-destructive font-medium" 
+                    ? "bg-primary/10 text-primary font-medium" 
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
               >
