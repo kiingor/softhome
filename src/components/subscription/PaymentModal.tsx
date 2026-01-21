@@ -1,19 +1,12 @@
 import { useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { supabase } from "@/integrations/supabase/client";
 import { useDashboard } from "@/contexts/DashboardContext";
 import { toast } from "sonner";
-import { Loader2, CreditCard, Lock, Shield } from "lucide-react";
+import { Loader2, CreditCard, Lock, Check, X } from "lucide-react";
 import { PLANS, PlanId } from "@/lib/planUtils";
 
 interface PaymentModalProps {
@@ -189,173 +182,226 @@ export function PaymentModal({ open, onClose, planId, onSuccess }: PaymentModalP
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <CreditCard className="w-5 h-5 text-primary" />
-            Assinar Plano {planInfo.name}
-          </DialogTitle>
-          <DialogDescription>
-            R$ {planInfo.price.toFixed(2).replace(".", ",")}/mês • Cobrança mensal no cartão de crédito
-          </DialogDescription>
-        </DialogHeader>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Card Data */}
-          <div className="space-y-4">
-            <h3 className="font-medium text-sm text-foreground flex items-center gap-2">
-              <Lock className="w-4 h-4" />
-              Dados do Cartão
-            </h3>
-            
-            <div className="space-y-2">
-              <Label htmlFor="cardNumber">Número do Cartão</Label>
-              <Input
-                id="cardNumber"
-                placeholder="0000 0000 0000 0000"
-                value={cardNumber}
-                onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
-                maxLength={19}
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="holderName">Nome no Cartão</Label>
-              <Input
-                id="holderName"
-                placeholder="NOME COMO ESTÁ NO CARTÃO"
-                value={holderName}
-                onChange={(e) => setHolderName(e.target.value.toUpperCase())}
-                required
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="expiry">Validade</Label>
-                <Input
-                  id="expiry"
-                  placeholder="MM/AA"
-                  value={expiry}
-                  onChange={(e) => setExpiry(formatExpiry(e.target.value))}
-                  maxLength={5}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="cvv">CVV</Label>
-                <Input
-                  id="cvv"
-                  placeholder="000"
-                  value={cvv}
-                  onChange={(e) => setCvv(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                  maxLength={4}
-                  type="password"
-                  required
-                />
-              </div>
-            </div>
-          </div>
-
-          <Separator />
-
-          {/* Holder Data */}
-          <div className="space-y-4">
-            <h3 className="font-medium text-sm text-foreground">Dados do Titular</h3>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="cpfCnpj">CPF/CNPJ</Label>
-                <Input
-                  id="cpfCnpj"
-                  placeholder="000.000.000-00"
-                  value={cpfCnpj}
-                  onChange={(e) => setCpfCnpj(formatCPFCNPJ(e.target.value))}
-                  maxLength={18}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="phone">Telefone</Label>
-                <Input
-                  id="phone"
-                  placeholder="(00) 00000-0000"
-                  value={phone}
-                  onChange={(e) => setPhone(formatPhone(e.target.value))}
-                  maxLength={15}
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="email">E-mail</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="email@empresa.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="postalCode">CEP</Label>
-                <Input
-                  id="postalCode"
-                  placeholder="00000-000"
-                  value={postalCode}
-                  onChange={(e) => setPostalCode(formatCEP(e.target.value))}
-                  maxLength={9}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="addressNumber">Número</Label>
-                <Input
-                  id="addressNumber"
-                  placeholder="123"
-                  value={addressNumber}
-                  onChange={(e) => setAddressNumber(e.target.value)}
-                  required
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 text-sm text-muted-foreground">
-            <Shield className="w-4 h-4 shrink-0" />
-            <span>Seus dados estão protegidos com criptografia de ponta a ponta.</span>
-          </div>
-
-          <div className="flex gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              className="flex-1"
+      <DialogContent className="max-w-4xl p-0 overflow-hidden border-0 gap-0">
+        <div className="grid md:grid-cols-2 min-h-[600px]">
+          {/* Left Side - Plan Summary */}
+          <div className="bg-primary p-8 text-primary-foreground flex flex-col">
+            {/* Close button for mobile */}
+            <button 
               onClick={onClose}
-              disabled={isLoading}
+              className="absolute top-4 left-4 md:hidden p-2 rounded-full hover:bg-primary-foreground/10 transition-colors"
             >
-              Cancelar
-            </Button>
-            <Button type="submit" className="flex-1" disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Processando...
-                </>
-              ) : (
-                <>
-                  <CreditCard className="w-4 h-4 mr-2" />
-                  Assinar Agora
-                </>
-              )}
-            </Button>
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex-1">
+              <div className="mb-8">
+                <p className="text-primary-foreground/70 text-sm mb-1">Assinar</p>
+                <h2 className="text-xl font-semibold">{planInfo.name}</h2>
+                <div className="mt-4">
+                  <span className="text-4xl font-bold">R$ {planInfo.priceDisplay}</span>
+                  <span className="text-primary-foreground/70">/mês</span>
+                </div>
+              </div>
+
+              {/* Plan Details */}
+              <div className="space-y-4 border-t border-primary-foreground/20 pt-6">
+                <div className="flex justify-between text-sm">
+                  <span className="text-primary-foreground/70">{planInfo.name}</span>
+                  <span>R$ {planInfo.priceDisplay}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-primary-foreground/70">Colaboradores</span>
+                  <span>Até {planInfo.collaboratorLimit}</span>
+                </div>
+              </div>
+
+              {/* Features */}
+              <div className="mt-6 space-y-3">
+                <p className="text-sm text-primary-foreground/70 font-medium">Incluso no plano:</p>
+                {planInfo.features.map((feature, index) => (
+                  <div key={index} className="flex items-center gap-2 text-sm">
+                    <Check className="w-4 h-4 shrink-0" />
+                    <span>{feature}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Total */}
+              <div className="mt-auto pt-6 border-t border-primary-foreground/20">
+                <div className="flex justify-between items-center">
+                  <span className="font-semibold">Total mensal</span>
+                  <span className="text-2xl font-bold">R$ {planInfo.priceDisplay}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-center gap-2 text-primary-foreground/60 text-xs">
+              <Lock className="w-3 h-3" />
+              <span>Pagamento seguro via Asaas</span>
+            </div>
           </div>
-        </form>
+
+          {/* Right Side - Payment Form */}
+          <div className="bg-background p-8 flex flex-col">
+            {/* Close button */}
+            <button 
+              onClick={onClose}
+              className="absolute top-4 right-4 p-2 rounded-full hover:bg-muted transition-colors text-muted-foreground"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <form onSubmit={handleSubmit} className="flex-1 flex flex-col">
+              <h3 className="text-lg font-semibold mb-6">Dados de pagamento</h3>
+
+              {/* Email */}
+              <div className="space-y-2 mb-4">
+                <Label htmlFor="email" className="text-sm text-muted-foreground">
+                  E-mail
+                </Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="email@empresa.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="h-11"
+                  required
+                />
+              </div>
+
+              {/* Card Information */}
+              <div className="space-y-2 mb-4">
+                <Label className="text-sm text-muted-foreground">Dados do cartão</Label>
+                <div className="border rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-ring">
+                  <div className="relative">
+                    <Input
+                      placeholder="1234 1234 1234 1234"
+                      value={cardNumber}
+                      onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
+                      maxLength={19}
+                      className="border-0 rounded-none h-11 pr-20 focus-visible:ring-0"
+                      required
+                    />
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-1">
+                      <div className="w-8 h-5 bg-[#1A1F71] rounded flex items-center justify-center">
+                        <span className="text-white text-[8px] font-bold">VISA</span>
+                      </div>
+                      <div className="w-8 h-5 bg-gradient-to-r from-[#EB001B] to-[#F79E1B] rounded flex items-center justify-center">
+                        <div className="flex">
+                          <div className="w-2.5 h-2.5 bg-[#EB001B] rounded-full opacity-80"></div>
+                          <div className="w-2.5 h-2.5 bg-[#F79E1B] rounded-full -ml-1 opacity-80"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex border-t">
+                    <Input
+                      placeholder="MM/AA"
+                      value={expiry}
+                      onChange={(e) => setExpiry(formatExpiry(e.target.value))}
+                      maxLength={5}
+                      className="border-0 rounded-none h-11 border-r focus-visible:ring-0"
+                      required
+                    />
+                    <Input
+                      placeholder="CVC"
+                      value={cvv}
+                      onChange={(e) => setCvv(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                      maxLength={4}
+                      type="password"
+                      className="border-0 rounded-none h-11 focus-visible:ring-0"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Holder Name */}
+              <div className="space-y-2 mb-4">
+                <Label htmlFor="holderName" className="text-sm text-muted-foreground">
+                  Nome no cartão
+                </Label>
+                <Input
+                  id="holderName"
+                  placeholder="NOME COMO ESTÁ NO CARTÃO"
+                  value={holderName}
+                  onChange={(e) => setHolderName(e.target.value.toUpperCase())}
+                  className="h-11"
+                  required
+                />
+              </div>
+
+              {/* Billing Information */}
+              <div className="space-y-2 mb-4">
+                <Label className="text-sm text-muted-foreground">Dados de cobrança</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <Input
+                    placeholder="CPF ou CNPJ"
+                    value={cpfCnpj}
+                    onChange={(e) => setCpfCnpj(formatCPFCNPJ(e.target.value))}
+                    maxLength={18}
+                    className="h-11"
+                    required
+                  />
+                  <Input
+                    placeholder="(00) 00000-0000"
+                    value={phone}
+                    onChange={(e) => setPhone(formatPhone(e.target.value))}
+                    maxLength={15}
+                    className="h-11"
+                    required
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Input
+                    placeholder="CEP"
+                    value={postalCode}
+                    onChange={(e) => setPostalCode(formatCEP(e.target.value))}
+                    maxLength={9}
+                    className="h-11"
+                    required
+                  />
+                  <Input
+                    placeholder="Número"
+                    value={addressNumber}
+                    onChange={(e) => setAddressNumber(e.target.value)}
+                    className="h-11"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <div className="mt-auto pt-4">
+                <Button 
+                  type="submit" 
+                  className="w-full h-12 text-base font-semibold"
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                      Processando...
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="w-5 h-5 mr-2" />
+                      Pagar R$ {planInfo.priceDisplay}
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              {/* Security Note */}
+              <div className="mt-4 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                <Lock className="w-3 h-3" />
+                <span>Seus dados estão protegidos com criptografia</span>
+              </div>
+            </form>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );
