@@ -1,35 +1,35 @@
-import { Users, Calendar, DollarSign, FileText, Shield, BarChart3 } from "lucide-react";
+import { Users, Wallet, Gift, Building2, UserCircle, BarChart3 } from "lucide-react";
 
 const features = [
   {
     icon: Users,
     title: "Gestão de Colaboradores",
-    description: "Cadastro completo, documentos, histórico e toda informação em um só lugar.",
+    description: "Cadastro completo com CPF, cargo, setor e empresa. Controle de status ativo/inativo.",
   },
   {
-    icon: Calendar,
-    title: "Férias e Ausências",
-    description: "Controle automático de férias, licenças e faltas com aprovações simplificadas.",
+    icon: Wallet,
+    title: "Controle Financeiro",
+    description: "Lançamentos de salários, vales, adicionais e custos por colaborador e competência.",
   },
   {
-    icon: DollarSign,
-    title: "Folha de Pagamento",
-    description: "Cálculos automáticos, integração contábil e holerites digitais.",
+    icon: Gift,
+    title: "Benefícios Flexíveis",
+    description: "Cadastre benefícios mensais ou diários e atribua automaticamente aos colaboradores.",
   },
   {
-    icon: FileText,
-    title: "Contratos e Docs",
-    description: "Geração automática de contratos, termos e documentos com assinatura digital.",
+    icon: UserCircle,
+    title: "Portal do Colaborador",
+    description: "Área exclusiva para o colaborador acessar contracheques, benefícios e extrato.",
   },
   {
-    icon: Shield,
-    title: "Segurança e LGPD",
-    description: "Dados criptografados, controle de acesso e conformidade total com a LGPD.",
+    icon: Building2,
+    title: "Multi-empresa",
+    description: "Gerencie várias empresas e setores em uma única conta com controle centralizado.",
   },
   {
     icon: BarChart3,
-    title: "Relatórios Inteligentes",
-    description: "Dashboards em tempo real, métricas de RH e insights para decisões estratégicas.",
+    title: "Relatórios e Contabilidade",
+    description: "Upload de contracheques em lote, associação automática e exportação de dados.",
   },
 ];
 
