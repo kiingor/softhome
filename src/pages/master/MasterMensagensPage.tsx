@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,19 +32,22 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useMaster } from "@/contexts/MasterContext";
-import { Send, Trash2, CheckCircle, Clock, RefreshCw, Plus, Megaphone, ImageIcon } from "lucide-react";
+import { Send, Trash2, CheckCircle, Clock, RefreshCw, Plus, Megaphone, ImageIcon, Upload, X } from "lucide-react";
 
 export default function MasterMensagensPage() {
   const { toast } = useToast();
   const { userId } = useMaster();
   const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState<string>('all');
   const [messageTitle, setMessageTitle] = useState("");
   const [messageBody, setMessageBody] = useState("");
   const [messageType, setMessageType] = useState<'info' | 'warning' | 'alert'>('info');
-  const [imageUrl, setImageUrl] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   // Fetch companies for dropdown
   const { data: companies } = useQuery({
@@ -85,9 +88,56 @@ export default function MasterMensagensPage() {
     },
   });
 
+  // Handle image selection
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast({
+          title: 'Arquivo muito grande',
+          description: 'A imagem deve ter no máximo 5MB.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      setImageFile(file);
+      setImagePreview(URL.createObjectURL(file));
+    }
+  };
+
+  const clearImage = () => {
+    setImageFile(null);
+    setImagePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   // Send message mutation
   const sendMutation = useMutation({
     mutationFn: async () => {
+      let imageUrl: string | null = null;
+
+      // Upload image if exists
+      if (imageFile) {
+        setIsUploadingImage(true);
+        const fileExt = imageFile.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+        
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('master-images')
+          .upload(fileName, imageFile);
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('master-images')
+          .getPublicUrl(fileName);
+        
+        imageUrl = publicUrl;
+        setIsUploadingImage(false);
+      }
+
       const { error } = await supabase
         .from('system_messages')
         .insert({
@@ -97,7 +147,7 @@ export default function MasterMensagensPage() {
           message_type: messageType,
           created_by: userId,
           visible_until: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-          image_url: imageUrl || null,
+          image_url: imageUrl,
         });
 
       if (error) throw error;
@@ -115,9 +165,10 @@ export default function MasterMensagensPage() {
       setMessageBody("");
       setMessageType('info');
       setSelectedCompany('all');
-      setImageUrl("");
+      clearImage();
     },
     onError: (error: Error) => {
+      setIsUploadingImage(false);
       toast({
         title: 'Erro ao enviar mensagem',
         description: error.message,
@@ -333,21 +384,43 @@ export default function MasterMensagensPage() {
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
                 <ImageIcon className="w-4 h-4" />
-                URL da Imagem (opcional)
+                Imagem (opcional)
               </Label>
-              <Input 
-                placeholder="https://exemplo.com/imagem.png"
-                value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageSelect}
+                className="hidden"
               />
-              {imageUrl && (
-                <img 
-                  src={imageUrl} 
-                  alt="Preview" 
-                  className="w-20 h-20 rounded object-cover border"
-                  onError={(e) => (e.currentTarget.style.display = 'none')}
-                />
+              {imagePreview ? (
+                <div className="relative inline-block">
+                  <img 
+                    src={imagePreview} 
+                    alt="Preview" 
+                    className="w-24 h-24 rounded object-cover border"
+                  />
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="icon"
+                    className="absolute -top-2 -right-2 h-6 w-6"
+                    onClick={clearImage}
+                  >
+                    <X className="w-3 h-3" />
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  Selecionar Imagem
+                </Button>
               )}
+              <p className="text-xs text-muted-foreground">Máximo 5MB</p>
             </div>
           </div>
           <DialogFooter>

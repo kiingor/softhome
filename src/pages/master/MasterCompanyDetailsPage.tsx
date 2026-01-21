@@ -58,10 +58,8 @@ export default function MasterCompanyDetailsPage() {
   const { userId } = useMaster();
   const queryClient = useQueryClient();
 
-  const [showPlanDialog, setShowPlanDialog] = useState(false);
   const [showBlockDialog, setShowBlockDialog] = useState(false);
   const [showMessageDialog, setShowMessageDialog] = useState(false);
-  const [newPlan, setNewPlan] = useState<PlanId>('essencial');
   const [messageTitle, setMessageTitle] = useState("");
   const [messageBody, setMessageBody] = useState("");
   const [messageType, setMessageType] = useState<'info' | 'warning' | 'alert'>('info');
@@ -161,48 +159,6 @@ export default function MasterCompanyDetailsPage() {
     onError: (error: Error) => {
       toast({
         title: 'Erro',
-        description: error.message,
-        variant: 'destructive',
-      });
-    },
-  });
-
-  // Change plan mutation
-  const changePlanMutation = useMutation({
-    mutationFn: async (plan: string) => {
-      // Update company
-      const { error: updateError } = await supabase
-        .from('companies')
-        .update({ plan_type: plan })
-        .eq('id', id);
-
-      if (updateError) throw updateError;
-
-      // Record history
-      const { error: historyError } = await supabase
-        .from('subscription_history')
-        .insert({
-          company_id: id,
-          previous_plan: company?.plan_type,
-          new_plan: plan,
-          changed_by: userId,
-          change_reason: 'Manual change by master admin',
-        });
-
-      if (historyError) throw historyError;
-    },
-    onSuccess: () => {
-      toast({
-        title: 'Plano alterado',
-        description: 'O plano foi atualizado com sucesso.',
-      });
-      queryClient.invalidateQueries({ queryKey: ['master-company', id] });
-      queryClient.invalidateQueries({ queryKey: ['master-company-history', id] });
-      setShowPlanDialog(false);
-    },
-    onError: (error: Error) => {
-      toast({
-        title: 'Erro ao alterar plano',
         description: error.message,
         variant: 'destructive',
       });
@@ -321,17 +277,9 @@ export default function MasterCompanyDetailsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xl font-bold">{planInfo.name}</p>
-                <p className="text-sm text-muted-foreground">R$ {planInfo.priceDisplay}/mês</p>
-              </div>
-              <Button variant="ghost" size="sm" onClick={() => {
-                setNewPlan(company.plan_type as PlanId);
-                setShowPlanDialog(true);
-              }}>
-                <ArrowUpCircle className="w-4 h-4" />
-              </Button>
+            <div>
+              <p className="text-xl font-bold">{planInfo.name}</p>
+              <p className="text-sm text-muted-foreground">R$ {planInfo.priceDisplay}/mês</p>
             </div>
           </CardContent>
         </Card>
@@ -374,13 +322,26 @@ export default function MasterCompanyDetailsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Badge variant={statusInfo.variant} className="text-sm">
-              {statusInfo.label}
-            </Badge>
-            {company.subscription_due_date && (
-              <p className="text-sm text-muted-foreground mt-1">
-                Próx. cobrança: {new Date(company.subscription_due_date).toLocaleDateString('pt-BR')}
-              </p>
+            {company.trial_ends_at && new Date(company.trial_ends_at) > new Date() ? (
+              <>
+                <Badge variant="secondary" className="text-sm">
+                  Em Trial
+                </Badge>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {Math.max(0, Math.ceil((new Date(company.trial_ends_at).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)))} dias restantes
+                </p>
+              </>
+            ) : (
+              <>
+                <Badge variant={statusInfo.variant} className="text-sm">
+                  {statusInfo.label}
+                </Badge>
+                {company.subscription_due_date && (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Próx. cobrança: {new Date(company.subscription_due_date).toLocaleDateString('pt-BR')}
+                  </p>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
@@ -495,44 +456,6 @@ export default function MasterCompanyDetailsPage() {
           </Card>
         </div>
       </div>
-
-      {/* Change Plan Dialog */}
-      <Dialog open={showPlanDialog} onOpenChange={setShowPlanDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Alterar Plano</DialogTitle>
-            <DialogDescription>
-              Selecione o novo plano para {company.company_name}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <Label>Novo plano</Label>
-            <Select value={newPlan} onValueChange={(v) => setNewPlan(v as PlanId)}>
-              <SelectTrigger className="mt-2">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(PLANS).map(([id, plan]) => (
-                  <SelectItem key={id} value={id}>
-                    {plan.name} - R$ {plan.priceDisplay}/mês
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowPlanDialog(false)}>
-              Cancelar
-            </Button>
-            <Button 
-              onClick={() => changePlanMutation.mutate(newPlan)}
-              disabled={changePlanMutation.isPending}
-            >
-              {changePlanMutation.isPending ? 'Alterando...' : 'Confirmar'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Block Dialog */}
       <Dialog open={showBlockDialog} onOpenChange={setShowBlockDialog}>
