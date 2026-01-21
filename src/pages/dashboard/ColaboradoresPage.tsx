@@ -75,6 +75,7 @@ const ColaboradoresPage = () => {
   const [teams, setTeams] = useState<Team[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
@@ -120,7 +121,11 @@ const ColaboradoresPage = () => {
   const loadCollaborators = async () => {
     if (!currentCompany) return;
 
-    setIsLoading(true);
+    // Only show loading skeleton on first load
+    if (!hasLoadedOnce) {
+      setIsLoading(true);
+    }
+    
     try {
       let query = supabase
         .from("collaborators")
@@ -151,6 +156,7 @@ const ColaboradoresPage = () => {
 
       setCollaborators(data || []);
       setTotalCount(count || 0);
+      setHasLoadedOnce(true);
     } catch (error: any) {
       toast({
         title: "Erro ao carregar colaboradores",
