@@ -135,11 +135,11 @@ const PortalLogin = () => {
     setIsLoading(true);
 
     try {
-      // Check if email exists in collaborators table
+      // Check if email exists in collaborators table (case-insensitive)
       const { data: collab, error } = await supabase
         .from("collaborators")
         .select("id, name, user_id, email")
-        .eq("email", email.toLowerCase().trim())
+        .ilike("email", email.trim())
         .maybeSingle();
 
       if (error) throw error;
