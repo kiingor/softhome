@@ -10,6 +10,8 @@ interface Company {
   plan_type: string;
   subscription_status?: string;
   trial_ends_at?: string | null;
+  asaas_customer_id?: string | null;
+  asaas_subscription_id?: string | null;
 }
 
 interface Store {

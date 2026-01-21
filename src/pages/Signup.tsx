@@ -9,17 +9,54 @@ import { z } from "zod";
 import { Eye, EyeOff, ArrowLeft } from "lucide-react";
 import { PLANS, PlanId } from "@/lib/planUtils";
 
+// Validação de CNPJ
+const validateCNPJ = (cnpj: string) => {
+  const numbers = cnpj.replace(/\D/g, "");
+  if (numbers.length !== 14) return false;
+  if (/^(\d)\1+$/.test(numbers)) return false;
+  
+  let sum = 0;
+  let weight = 5;
+  for (let i = 0; i < 12; i++) {
+    sum += parseInt(numbers[i]) * weight;
+    weight = weight === 2 ? 9 : weight - 1;
+  }
+  let digit = sum % 11 < 2 ? 0 : 11 - (sum % 11);
+  if (parseInt(numbers[12]) !== digit) return false;
+  
+  sum = 0;
+  weight = 6;
+  for (let i = 0; i < 13; i++) {
+    sum += parseInt(numbers[i]) * weight;
+    weight = weight === 2 ? 9 : weight - 1;
+  }
+  digit = sum % 11 < 2 ? 0 : 11 - (sum % 11);
+  return parseInt(numbers[13]) === digit;
+};
+
 const signupSchema = z.object({
   companyName: z.string().min(2, "Nome da empresa deve ter pelo menos 2 caracteres"),
+  cnpj: z.string().refine(validateCNPJ, "CNPJ inválido"),
   email: z.string().email("Email inválido"),
   password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres"),
 });
+
+const formatCNPJ = (value: string) => {
+  const numbers = value.replace(/\D/g, "");
+  return numbers
+    .replace(/^(\d{2})(\d)/, "$1.$2")
+    .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
+    .replace(/\.(\d{3})(\d)/, ".$1/$2")
+    .replace(/(\d{4})(\d)/, "$1-$2")
+    .slice(0, 18);
+};
 
 const Signup = () => {
   const [searchParams] = useSearchParams();
   const selectedPlan = (searchParams.get('plan') as PlanId) || 'essencial';
   const planInfo = PLANS[selectedPlan] || PLANS.essencial;
   const [companyName, setCompanyName] = useState("");
+  const [cnpj, setCnpj] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -30,7 +67,7 @@ const Signup = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const validation = signupSchema.safeParse({ companyName, email, password });
+    const validation = signupSchema.safeParse({ companyName, cnpj, email, password });
     if (!validation.success) {
       toast({
         title: "Erro de validação",
@@ -67,11 +104,12 @@ const Signup = () => {
       }
 
       if (authData.user) {
-        // Create company
+        // Create company with CNPJ
         const { data: companyData, error: companyError } = await supabase
           .from("companies")
           .insert({
             company_name: companyName,
+            cnpj: cnpj.replace(/\D/g, ""), // Store only numbers
             owner_id: authData.user.id,
             plan_type: selectedPlan,
           })
@@ -143,6 +181,20 @@ const Signup = () => {
                 onChange={(e) => setCompanyName(e.target.value)}
                 required
                 className="h-12"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="cnpj">CNPJ</Label>
+              <Input
+                id="cnpj"
+                type="text"
+                placeholder="00.000.000/0000-00"
+                value={cnpj}
+                onChange={(e) => setCnpj(formatCNPJ(e.target.value))}
+                required
+                className="h-12"
+                maxLength={18}
               />
             </div>
 
