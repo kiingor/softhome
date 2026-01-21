@@ -80,7 +80,7 @@ export default function DashboardSidebar() {
   return (
     <aside className="w-64 border-r border-border bg-card flex flex-col">
       {/* Header com logo */}
-      <div className="p-6 border-b border-border">
+      <div className="h-16 px-6 border-b border-border flex items-center">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl gradient-hero flex items-center justify-center shadow-soft">
             <span className="text-primary-foreground font-bold text-xl">M</span>
