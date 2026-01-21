@@ -208,37 +208,51 @@ export default function MasterConfiguracoesPage() {
   }
 
   async function upsertSetting(key: string, value: string) {
-    // Try to update first
-    const { data: existing } = await supabase
+    const { data: existing, error: existingError } = await supabase
       .from('system_settings')
       .select('id')
       .eq('setting_key', key)
-      .single();
+      .maybeSingle();
+
+    if (existingError) throw existingError;
 
     if (existing) {
-      await supabase
+      const { error: updateError } = await supabase
         .from('system_settings')
         .update({ setting_value: value })
         .eq('setting_key', key);
+
+      if (updateError) throw updateError;
     } else {
-      await supabase
+      const { error: insertError } = await supabase
         .from('system_settings')
         .insert({ setting_key: key, setting_value: value });
+
+      if (insertError) throw insertError;
     }
   }
 
   async function handleSaveAsaas() {
     setIsSavingAsaas(true);
     try {
+      const trimmedEnvironment = (asaasEnvironment || 'sandbox').trim() as 'sandbox' | 'production';
+      const trimmedSandboxKey = (asaasSandboxKey || '').trim();
+      const trimmedProductionKey = (asaasProductionKey || '').trim();
+
       await Promise.all([
-        upsertSetting('asaas_environment', asaasEnvironment),
-        upsertSetting('asaas_sandbox_key', asaasSandboxKey),
-        upsertSetting('asaas_production_key', asaasProductionKey),
+        upsertSetting('asaas_environment', trimmedEnvironment),
+        upsertSetting('asaas_sandbox_key', trimmedSandboxKey),
+        upsertSetting('asaas_production_key', trimmedProductionKey),
       ]);
+
+      // Keep local state trimmed so UI reflects what's stored
+      setAsaasEnvironment(trimmedEnvironment);
+      setAsaasSandboxKey(trimmedSandboxKey);
+      setAsaasProductionKey(trimmedProductionKey);
 
       toast({
         title: "Configurações do Asaas salvas",
-        description: `Ambiente atual: ${asaasEnvironment === 'sandbox' ? 'Sandbox (Testes)' : 'Produção'}`,
+        description: `Ambiente atual: ${trimmedEnvironment === 'sandbox' ? 'Sandbox (Testes)' : 'Produção'}`,
       });
     } catch (error) {
       console.error('Erro ao salvar configurações do Asaas:', error);

@@ -47,19 +47,48 @@ async function loadAsaasConfig(supabase: any) {
     
     const environment = settingsMap['asaas_environment'] || 'sandbox';
     
+    let source: 'system_settings' | 'env' = 'system_settings';
+
     if (environment === 'production') {
       ASAAS_API_URL = 'https://api.asaas.com/v3';
-      ASAAS_API_KEY = settingsMap['asaas_production_key'] || '';
+      ASAAS_API_KEY = (settingsMap['asaas_production_key'] || '').trim();
     } else {
       ASAAS_API_URL = 'https://sandbox.asaas.com/api/v3';
-      ASAAS_API_KEY = settingsMap['asaas_sandbox_key'] || '';
+      ASAAS_API_KEY = (settingsMap['asaas_sandbox_key'] || '').trim();
     }
-    
-    console.log('Asaas environment:', environment, '| URL:', ASAAS_API_URL);
+
+    // Log only a fingerprint of the key (never the full secret)
+    const keyLen = ASAAS_API_KEY.length;
+    const keyPrefix = ASAAS_API_KEY.slice(0, 6);
+    const keySuffix = ASAAS_API_KEY.slice(-4);
+    const hasWhitespace = /\s/.test(ASAAS_API_KEY);
+
+    console.log('[asaas-config]', {
+      source,
+      environment,
+      url: ASAAS_API_URL,
+      keyLen,
+      keyPrefix,
+      keySuffix,
+      hasWhitespace,
+    });
   } else {
     // Fallback to env variable if no settings found
-    ASAAS_API_KEY = Deno.env.get('ASAAS_API_KEY') || '';
-    console.log('Using fallback ASAAS_API_KEY from env');
+    ASAAS_API_KEY = (Deno.env.get('ASAAS_API_KEY') || '').trim();
+    const keyLen = ASAAS_API_KEY.length;
+    const keyPrefix = ASAAS_API_KEY.slice(0, 6);
+    const keySuffix = ASAAS_API_KEY.slice(-4);
+    const hasWhitespace = /\s/.test(ASAAS_API_KEY);
+
+    console.log('[asaas-config]', {
+      source: 'env',
+      environment: 'sandbox (default)',
+      url: ASAAS_API_URL,
+      keyLen,
+      keyPrefix,
+      keySuffix,
+      hasWhitespace,
+    });
   }
 }
 
@@ -68,7 +97,8 @@ async function asaasRequest(endpoint: string, options: RequestInit = {}) {
     throw new Error('Chave de API do Asaas não configurada. Configure nas Configurações do Master.');
   }
 
-  const response = await fetch(`${ASAAS_API_URL}${endpoint}`, {
+  const url = `${ASAAS_API_URL}${endpoint}`;
+  const response = await fetch(url, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
@@ -77,10 +107,28 @@ async function asaasRequest(endpoint: string, options: RequestInit = {}) {
     },
   });
 
-  const data = await response.json();
+  const contentType = response.headers.get('content-type') || '';
+  const rawText = await response.text();
+
+  let data: any = null;
+  if (contentType.includes('application/json')) {
+    try {
+      data = rawText ? JSON.parse(rawText) : null;
+    } catch {
+      data = { parseError: true, rawText };
+    }
+  } else {
+    data = { contentType, rawText };
+  }
   
   if (!response.ok) {
-    console.error('Asaas API error:', data);
+    console.error('Asaas API error:', {
+      status: response.status,
+      url,
+      method: options.method || 'GET',
+      contentType,
+      body: data,
+    });
     throw new Error(data.errors?.[0]?.description || 'Asaas API error');
   }
 
