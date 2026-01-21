@@ -13,7 +13,7 @@ import {
   Cake,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { SystemNotifications } from "@/components/dashboard/SystemNotifications";
+
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { TableSkeleton } from "@/components/ui/table-skeleton";
@@ -203,9 +203,6 @@ const DashboardHome = () => {
 
   return (
     <div className="space-y-8 animate-fade-in">
-      {/* System Notifications */}
-      <SystemNotifications />
-      
       {/* Welcome Section */}
       <div className="animate-slide-up">
         <h1 className="text-2xl md:text-3xl font-bold text-foreground">
