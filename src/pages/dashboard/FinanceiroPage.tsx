@@ -74,6 +74,7 @@ interface PayrollEntry {
 interface Collaborator {
   id: string;
   name: string;
+  status: "ativo" | "inativo";
 }
 
 interface BenefitAssignment {
@@ -144,7 +145,8 @@ const FinanceiroPage = () => {
 
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
+      // Fetch entries for the current period
+      const { data: periodEntries, error: periodError } = await supabase
         .from("payroll_entries")
         .select("*")
         .eq("company_id", currentCompany.id)
@@ -152,8 +154,58 @@ const FinanceiroPage = () => {
         .eq("year", year)
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
-      setEntries(data || []);
+      if (periodError) throw periodError;
+
+      // Fetch fixed entries (is_fixed = true) that were created in previous periods
+      // These should appear in all months from their creation until collaborator is inactive
+      const { data: fixedEntries, error: fixedError } = await supabase
+        .from("payroll_entries")
+        .select("*")
+        .eq("company_id", currentCompany.id)
+        .eq("is_fixed", true)
+        .or(`year.lt.${year},and(year.eq.${year},month.lte.${month})`);
+
+      if (fixedError) throw fixedError;
+
+      // Get list of collaborator IDs that already have an entry of each type in the current period
+      const existingKeys = new Set(
+        (periodEntries || []).map((e) => `${e.collaborator_id}-${e.type}`)
+      );
+
+      // Filter fixed entries to only include those that:
+      // 1. Don't already exist in the current period for that type
+      // 2. Are from a previous period (month/year before current selection)
+      const additionalFixedEntries = (fixedEntries || [])
+        .filter((entry) => {
+          const key = `${entry.collaborator_id}-${entry.type}`;
+          // Skip if already in current period
+          if (existingKeys.has(key)) return false;
+          // Include if from a previous period
+          if (entry.year < year) return true;
+          if (entry.year === year && entry.month < month) return true;
+          return false;
+        })
+        // Take only the most recent fixed entry per collaborator per type
+        .reduce((acc, entry) => {
+          const key = `${entry.collaborator_id}-${entry.type}`;
+          const existing = acc.get(key);
+          if (!existing || 
+              entry.year > existing.year || 
+              (entry.year === existing.year && entry.month > existing.month)) {
+            acc.set(key, entry);
+          }
+          return acc;
+        }, new Map<string, typeof fixedEntries[0]>());
+
+      // Convert map values to array and mark them as "virtual" for the current period
+      const virtualFixedEntries = Array.from(additionalFixedEntries.values()).map((entry) => ({
+        ...entry,
+        month,
+        year,
+        isVirtualFixed: true, // Mark so we know it's inherited from a previous period
+      }));
+
+      setEntries([...(periodEntries || []), ...virtualFixedEntries]);
     } catch (error: any) {
       toast({
         title: "Erro ao carregar lançamentos",
@@ -171,9 +223,8 @@ const FinanceiroPage = () => {
     try {
       const { data, error } = await supabase
         .from("collaborators")
-        .select("id, name")
+        .select("id, name, status")
         .eq("company_id", currentCompany.id)
-        .eq("status", "ativo")
         .eq("is_temp", false)
         .order("name");
 
@@ -279,11 +330,25 @@ const FinanceiroPage = () => {
     return collaborators.find((c) => c.id === id)?.name || "Colaborador removido";
   };
 
+  // Get active collaborator IDs
+  const activeCollaboratorIds = useMemo(() => {
+    return new Set(collaborators.filter((c) => c.status === "ativo").map((c) => c.id));
+  }, [collaborators]);
+
   // Combine entries with benefit assignments as virtual entries
   const combinedEntries = useMemo(() => {
-    // Map benefit assignments to virtual payroll entries
+    // Filter entries to only include those from active collaborators (for fixed entries)
+    const filteredPayrollEntries = entries.filter((entry) => {
+      // If it's a virtual fixed entry (inherited from previous period), only show for active collaborators
+      if ((entry as any).isVirtualFixed) {
+        return activeCollaboratorIds.has(entry.collaborator_id);
+      }
+      return true;
+    });
+
+    // Map benefit assignments to virtual payroll entries (only for active collaborators)
     const benefitEntries = benefitAssignments
-      .filter((ba) => ba.benefit)
+      .filter((ba) => ba.benefit && activeCollaboratorIds.has(ba.collaborator_id))
       .map((ba) => ({
         id: `benefit-${ba.id}`,
         type: "beneficio" as const,
@@ -297,8 +362,8 @@ const FinanceiroPage = () => {
         isBenefit: true,
       }));
 
-    return [...entries, ...benefitEntries];
-  }, [entries, benefitAssignments, month, year]);
+    return [...filteredPayrollEntries, ...benefitEntries];
+  }, [entries, benefitAssignments, month, year, activeCollaboratorIds]);
 
   // Filter entries
   const filteredEntries = useMemo(() => {
@@ -419,18 +484,20 @@ const FinanceiroPage = () => {
                   </SelectContent>
                 </Select>
 
-                {collaborators.length > 0 && (
+                {collaborators.filter((c) => c.status === "ativo").length > 0 && (
                   <Select value={collaboratorFilter} onValueChange={setCollaboratorFilter}>
                     <SelectTrigger className="w-[180px]">
                       <SelectValue placeholder="Colaborador" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Todos</SelectItem>
-                      {collaborators.map((collab) => (
-                        <SelectItem key={collab.id} value={collab.id}>
-                          {collab.name}
-                        </SelectItem>
-                      ))}
+                      {collaborators
+                        .filter((c) => c.status === "ativo")
+                        .map((collab) => (
+                          <SelectItem key={collab.id} value={collab.id}>
+                            {collab.name}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 )}

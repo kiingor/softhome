@@ -47,15 +47,54 @@ const MeuExtratoPage = () => {
     queryKey: ["my-payroll-entries", collaborator?.id, selectedMonth, selectedYear],
     queryFn: async () => {
       if (!collaborator?.id) return [];
-      const { data, error } = await supabase
+      
+      // Fetch entries for the current period
+      const { data: periodEntries, error: periodError } = await supabase
         .from("payroll_entries")
         .select("*")
         .eq("collaborator_id", collaborator.id)
         .eq("month", selectedMonth)
         .eq("year", selectedYear)
         .order("type");
-      if (error) throw error;
-      return data;
+      
+      if (periodError) throw periodError;
+      
+      // Fetch fixed entries from previous periods
+      const { data: fixedEntries, error: fixedError } = await supabase
+        .from("payroll_entries")
+        .select("*")
+        .eq("collaborator_id", collaborator.id)
+        .eq("is_fixed", true)
+        .or(`year.lt.${selectedYear},and(year.eq.${selectedYear},month.lt.${selectedMonth})`);
+      
+      if (fixedError) throw fixedError;
+      
+      // Get existing types in current period
+      const existingTypes = new Set(
+        (periodEntries || []).map((e) => e.type)
+      );
+      
+      // Get most recent fixed entry per type from previous periods
+      const additionalFixedEntries = (fixedEntries || [])
+        .filter((entry) => !existingTypes.has(entry.type))
+        .reduce((acc, entry) => {
+          const existing = acc.get(entry.type);
+          if (!existing || 
+              entry.year > existing.year || 
+              (entry.year === existing.year && entry.month > existing.month)) {
+            acc.set(entry.type, entry);
+          }
+          return acc;
+        }, new Map());
+      
+      // Map fixed entries to current period display
+      const virtualFixedEntries = Array.from(additionalFixedEntries.values()).map((entry: any) => ({
+        ...entry,
+        month: selectedMonth,
+        year: selectedYear,
+      }));
+      
+      return [...(periodEntries || []), ...virtualFixedEntries];
     },
     enabled: !!collaborator?.id,
   });
