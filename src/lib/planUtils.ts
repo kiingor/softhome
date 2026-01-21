@@ -1,7 +1,7 @@
 export const PLANS = {
   essencial: {
     id: 'essencial',
-    name: 'RH360 Essencial',
+    name: 'Meu RH Essencial',
     price: 49.90,
     priceDisplay: '49,90',
     collaboratorLimit: 5,
@@ -18,7 +18,7 @@ export const PLANS = {
   },
   crescer: {
     id: 'crescer',
-    name: 'RH360 Crescer',
+    name: 'Meu RH Crescer',
     price: 99.90,
     priceDisplay: '99,90',
     collaboratorLimit: 10,
@@ -37,7 +37,7 @@ export const PLANS = {
   },
   profissional: {
     id: 'profissional',
-    name: 'RH360 Profissional',
+    name: 'Meu RH Profissional',
     price: 199.90,
     priceDisplay: '199,90',
     collaboratorLimit: 30,
@@ -57,7 +57,7 @@ export const PLANS = {
   },
   empresa_plus: {
     id: 'empresa_plus',
-    name: 'RH360 Empresa+',
+    name: 'Meu RH Empresa+',
     price: 399.90,
     priceDisplay: '399,90',
     collaboratorLimit: 100,

@@ -8,9 +8,9 @@ const Footer = () => {
           <div className="md:col-span-2">
             <Link to="/" className="flex items-center gap-2 mb-4">
               <div className="w-10 h-10 rounded-xl gradient-hero flex items-center justify-center">
-                <span className="text-primary-foreground font-bold text-lg">R</span>
+                <span className="text-primary-foreground font-bold text-lg">M</span>
               </div>
-              <span className="text-xl font-bold">RH360</span>
+              <span className="text-xl font-bold">Meu RH</span>
             </Link>
             <p className="text-background/70 max-w-sm leading-relaxed">
               Sistema de RH completo em nuvem. Simplifique a gestão de pessoas e transforme seu departamento pessoal.
@@ -40,7 +40,7 @@ const Footer = () => {
 
         <div className="pt-8 border-t border-background/20 flex flex-col md:flex-row justify-between items-center gap-4">
           <p className="text-background/60 text-sm">
-            © 2024 RH360. Todos os direitos reservados.
+            © 2024 Meu RH. Todos os direitos reservados.
           </p>
           <div className="flex items-center gap-6">
             <a href="#" className="text-background/60 hover:text-background transition-colors">

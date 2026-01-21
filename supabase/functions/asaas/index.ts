@@ -24,10 +24,10 @@ interface AsaasSubscription {
 
 // Plan pricing configuration
 const PLAN_PRICING = {
-  essencial: { value: 49.90, description: 'RH360 Essencial - Até 5 colaboradores' },
-  crescer: { value: 99.90, description: 'RH360 Crescer - Até 10 colaboradores' },
-  profissional: { value: 199.90, description: 'RH360 Profissional - Até 30 colaboradores' },
-  empresa_plus: { value: 399.90, description: 'RH360 Empresa+ - Até 100 colaboradores' },
+  essencial: { value: 49.90, description: 'Meu RH Essencial - Até 5 colaboradores' },
+  crescer: { value: 99.90, description: 'Meu RH Crescer - Até 10 colaboradores' },
+  profissional: { value: 199.90, description: 'Meu RH Profissional - Até 30 colaboradores' },
+  empresa_plus: { value: 399.90, description: 'Meu RH Empresa+ - Até 100 colaboradores' },
 };
 
 async function asaasRequest(endpoint: string, options: RequestInit = {}) {

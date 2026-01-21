@@ -92,7 +92,7 @@ const Signup = () => {
 
         toast({
           title: "Conta criada com sucesso! 🎉",
-          description: "Bem-vindo ao RH360!",
+          description: "Bem-vindo ao Meu RH!",
         });
 
         navigate("/dashboard");
@@ -123,7 +123,7 @@ const Signup = () => {
           <div className="text-center mb-8">
             <Link to="/" className="inline-flex items-center gap-2 mb-4">
               <div className="w-12 h-12 rounded-xl gradient-hero flex items-center justify-center shadow-soft">
-                <span className="text-primary-foreground font-bold text-xl">R</span>
+                <span className="text-primary-foreground font-bold text-xl">M</span>
               </div>
             </Link>
             <h1 className="text-2xl font-bold text-foreground">Crie sua conta</h1>

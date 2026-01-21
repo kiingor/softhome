@@ -75,7 +75,7 @@ const Login = () => {
 
       toast({
         title: "Login realizado! 🎉",
-        description: "Bem-vindo de volta ao RH360!",
+        description: "Bem-vindo de volta ao Meu RH!",
       });
 
       navigate("/dashboard");
@@ -105,12 +105,12 @@ const Login = () => {
           <div className="text-center mb-8">
             <Link to="/" className="inline-flex items-center gap-2 mb-4">
               <div className="w-12 h-12 rounded-xl gradient-hero flex items-center justify-center shadow-soft">
-                <span className="text-primary-foreground font-bold text-xl">R</span>
+                <span className="text-primary-foreground font-bold text-xl">M</span>
               </div>
             </Link>
             <h1 className="text-2xl font-bold text-foreground">Bem-vindo de volta</h1>
             <p className="text-muted-foreground mt-2">
-              Entre na sua conta RH360
+              Entre na sua conta Meu RH
             </p>
           </div>
 

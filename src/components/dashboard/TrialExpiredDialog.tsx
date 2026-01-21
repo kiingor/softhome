@@ -110,13 +110,13 @@ export const TrialExpiredDialog = () => {
       <div className="max-w-6xl w-full">
         <div className="text-center mb-8">
           <div className="w-16 h-16 rounded-2xl gradient-hero flex items-center justify-center shadow-lg mx-auto mb-4">
-            <span className="text-primary-foreground font-bold text-2xl">R</span>
+            <span className="text-primary-foreground font-bold text-2xl">M</span>
           </div>
           <h1 className="text-3xl font-bold text-foreground mb-2">
             Seu período de teste expirou
           </h1>
           <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-            Escolha um plano para continuar utilizando o RH360 e gerenciar sua equipe de forma eficiente.
+            Escolha um plano para continuar utilizando o Meu RH e gerenciar sua equipe de forma eficiente.
           </p>
         </div>
 

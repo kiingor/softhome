@@ -48,7 +48,7 @@ export function MasterLayout({ children }: MasterLayoutProps) {
             </div>
             <div>
               <h1 className="font-bold text-foreground">Portal Master</h1>
-              <p className="text-xs text-muted-foreground">RH360 Admin</p>
+              <p className="text-xs text-muted-foreground">Meu RH Admin</p>
             </div>
           </div>
         </div>

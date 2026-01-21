@@ -109,7 +109,7 @@ const Plans = () => {
         <div className="text-center mt-12">
           <p className="text-muted-foreground">
             Precisa de mais de 100 colaboradores?{" "}
-            <a href="mailto:comercial@rh360.com.br" className="text-primary font-semibold hover:underline">
+            <a href="mailto:comercial@meurh.com.br" className="text-primary font-semibold hover:underline">
               Fale com nosso time comercial
             </a>
           </p>

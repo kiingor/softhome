@@ -57,7 +57,7 @@ const Hero = () => {
             <div className="absolute -inset-4 gradient-hero rounded-3xl opacity-20 blur-3xl" />
             <img 
               src={heroImage} 
-              alt="Equipe colaborando feliz com o RH360" 
+              alt="Equipe colaborando feliz com o Meu RH" 
               className="relative w-full rounded-2xl shadow-card"
             />
           </div>
