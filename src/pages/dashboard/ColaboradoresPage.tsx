@@ -25,6 +25,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { UserPlus, Search, Filter, MoreHorizontal, Edit, Trash2, Users } from "lucide-react";
 import { useDashboard } from "@/contexts/DashboardContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -69,6 +79,11 @@ const ColaboradoresPage = () => {
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Delete confirmation state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [collaboratorToDelete, setCollaboratorToDelete] = useState<Collaborator | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Filters
   const [searchTerm, setSearchTerm] = useState("");
@@ -195,20 +210,26 @@ const ColaboradoresPage = () => {
     loadCollaborators();
   };
 
-  const handleDelete = async (collaborator: Collaborator) => {
-    if (!confirm(`Tem certeza que deseja excluir ${collaborator.name}?`)) return;
+  const handleDelete = (collaborator: Collaborator) => {
+    setCollaboratorToDelete(collaborator);
+    setDeleteDialogOpen(true);
+  };
 
+  const confirmDelete = async () => {
+    if (!collaboratorToDelete) return;
+
+    setIsDeleting(true);
     try {
       const { error } = await supabase
         .from("collaborators")
         .delete()
-        .eq("id", collaborator.id);
+        .eq("id", collaboratorToDelete.id);
 
       if (error) throw error;
 
       toast({
         title: "Colaborador excluído",
-        description: `${collaborator.name} foi removido.`,
+        description: `${collaboratorToDelete.name} foi removido.`,
       });
 
       loadCollaborators();
@@ -218,6 +239,10 @@ const ColaboradoresPage = () => {
         description: error.message,
         variant: "destructive",
       });
+    } finally {
+      setIsDeleting(false);
+      setDeleteDialogOpen(false);
+      setCollaboratorToDelete(null);
     }
   };
 
@@ -475,6 +500,29 @@ const ColaboradoresPage = () => {
           collaboratorId={editingId}
           onSuccess={handleModalSuccess}
         />
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir colaborador</AlertDialogTitle>
+              <AlertDialogDescription>
+                Tem certeza que deseja excluir <strong>{collaboratorToDelete?.name}</strong>?
+                Esta ação não pode ser desfeita e todos os dados relacionados serão removidos.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmDelete}
+                disabled={isDeleting}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {isDeleting ? "Excluindo..." : "Excluir"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </RoleGuard>
   );
