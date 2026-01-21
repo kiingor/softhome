@@ -30,14 +30,11 @@ export default function MasterLoginPage() {
     const { data: { user } } = await supabase.auth.getUser();
     
     if (user) {
-      // Check if user is master admin
-      const { data: masterAdmin } = await supabase
-        .from('master_admins')
-        .select('id')
-        .eq('user_id', user.id)
-        .maybeSingle();
-      
-      if (masterAdmin) {
+      const { data: isMasterAdmin, error } = await supabase.rpc('is_master_admin', {
+        _user_id: user.id,
+      });
+
+      if (!error && isMasterAdmin) {
         navigate('/master');
         return;
       }
@@ -62,23 +59,6 @@ export default function MasterLoginPage() {
     setIsLoading(true);
 
     try {
-      // First check if email is in master_admins list
-      const { data: authorizedEmail } = await supabase
-        .from('master_admins')
-        .select('id, email')
-        .eq('email', email.toLowerCase())
-        .maybeSingle();
-
-      if (!authorizedEmail) {
-        toast({
-          title: "Acesso negado",
-          description: "Este email não está autorizado a acessar o Portal Master.",
-          variant: "destructive",
-        });
-        setIsLoading(false);
-        return;
-      }
-
       // Attempt login
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
@@ -97,11 +77,19 @@ export default function MasterLoginPage() {
       }
 
       if (authData.user) {
-        // Update master_admin record with user_id if not set
-        await supabase
-          .from('master_admins')
-          .update({ user_id: authData.user.id })
-          .eq('email', email.toLowerCase());
+        const { data: isMasterAdmin, error } = await supabase.rpc('is_master_admin', {
+          _user_id: authData.user.id,
+        });
+
+        if (error || !isMasterAdmin) {
+          await supabase.auth.signOut();
+          toast({
+            title: "Acesso negado",
+            description: "Este usuário não está autorizado a acessar o Portal Master.",
+            variant: "destructive",
+          });
+          return;
+        }
 
         toast({
           title: "Bem-vindo ao Portal Master",
