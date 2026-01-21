@@ -426,26 +426,13 @@ const CollaboratorModal = ({
           await supabase.from("payroll_entries").insert(entriesToCreate);
         }
 
-        // Create pending benefit assignments and corresponding payroll entries
+        // Create pending benefit assignments (benefits are calculated dynamically, not as payroll entries)
         if (pendingBenefits.length > 0) {
           const assignmentsToCreate = pendingBenefits.map((b) => ({
             benefit_id: b.benefit_id,
             collaborator_id: newCollab.id,
           }));
           await supabase.from("benefits_assignments").insert(assignmentsToCreate);
-
-          // Create payroll entries for each benefit
-          const benefitEntries = pendingBenefits.map((b) => ({
-            collaborator_id: newCollab.id,
-            company_id: currentCompany!.id,
-            type: "adicional" as const,
-            value: b.monthly_value,
-            description: `Benefício: ${b.benefit_name}`,
-            month: currentMonth,
-            year: currentYear,
-            is_fixed: true,
-          }));
-          await supabase.from("payroll_entries").insert(benefitEntries);
         }
 
         toast.success("Colaborador criado com sucesso!");
@@ -592,6 +579,7 @@ const CollaboratorModal = ({
   };
 
   // Add benefit assignment (for existing collaborators)
+  // Benefits are calculated dynamically from benefits_assignments, not stored as payroll_entries
   const handleAddBenefit = async () => {
     if (!selectedBenefitId) {
       toast.error("Selecione um benefício");
@@ -599,13 +587,6 @@ const CollaboratorModal = ({
     }
 
     try {
-      // Get benefit details for creating payroll entry
-      const selectedBenefit = availableBenefits.find(b => b.id === selectedBenefitId);
-      if (!selectedBenefit) {
-        toast.error("Benefício não encontrado");
-        return;
-      }
-
       const { error } = await supabase.from("benefits_assignments").insert({
         benefit_id: selectedBenefitId,
         collaborator_id: collaboratorId,
@@ -619,31 +600,7 @@ const CollaboratorModal = ({
         throw error;
       }
 
-      // Calculate monthly value for the benefit
-      const valueType = (selectedBenefit.value_type || "monthly") as "monthly" | "daily";
-      const applicableDays = selectedBenefit.applicable_days || ["mon", "tue", "wed", "thu", "fri"];
-      const monthlyValue = calculateMonthlyBenefitValue(
-        selectedBenefit.value || 0,
-        valueType,
-        applicableDays as DayAbbrev[],
-        currentMonth,
-        currentYear
-      );
-
-      // Create corresponding payroll entry
-      await supabase.from("payroll_entries").insert({
-        collaborator_id: collaboratorId,
-        company_id: currentCompany!.id,
-        type: "adicional" as const,
-        value: monthlyValue,
-        description: `Benefício: ${selectedBenefit.name}`,
-        month: currentMonth,
-        year: currentYear,
-        is_fixed: true,
-      });
-
       refetchAssignments();
-      queryClient.invalidateQueries({ queryKey: ["payroll-entries"] });
       setAddBenefitOpen(false);
       setSelectedBenefitId("");
       toast.success("Benefício atribuído!");
