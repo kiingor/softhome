@@ -41,7 +41,7 @@ const PortalLayout = ({ children }: PortalLayoutProps) => {
 
   const handleSignOut = async () => {
     await signOut();
-    navigate("/login");
+    navigate("/portal/login");
   };
 
   const getInitials = (name: string) => {
