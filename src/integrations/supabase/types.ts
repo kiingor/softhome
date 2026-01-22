@@ -933,6 +933,14 @@ export type Database = {
     }
     Functions: {
       can_add_collaborator: { Args: { _company_id: string }; Returns: boolean }
+      can_modify_module: {
+        Args: { _company_id: string; _module: string; _user_id: string }
+        Returns: boolean
+      }
+      can_view_module: {
+        Args: { _company_id: string; _module: string; _user_id: string }
+        Returns: boolean
+      }
       get_plan_limit: { Args: { plan: string }; Returns: number }
       get_user_permissions: {
         Args: { _company_id: string; _module: string; _user_id: string }
@@ -946,6 +954,15 @@ export type Database = {
       get_user_roles: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"][]
+      }
+      has_module_permission: {
+        Args: {
+          _company_id: string
+          _module: string
+          _permission?: string
+          _user_id: string
+        }
+        Returns: boolean
       }
       has_role: {
         Args: {

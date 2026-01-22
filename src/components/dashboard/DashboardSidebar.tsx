@@ -1,5 +1,6 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useDashboard, AppRole } from "@/contexts/DashboardContext";
+import { useDashboard } from "@/contexts/DashboardContext";
+import { useSidebarPermissions } from "@/hooks/useSidebarPermissions";
 import { supabase } from "@/integrations/supabase/client";
 import {
   LayoutDashboard,
@@ -13,16 +14,18 @@ import {
   LogOut,
   FolderTree,
   DollarSign,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { ModuleType } from "@/hooks/usePermissions";
 
 interface MenuItem {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   href: string;
-  roles: AppRole[];
+  module: ModuleType | null; // null means always visible (like Visão Geral)
 }
 
 interface MenuCategory {
@@ -34,40 +37,47 @@ const menuCategories: MenuCategory[] = [
   {
     label: "Principal",
     items: [
-      { icon: LayoutDashboard, label: "Visão Geral", href: "/dashboard", roles: ["admin", "rh", "gestor", "contador", "colaborador"] },
+      { icon: LayoutDashboard, label: "Visão Geral", href: "/dashboard", module: null },
     ],
   },
   {
     label: "Cadastros",
     items: [
-      { icon: Users, label: "Colaboradores", href: "/dashboard/colaboradores", roles: ["admin", "rh", "gestor"] },
-      { icon: FolderTree, label: "Setores", href: "/dashboard/setores", roles: ["admin", "rh", "gestor"] },
-      { icon: Briefcase, label: "Cargos", href: "/dashboard/cargos", roles: ["admin", "rh"] },
-      { icon: Building2, label: "Empresas", href: "/dashboard/empresas", roles: ["admin"] },
-      { icon: Gift, label: "Benefícios", href: "/dashboard/beneficios", roles: ["admin", "rh"] },
+      { icon: Users, label: "Colaboradores", href: "/dashboard/colaboradores", module: "colaboradores" },
+      { icon: FolderTree, label: "Setores", href: "/dashboard/setores", module: "setores" },
+      { icon: Briefcase, label: "Cargos", href: "/dashboard/cargos", module: "cargos" },
+      { icon: Building2, label: "Empresas", href: "/dashboard/empresas", module: "empresas" },
+      { icon: Gift, label: "Benefícios", href: "/dashboard/beneficios", module: "beneficios" },
     ],
   },
   {
     label: "Gestão",
     items: [
-      { icon: DollarSign, label: "Lançamentos", href: "/dashboard/financeiro", roles: ["admin", "rh", "contador"] },
-      { icon: BarChart3, label: "Relatórios", href: "/dashboard/relatorios", roles: ["admin", "rh", "contador"] },
-      { icon: FileText, label: "Contabilidade", href: "/dashboard/contabilidade", roles: ["admin", "rh", "contador"] },
+      { icon: DollarSign, label: "Lançamentos", href: "/dashboard/financeiro", module: "financeiro" },
+      { icon: BarChart3, label: "Relatórios", href: "/dashboard/relatorios", module: "relatorios" },
+      { icon: FileText, label: "Contabilidade", href: "/dashboard/contabilidade", module: "contabilidade" },
     ],
   },
 ];
 
 export default function DashboardSidebar() {
-  const { hasAnyRole } = useDashboard();
+  const { canViewModule, isAdmin, isLoading } = useSidebarPermissions();
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Filter categories and items based on roles
+  // Filter categories and items based on module permissions
   const visibleCategories = menuCategories
     .map(category => ({
       ...category,
-      items: category.items.filter(item => hasAnyRole(item.roles)),
+      items: category.items.filter(item => {
+        // Always show items without a module requirement (like Visão Geral)
+        if (item.module === null) return true;
+        // Admin sees all
+        if (isAdmin) return true;
+        // Check specific module permission
+        return canViewModule(item.module);
+      }),
     }))
     .filter(category => category.items.length > 0);
 
@@ -94,37 +104,43 @@ export default function DashboardSidebar() {
 
       {/* Menu de navegação */}
       <nav className="flex-1 p-4 overflow-auto">
-        {visibleCategories.map((category, categoryIndex) => (
-          <div key={category.label}>
-            {categoryIndex > 0 && (
-              <div className="my-3 border-t border-border" />
-            )}
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 px-4">
-              {category.label}
-            </p>
-            <div className="space-y-1">
-              {category.items.map((item) => {
-                const isActive = location.pathname === item.href || 
-                  (item.href !== "/dashboard" && location.pathname.startsWith(item.href));
-                return (
-                  <Link
-                    key={item.href}
-                    to={item.href}
-                    className={cn(
-                      "flex items-center gap-3 px-4 py-3 rounded-lg transition-colors",
-                      isActive
-                        ? "bg-primary/10 text-primary font-medium"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                    )}
-                  >
-                    <item.icon className="w-5 h-5" />
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </div>
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
           </div>
-        ))}
+        ) : (
+          visibleCategories.map((category, categoryIndex) => (
+            <div key={category.label}>
+              {categoryIndex > 0 && (
+                <div className="my-3 border-t border-border" />
+              )}
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 px-4">
+                {category.label}
+              </p>
+              <div className="space-y-1">
+                {category.items.map((item) => {
+                  const isActive = location.pathname === item.href || 
+                    (item.href !== "/dashboard" && location.pathname.startsWith(item.href));
+                  return (
+                    <Link
+                      key={item.href}
+                      to={item.href}
+                      className={cn(
+                        "flex items-center gap-3 px-4 py-3 rounded-lg transition-colors",
+                        isActive
+                          ? "bg-primary/10 text-primary font-medium"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                      )}
+                    >
+                      <item.icon className="w-5 h-5" />
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))
+        )}
       </nav>
 
       {/* Footer */}
