@@ -506,21 +506,21 @@ const FinanceiroPage = () => {
           </CardContent>
         </Card>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          <Card className="border border-border col-span-2 md:col-span-1">
-            <CardContent className="p-4">
-              <p className="text-sm text-muted-foreground">Total Geral</p>
-              <p className="text-2xl font-bold text-foreground">
+        {/* Summary Cards - Layout Compacto */}
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-2">
+          <Card className="border border-border">
+            <CardContent className="p-3">
+              <p className="text-xs text-muted-foreground truncate">Total</p>
+              <p className="text-lg font-bold text-foreground">
                 {formatCurrency(totals.total)}
               </p>
             </CardContent>
           </Card>
           {Object.entries(typeLabels).map(([type, label]) => (
             <Card key={type} className="border border-border">
-              <CardContent className="p-4">
-                <p className="text-sm text-muted-foreground">{label}</p>
-                <p className="text-lg font-semibold text-foreground">
+              <CardContent className="p-3">
+                <p className="text-xs text-muted-foreground truncate">{label}</p>
+                <p className="text-sm font-semibold text-foreground">
                   {formatCurrency(totals.byType[type] || 0)}
                 </p>
               </CardContent>
