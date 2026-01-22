@@ -37,7 +37,7 @@ import {
 import { toast } from "sonner";
 import { PLANS, getPlanById, PlanId } from "@/lib/planUtils";
 import { UsersAccessTab } from "@/components/dashboard/UsersAccessTab";
-import { useIsCompanyAdmin } from "@/hooks/usePermissions";
+import { useIsCompanyAdmin, usePermissions } from "@/hooks/usePermissions";
 import { PaymentModal } from "@/components/subscription/PaymentModal";
 import { differenceInDays } from "date-fns";
 
@@ -45,6 +45,8 @@ const ConfiguracoesPage = () => {
   const { currentCompany } = useDashboard();
   const queryClient = useQueryClient();
   const { isAdmin } = useIsCompanyAdmin();
+  const { canView: canViewPermissoes } = usePermissions("permissoes");
+  const canAccessUsersTab = isAdmin || canViewPermissoes;
   const [searchParams] = useSearchParams();
   const [isEditing, setIsEditing] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -244,7 +246,7 @@ const ConfiguracoesPage = () => {
               <Building2 className="w-4 h-4" />
               Dados da Conta
             </TabsTrigger>
-            {isAdmin && (
+            {canAccessUsersTab && (
               <TabsTrigger value="usuarios" className="gap-2">
                 <Users className="w-4 h-4" />
                 Usuários e Acessos
@@ -382,7 +384,7 @@ const ConfiguracoesPage = () => {
           </TabsContent>
 
           {/* Tab: Usuários e Acessos */}
-          {isAdmin && (
+          {canAccessUsersTab && (
             <TabsContent value="usuarios">
               <UsersAccessTab />
             </TabsContent>
