@@ -31,6 +31,8 @@ import {
 } from "recharts";
 import { format, parseISO, isThisMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useMultiplePermissions } from "@/hooks/useMultiplePermissions";
+import { ModuleType } from "@/hooks/usePermissions";
 
 const COLORS = ["hsl(var(--primary))", "hsl(var(--accent))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
 
@@ -39,6 +41,14 @@ const DashboardHome = () => {
   const navigate = useNavigate();
 
   const isColaborador = hasRole("colaborador") && !hasAnyRole(["admin", "rh", "gestor"]);
+  
+  // Get permissions for all modules to filter quick actions
+  const { canViewModule, isLoading: permissionsLoading, isAdmin } = useMultiplePermissions([
+    "colaboradores",
+    "financeiro",
+    "relatorios",
+    "beneficios",
+  ] as ModuleType[]);
 
   // Fetch collaborators count
   const { data: collaborators = [], isLoading: loadingCollaborators } = useQuery({
@@ -162,17 +172,28 @@ const DashboardHome = () => {
     { label: "Cargos Cadastrados", value: positions.length.toString(), icon: Briefcase, color: "bg-orange-100 text-orange-600" },
   ];
 
-  const quickActions = isColaborador
+  // Build quick actions based on permissions
+  const allQuickActions = isColaborador
     ? [
-        { label: "Meus Documentos", icon: FileText, action: () => navigate("/colaborador/contracheques") },
-        { label: "Meus Benefícios", icon: DollarSign, action: () => navigate("/colaborador/beneficios") },
+        { label: "Meus Documentos", icon: FileText, action: () => navigate("/colaborador/contracheques"), module: null },
+        { label: "Meus Benefícios", icon: DollarSign, action: () => navigate("/colaborador/beneficios"), module: null },
       ]
     : [
-        { label: "Novo Colaborador", icon: UserPlus, action: () => navigate("/dashboard/colaboradores") },
-        { label: "Lançamentos", icon: DollarSign, action: () => navigate("/dashboard/financeiro") },
-        { label: "Relatórios", icon: TrendingUp, action: () => navigate("/dashboard/relatorios") },
-        { label: "Benefícios", icon: Gift, action: () => navigate("/dashboard/beneficios") },
+        { label: "Novo Colaborador", icon: UserPlus, action: () => navigate("/dashboard/colaboradores"), module: "colaboradores" as ModuleType },
+        { label: "Lançamentos", icon: DollarSign, action: () => navigate("/dashboard/financeiro"), module: "financeiro" as ModuleType },
+        { label: "Relatórios", icon: TrendingUp, action: () => navigate("/dashboard/relatorios"), module: "relatorios" as ModuleType },
+        { label: "Benefícios", icon: Gift, action: () => navigate("/dashboard/beneficios"), module: "beneficios" as ModuleType },
       ];
+
+  // Filter quick actions based on permissions
+  const quickActions = allQuickActions.filter(action => {
+    // Collaborator actions don't need permission check
+    if (action.module === null) return true;
+    // Admin always sees all
+    if (isAdmin) return true;
+    // Check module permission
+    return canViewModule(action.module);
+  });
 
   if (isLoading) {
     return (

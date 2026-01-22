@@ -3,7 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Users, Pencil, Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useDashboard } from '@/contexts/DashboardContext';
-import RoleGuard from '@/components/dashboard/RoleGuard';
+import PermissionGuard from '@/components/dashboard/PermissionGuard';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -181,7 +182,7 @@ export default function SetoresPage() {
   };
 
   return (
-    <RoleGuard allowedRoles={['admin', 'rh']}>
+    <PermissionGuard module="setores">
       <div className="space-y-6 page-content">
         <div className="flex items-center justify-between animate-fade-in">
           <div>
@@ -368,6 +369,6 @@ export default function SetoresPage() {
           </CardContent>
         </Card>
       </div>
-    </RoleGuard>
+    </PermissionGuard>
   );
 }

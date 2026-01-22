@@ -1,4 +1,5 @@
-import RoleGuard from "@/components/dashboard/RoleGuard";
+import PermissionGuard from "@/components/dashboard/PermissionGuard";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar, Plus } from "lucide-react";
@@ -9,7 +10,7 @@ const FeriasPage = () => {
   const canManage = hasAnyRole(["admin", "rh", "gestor"]);
 
   return (
-    <RoleGuard allowedRoles={["admin", "rh", "gestor", "colaborador"]}>
+    <PermissionGuard module="ferias">
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
@@ -44,7 +45,7 @@ const FeriasPage = () => {
           </CardContent>
         </Card>
       </div>
-    </RoleGuard>
+    </PermissionGuard>
   );
 };
 

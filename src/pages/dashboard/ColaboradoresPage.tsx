@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import RoleGuard from "@/components/dashboard/RoleGuard";
+import PermissionGuard from "@/components/dashboard/PermissionGuard";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -70,6 +71,7 @@ interface Team {
 const ColaboradoresPage = () => {
   const { currentCompany } = useDashboard();
   const { toast } = useToast();
+  const { canCreate, canEdit, canDelete, isAdmin } = usePermissions("colaboradores");
 
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
@@ -265,7 +267,7 @@ const ColaboradoresPage = () => {
   const totalPages = Math.ceil(totalCount / pageSize);
 
   return (
-    <RoleGuard allowedRoles={["admin", "rh", "gestor"]}>
+    <PermissionGuard module="colaboradores">
       <div className="space-y-6 page-content">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 animate-fade-in">
           <div>
@@ -274,10 +276,12 @@ const ColaboradoresPage = () => {
               {totalCount} colaborador{totalCount !== 1 ? "es" : ""} cadastrado{totalCount !== 1 ? "s" : ""}
             </p>
           </div>
-          <Button variant="hero" onClick={handleNewCollaborator}>
-            <UserPlus className="w-4 h-4 mr-2" />
-            Novo Colaborador
-          </Button>
+          {(canCreate || isAdmin) && (
+            <Button variant="hero" onClick={handleNewCollaborator}>
+              <UserPlus className="w-4 h-4 mr-2" />
+              Novo Colaborador
+            </Button>
+          )}
         </div>
 
         {/* Search and Filters */}
@@ -443,26 +447,32 @@ const ColaboradoresPage = () => {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <MoreHorizontal className="w-4 h-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleEdit(collaborator)}>
-                              <Edit className="w-4 h-4 mr-2" />
-                              Editar
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => handleDelete(collaborator)}
-                              className="text-destructive focus:text-destructive"
-                            >
-                              <Trash2 className="w-4 h-4 mr-2" />
-                              Excluir
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        {(canEdit || canDelete || isAdmin) && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <MoreHorizontal className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              {(canEdit || isAdmin) && (
+                                <DropdownMenuItem onClick={() => handleEdit(collaborator)}>
+                                  <Edit className="w-4 h-4 mr-2" />
+                                  Editar
+                                </DropdownMenuItem>
+                              )}
+                              {(canDelete || isAdmin) && (
+                                <DropdownMenuItem
+                                  onClick={() => handleDelete(collaborator)}
+                                  className="text-destructive focus:text-destructive"
+                                >
+                                  <Trash2 className="w-4 h-4 mr-2" />
+                                  Excluir
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -530,7 +540,7 @@ const ColaboradoresPage = () => {
           </AlertDialogContent>
         </AlertDialog>
       </div>
-    </RoleGuard>
+    </PermissionGuard>
   );
 };
 

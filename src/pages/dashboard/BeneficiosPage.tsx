@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useDashboard } from "@/contexts/DashboardContext";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,20 +26,21 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Gift, Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import RoleGuard from "@/components/dashboard/RoleGuard";
+import PermissionGuard from "@/components/dashboard/PermissionGuard";
 import BenefitForm from "@/components/benefits/BenefitForm";
 import { formatCurrency } from "@/lib/formatters";
 import { DayAbbrev, dayLabels } from "@/lib/workingDays";
 
 const BeneficiosPage = () => {
-  const { currentCompany, hasAnyRole } = useDashboard();
+  const { currentCompany } = useDashboard();
   const queryClient = useQueryClient();
   const [benefitFormOpen, setBenefitFormOpen] = useState(false);
   const [editingBenefit, setEditingBenefit] = useState<any>(null);
   const [deletingBenefit, setDeletingBenefit] = useState<any>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const canManage = hasAnyRole(["admin", "rh"]);
+  const { canCreate, canEdit, canDelete, isAdmin } = usePermissions("beneficios");
+  const canManage = canCreate || canEdit || canDelete || isAdmin;
 
   // Fetch benefits
   const { data: benefits = [], isLoading: loadingBenefits } = useQuery({
@@ -185,7 +187,7 @@ const BeneficiosPage = () => {
   };
 
   return (
-    <RoleGuard allowedRoles={["admin", "rh", "colaborador"]}>
+    <PermissionGuard module="beneficios">
       <div className="space-y-6 page-content">
         <div className="flex items-center justify-between animate-fade-in">
           <div>
@@ -353,7 +355,7 @@ const BeneficiosPage = () => {
           </AlertDialogContent>
         </AlertDialog>
       </div>
-    </RoleGuard>
+    </PermissionGuard>
   );
 };
 

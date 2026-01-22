@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useDashboard } from "@/contexts/DashboardContext";
-import RoleGuard from "@/components/dashboard/RoleGuard";
+import PermissionGuard from "@/components/dashboard/PermissionGuard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -230,7 +230,7 @@ const ContabilidadePage = () => {
   };
 
   return (
-    <RoleGuard allowedRoles={["contador", "admin", "rh"]}>
+    <PermissionGuard module="contabilidade">
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -435,7 +435,7 @@ const ContabilidadePage = () => {
           </AlertDialogContent>
         </AlertDialog>
       </div>
-    </RoleGuard>
+    </PermissionGuard>
   );
 };
 
