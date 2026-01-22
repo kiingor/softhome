@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
-import RoleGuard from "@/components/dashboard/RoleGuard";
+import PermissionGuard from "@/components/dashboard/PermissionGuard";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -393,7 +394,7 @@ const FinanceiroPage = () => {
   const yearOptions = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
 
   return (
-    <RoleGuard allowedRoles={["admin", "rh"]}>
+    <PermissionGuard module="financeiro">
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
@@ -685,7 +686,7 @@ const FinanceiroPage = () => {
           </AlertDialogContent>
         </AlertDialog>
       </div>
-    </RoleGuard>
+    </PermissionGuard>
   );
 };
 

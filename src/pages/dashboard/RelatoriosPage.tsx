@@ -48,7 +48,7 @@ import {
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
-import RoleGuard from "@/components/dashboard/RoleGuard";
+import PermissionGuard from "@/components/dashboard/PermissionGuard";
 import { exportToPDF, exportToExcel, groupEntriesByCollaborator } from "@/lib/exportUtils";
 import { formatCurrency, getMonthName } from "@/lib/formatters";
 
@@ -229,7 +229,7 @@ const RelatoriosPage = () => {
   const periodLabel = `${getMonthName(selectedMonth)} de ${selectedYear}`;
 
   return (
-    <RoleGuard allowedRoles={["admin", "rh", "contador"]}>
+    <PermissionGuard module="relatorios">
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -460,7 +460,7 @@ const RelatoriosPage = () => {
           </AlertDialogContent>
         </AlertDialog>
       </div>
-    </RoleGuard>
+    </PermissionGuard>
   );
 };
 
