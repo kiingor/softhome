@@ -91,10 +91,6 @@ const Hero = () => {
   </Button>
 </div>
 
-
-              
-            </div>
-
             <div className="mt-10 flex items-center gap-6 text-sm text-muted-foreground">
               <div className="flex items-center gap-2">
                 <svg className="w-5 h-5 text-accent" fill="currentColor" viewBox="0 0 20 20">
