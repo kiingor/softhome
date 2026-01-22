@@ -7,7 +7,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
-import AceitarConvite from "./pages/AceitarConvite";
+
 import NotFound from "./pages/NotFound";
 import DashboardLayout from "./components/dashboard/DashboardLayout";
 import DashboardHome from "./pages/dashboard/DashboardHome";
@@ -62,7 +62,7 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
-          <Route path="/aceitar-convite" element={<AceitarConvite />} />
+          
           
           {/* Dashboard routes with persistent layout */}
           <Route path="/dashboard" element={<DashboardLayout />}>
