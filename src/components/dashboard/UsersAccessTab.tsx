@@ -89,6 +89,7 @@ export const UsersAccessTab = () => {
   // Invite user mutation
   const inviteMutation = useMutation({
     mutationFn: async (data: { email: string; full_name: string }) => {
+      // 1. Inserir na tabela company_users
       const { error } = await supabase.from("company_users").insert({
         company_id: currentCompany!.id,
         email: data.email,
@@ -97,6 +98,26 @@ export const UsersAccessTab = () => {
       });
 
       if (error) throw error;
+
+      // 2. Enviar email de convite via Edge Function
+      try {
+        const { error: emailError } = await supabase.functions.invoke("send-invite-email", {
+          body: {
+            recipientEmail: data.email,
+            recipientName: data.full_name,
+            companyName: currentCompany!.company_name,
+            inviterName: user?.email || "Administrador",
+          },
+        });
+
+        if (emailError) {
+          console.error("Error sending invite email:", emailError);
+          // Não falha a operação se o email não for enviado
+          // O convite foi salvo na tabela
+        }
+      } catch (emailError) {
+        console.error("Error invoking send-invite-email:", emailError);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["company-users"] });
