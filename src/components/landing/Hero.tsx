@@ -4,11 +4,26 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight, Play } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import defaultHeroImage from "@/assets/hero-illustration.png";
-
 const Hero = () => {
   // Começa vazio para não mostrar a imagem antiga/padrão e trocar bruscamente
   const [heroImage, setHeroImage] = useState<string | null>(null);
   const [imageLoaded, setImageLoaded] = useState(false);
+
+  // 👉 MESMA LÓGICA DO HEADER
+  const scrollToSection = (href: string) => {
+    const targetId = href.replace("#", "");
+    const element = document.getElementById(targetId);
+    if (element) {
+      const headerOffset = 80;
+      const elementPosition = element.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.scrollY - headerOffset;
+
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: "smooth",
+      });
+    }
+  };
 
   useEffect(() => {
     async function loadHeroImage() {
@@ -20,6 +35,7 @@ const Hero = () => {
           .single();
 
         const url = data?.setting_value ? data.setting_value : defaultHeroImage;
+
         setHeroImage(url);
         setImageLoaded(false);
       } catch (error) {
