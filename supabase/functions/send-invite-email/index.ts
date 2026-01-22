@@ -38,7 +38,8 @@ serve(async (req) => {
     console.log("Company:", companyName);
     console.log("Inviter:", inviterName);
 
-    const loginUrl = "https://meurh.lovable.app/login";
+    // Build the invite acceptance URL with email
+    const acceptUrl = `https://meurh.lovable.app/aceitar-convite?email=${encodeURIComponent(recipientEmail)}`;
 
     const emailResponse = await resend.emails.send({
       from: "Meu RH <onboarding@resend.dev>",
@@ -82,7 +83,7 @@ serve(async (req) => {
               </ul>
               
               <div style="text-align: center; margin: 30px 0;">
-                <a href="${loginUrl}" 
+                <a href="${acceptUrl}" 
                    style="background: linear-gradient(135deg, #7C3AED 0%, #5B21B6 100%); 
                           color: white; padding: 14px 32px; 
                           text-decoration: none; border-radius: 8px; font-weight: bold;
