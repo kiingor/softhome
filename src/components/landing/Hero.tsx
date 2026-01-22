@@ -59,7 +59,7 @@ const Hero = () => {
               </Link>
               <Button variant="outline" size="xl" className="w-full sm:w-auto">
                 <Play className="w-5 h-5" />
-                Ver demonstração
+                Ver Planos
               </Button>
             </div>
 
@@ -82,17 +82,7 @@ const Hero = () => {
                     clipRule="evenodd"
                   />
                 </svg>
-                Sem fidelidade
-              </div>
-              <div className="flex items-center gap-2">
-                <svg className="w-5 h-5 text-accent" fill="currentColor" viewBox="0 0 20 20">
-                  <path
-                    fillRule="evenodd"
-                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-                Pagamento 100% seguro
+                Sem cartão de crédito
               </div>
             </div>
           </div>
