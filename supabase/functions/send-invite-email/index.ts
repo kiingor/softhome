@@ -39,7 +39,7 @@ serve(async (req) => {
     console.log("Inviter:", inviterName);
 
     // Build the invite acceptance URL with email
-    const acceptUrl = `https://meurh.lovable.app/aceitar-convite?email=${encodeURIComponent(recipientEmail)}`;
+    const acceptUrl = `https://meurh.com.br/aceitar-convite?email=${encodeURIComponent(recipientEmail)}`;
 
     const emailResponse = await resend.emails.send({
       from: "Meu RH <onboarding@resend.dev>",

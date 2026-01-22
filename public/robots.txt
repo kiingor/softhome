@@ -1,5 +1,5 @@
 # Robots.txt - Meu RH
-# https://meurh.lovable.app
+# https://meurh.com.br
 
 User-agent: Googlebot
 Allow: /
@@ -23,7 +23,7 @@ User-agent: *
 Allow: /
 
 # Sitemap
-Sitemap: https://meurh.lovable.app/sitemap.xml
+Sitemap: https://meurh.com.br/sitemap.xml
 
 # Bloquear áreas privadas do sistema
 Disallow: /dashboard/
