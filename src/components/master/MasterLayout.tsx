@@ -1,5 +1,4 @@
-import { ReactNode } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate, Outlet } from "react-router-dom";
 import { useMaster } from "@/contexts/MasterContext";
 import { supabase } from "@/integrations/supabase/client";
 import { 
@@ -9,15 +8,10 @@ import {
   Settings,
   Shield,
   MessageSquare,
-  Users
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-
-interface MasterLayoutProps {
-  children: ReactNode;
-}
 
 const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/master' },
@@ -26,7 +20,7 @@ const menuItems = [
   { icon: Settings, label: 'Configurações', href: '/master/configuracoes' },
 ];
 
-export function MasterLayout({ children }: MasterLayoutProps) {
+export function MasterLayout() {
   const { userEmail } = useMaster();
   const location = useLocation();
   const navigate = useNavigate();
@@ -94,7 +88,7 @@ export function MasterLayout({ children }: MasterLayoutProps) {
       {/* Main content */}
       <main className="flex-1 overflow-auto">
         <div className="p-8">
-          {children}
+          <Outlet />
         </div>
       </main>
     </div>

@@ -14,13 +14,21 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   FileText,
   ChevronLeft,
   ChevronRight,
   TrendingUp,
   DollarSign,
+  Gift,
+  Info,
 } from "lucide-react";
 import { formatCurrency, getMonthName } from "@/lib/formatters";
+import { calculateMonthlyBenefitValue, getBenefitCalculationDescription, DayAbbrev } from "@/lib/workingDays";
 
 const typeLabels: Record<string, string> = {
   salario: "Salário",
@@ -28,6 +36,7 @@ const typeLabels: Record<string, string> = {
   custo: "Custo",
   despesa: "Despesa",
   adicional: "Adicional",
+  beneficio: "Benefício",
 };
 
 const typeColors: Record<string, string> = {
@@ -36,14 +45,26 @@ const typeColors: Record<string, string> = {
   custo: "bg-orange-100 text-orange-700",
   despesa: "bg-red-100 text-red-700",
   adicional: "bg-purple-100 text-purple-700",
+  beneficio: "bg-teal-100 text-teal-700",
 };
+
+interface BenefitAssignment {
+  id: string;
+  benefit: {
+    id: string;
+    name: string;
+    value: number;
+    value_type: string;
+    applicable_days: string[] | null;
+  } | null;
+}
 
 const MeuExtratoPage = () => {
   const { collaborator } = usePortal();
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
-  const { data: entries = [], isLoading } = useQuery({
+  const { data: entries = [], isLoading: isLoadingEntries } = useQuery({
     queryKey: ["my-payroll-entries", collaborator?.id, selectedMonth, selectedYear],
     queryFn: async () => {
       if (!collaborator?.id) return [];
@@ -99,15 +120,83 @@ const MeuExtratoPage = () => {
     enabled: !!collaborator?.id,
   });
 
+  // Fetch benefit assignments for the collaborator
+  const { data: benefitAssignments = [], isLoading: isLoadingBenefits } = useQuery({
+    queryKey: ["my-benefit-assignments", collaborator?.id],
+    queryFn: async () => {
+      if (!collaborator?.id) return [];
+      const { data, error } = await supabase
+        .from("benefits_assignments")
+        .select(`
+          id,
+          benefit:benefits(id, name, value, value_type, applicable_days)
+        `)
+        .eq("collaborator_id", collaborator.id);
+      
+      if (error) throw error;
+      return (data || []) as BenefitAssignment[];
+    },
+    enabled: !!collaborator?.id,
+  });
+
+  // Calculate benefit monthly value
+  const calculateBenefitValue = (benefit: BenefitAssignment["benefit"]) => {
+    if (!benefit) return 0;
+    const valueType = (benefit.value_type || "monthly") as "monthly" | "daily";
+    const applicableDays = (benefit.applicable_days || ["mon", "tue", "wed", "thu", "fri"]) as DayAbbrev[];
+    return calculateMonthlyBenefitValue(
+      benefit.value || 0,
+      valueType,
+      applicableDays,
+      selectedMonth,
+      selectedYear
+    );
+  };
+
+  // Get benefit calculation description
+  const getBenefitDescription = (benefit: BenefitAssignment["benefit"]) => {
+    if (!benefit) return "";
+    const valueType = (benefit.value_type || "monthly") as "monthly" | "daily";
+    const applicableDays = (benefit.applicable_days || ["mon", "tue", "wed", "thu", "fri"]) as DayAbbrev[];
+    return getBenefitCalculationDescription(
+      benefit.value || 0,
+      valueType,
+      applicableDays,
+      selectedMonth,
+      selectedYear
+    );
+  };
+
+  // Combine entries with benefit assignments as virtual entries
+  const combinedEntries = useMemo(() => {
+    const benefitEntries = benefitAssignments
+      .filter((ba) => ba.benefit)
+      .map((ba) => ({
+        id: `benefit-${ba.id}`,
+        type: "beneficio" as const,
+        description: ba.benefit!.name,
+        value: calculateBenefitValue(ba.benefit),
+        month: selectedMonth,
+        year: selectedYear,
+        is_fixed: true,
+        isBenefit: true,
+        benefitDetails: ba.benefit,
+      }));
+
+    return [...entries, ...benefitEntries];
+  }, [entries, benefitAssignments, selectedMonth, selectedYear]);
+
+  const isLoading = isLoadingEntries || isLoadingBenefits;
+
   const totals = useMemo(() => {
     const byType: Record<string, number> = {};
     let total = 0;
-    entries.forEach((entry) => {
+    combinedEntries.forEach((entry) => {
       byType[entry.type] = (byType[entry.type] || 0) + Number(entry.value);
       total += Number(entry.value);
     });
     return { byType, total };
-  }, [entries]);
+  }, [combinedEntries]);
 
   const navigatePeriod = (direction: "prev" | "next") => {
     if (direction === "prev") {
@@ -175,7 +264,10 @@ const MeuExtratoPage = () => {
         {Object.entries(totals.byType).map(([type, value]) => (
           <Card key={type}>
             <CardContent className="p-4">
-              <p className="text-sm text-muted-foreground">{typeLabels[type]}</p>
+              <div className="flex items-center gap-2">
+                {type === "beneficio" && <Gift className="w-4 h-4 text-teal-600" />}
+                <p className="text-sm text-muted-foreground">{typeLabels[type]}</p>
+              </div>
               <p className="text-lg font-semibold">{formatCurrency(value)}</p>
             </CardContent>
           </Card>
@@ -195,7 +287,7 @@ const MeuExtratoPage = () => {
             <div className="text-center py-8 text-muted-foreground">
               Carregando...
             </div>
-          ) : entries.length === 0 ? (
+          ) : combinedEntries.length === 0 ? (
             <div className="text-center py-12">
               <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
                 <DollarSign className="w-8 h-8 text-muted-foreground" />
@@ -218,12 +310,24 @@ const MeuExtratoPage = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {entries.map((entry) => (
+                  {combinedEntries.map((entry: any) => (
                     <TableRow key={entry.id}>
                       <TableCell>
-                        <Badge className={typeColors[entry.type]}>
-                          {typeLabels[entry.type]}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge className={typeColors[entry.type]}>
+                            {typeLabels[entry.type]}
+                          </Badge>
+                          {entry.isBenefit && (
+                            <Tooltip>
+                              <TooltipTrigger>
+                                <Info className="w-4 h-4 text-muted-foreground" />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>{getBenefitDescription(entry.benefitDetails)}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {entry.description || "-"}

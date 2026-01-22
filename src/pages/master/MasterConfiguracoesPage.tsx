@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from "react";
-import { MasterLayout } from "@/components/master/MasterLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -268,18 +267,16 @@ export default function MasterConfiguracoesPage() {
 
   if (isLoading || isLoadingAsaas) {
     return (
-      <MasterLayout>
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-        </div>
-      </MasterLayout>
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
     );
   }
 
   const currentColor = selectedColor || settings.primary_color;
 
   return (
-    <MasterLayout>
+    <>
       <div className="space-y-6">
         {/* Header */}
         <div>
@@ -573,6 +570,6 @@ export default function MasterConfiguracoesPage() {
           </CardContent>
         </Card>
       </div>
-    </MasterLayout>
+    </>
   );
 }

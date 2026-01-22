@@ -143,59 +143,17 @@ const App = () => {
             element={
               <MasterProvider>
                 <MasterGuard>
-                  <MasterLayout>
-                    <MasterDashboard />
-                  </MasterLayout>
+                  <MasterLayout />
                 </MasterGuard>
               </MasterProvider>
             }
-          />
-          <Route
-            path="/master/empresas"
-            element={
-              <MasterProvider>
-                <MasterGuard>
-                  <MasterLayout>
-                    <MasterEmpresasPage />
-                  </MasterLayout>
-                </MasterGuard>
-              </MasterProvider>
-            }
-          />
-          <Route
-            path="/master/empresas/:id"
-            element={
-              <MasterProvider>
-                <MasterGuard>
-                  <MasterLayout>
-                    <MasterCompanyDetailsPage />
-                  </MasterLayout>
-                </MasterGuard>
-              </MasterProvider>
-            }
-          />
-          <Route
-            path="/master/mensagens"
-            element={
-              <MasterProvider>
-                <MasterGuard>
-                  <MasterLayout>
-                    <MasterMensagensPage />
-                  </MasterLayout>
-                </MasterGuard>
-              </MasterProvider>
-            }
-          />
-          <Route
-            path="/master/configuracoes"
-            element={
-              <MasterProvider>
-                <MasterGuard>
-                  <MasterConfiguracoesPage />
-                </MasterGuard>
-              </MasterProvider>
-            }
-          />
+          >
+            <Route index element={<MasterDashboard />} />
+            <Route path="empresas" element={<MasterEmpresasPage />} />
+            <Route path="empresas/:id" element={<MasterCompanyDetailsPage />} />
+            <Route path="mensagens" element={<MasterMensagensPage />} />
+            <Route path="configuracoes" element={<MasterConfiguracoesPage />} />
+          </Route>
           
           <Route path="*" element={<NotFound />} />
         </Routes>
