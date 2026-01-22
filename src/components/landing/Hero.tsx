@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight, Play } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import defaultHeroImage from "@/assets/hero-illustration.png";
+
 const Hero = () => {
   // Começa vazio para não mostrar a imagem antiga/padrão e trocar bruscamente
   const [heroImage, setHeroImage] = useState<string | null>(null);
@@ -16,7 +17,8 @@ const Hero = () => {
     if (element) {
       const headerOffset = 80;
       const elementPosition = element.getBoundingClientRect().top;
-      const offsetPosition = elementPosition + window.scrollY - headerOffset;
+      const offsetPosition =
+        elementPosition + window.scrollY - headerOffset;
 
       window.scrollTo({
         top: offsetPosition,
@@ -34,7 +36,9 @@ const Hero = () => {
           .eq("setting_key", "hero_image_url")
           .single();
 
-        const url = data?.setting_value ? data.setting_value : defaultHeroImage;
+        const url = data?.setting_value
+          ? data.setting_value
+          : defaultHeroImage;
 
         setHeroImage(url);
         setImageLoaded(false);
@@ -47,6 +51,7 @@ const Hero = () => {
     loadHeroImage();
   }, []);
 
+
   return (
     <section className="pt-32 pb-20 gradient-warm overflow-hidden">
       <div className="container mx-auto px-6">
@@ -56,47 +61,50 @@ const Hero = () => {
               <span className="w-2 h-2 rounded-full bg-primary animate-pulse-soft" />
               Novo: Gestão de férias automática
             </div>
-
+            
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-foreground leading-tight mb-6">
-              RH descomplicado, <span className="text-gradient">pessoas felizes</span>
+              RH descomplicado,{" "}
+              <span className="text-gradient">pessoas felizes</span>
             </h1>
-
+            
             <p className="text-lg md:text-xl text-muted-foreground leading-relaxed mb-8 max-w-xl">
-              Gerencie folha de pagamento, férias, benefícios e toda a jornada do colaborador em um só lugar. Simples
-              assim.
+              Gerencie folha de pagamento, férias, benefícios e toda a jornada do colaborador em um só lugar. 
+              Simples assim.
             </p>
 
-            <div className="flex flex-col sm:flex-row gap-4">
-              <Link to="/signup">
-                <Button variant="hero" size="xl" className="w-full sm:w-auto">
-                  Comece agora grátis
-                  <ArrowRight className="w-5 h-5" />
-                </Button>
-              </Link>
-              <Button variant="outline" size="xl" className="w-full sm:w-auto">
-                <Play className="w-5 h-5" />
-                Ver Planos
-              </Button>
+         <div className="flex flex-col sm:flex-row gap-4">
+  <Link to="/signup">
+    <Button variant="hero" size="xl" className="w-full sm:w-auto">
+      Comece agora grátis
+      <ArrowRight className="w-5 h-5" />
+    </Button>
+  </Link>
+
+  <Button
+    variant="outline"
+    size="xl"
+    className="w-full sm:w-auto"
+    onClick={() => scrollToSection("#planos")}
+  >
+    <Play className="w-5 h-5" />
+    Ver Planos
+  </Button>
+</div>
+
+
+              
             </div>
 
             <div className="mt-10 flex items-center gap-6 text-sm text-muted-foreground">
               <div className="flex items-center gap-2">
                 <svg className="w-5 h-5 text-accent" fill="currentColor" viewBox="0 0 20 20">
-                  <path
-                    fillRule="evenodd"
-                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                    clipRule="evenodd"
-                  />
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                 </svg>
                 3 dias grátis
               </div>
               <div className="flex items-center gap-2">
                 <svg className="w-5 h-5 text-accent" fill="currentColor" viewBox="0 0 20 20">
-                  <path
-                    fillRule="evenodd"
-                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                    clipRule="evenodd"
-                  />
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                 </svg>
                 Sem cartão de crédito
               </div>
