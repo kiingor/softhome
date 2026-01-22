@@ -55,11 +55,18 @@ serve(async (req) => {
     }
 
     // Parse the request body
-    const { email, password } = await req.json();
+    const { email, password, full_name, company_id } = await req.json();
 
     if (!email || !password) {
       return new Response(
         JSON.stringify({ error: "Email e senha são obrigatórios" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!company_id) {
+      return new Response(
+        JSON.stringify({ error: "ID da empresa é obrigatório" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -113,6 +120,24 @@ serve(async (req) => {
 
       if (roleError) {
         console.error("Error adding role:", roleError);
+        // Don't fail the whole operation, just log it
+      }
+
+      // Insert into company_users table so user appears in the list
+      const { error: companyUserError } = await adminClient
+        .from("company_users")
+        .insert({
+          company_id: company_id,
+          email: email.toLowerCase().trim(),
+          full_name: full_name || null,
+          user_id: newUser.user.id,
+          invited_by: callerUser.id,
+          is_active: true,
+          accepted_at: new Date().toISOString(),
+        });
+
+      if (companyUserError) {
+        console.error("Error adding company_user:", companyUserError);
         // Don't fail the whole operation, just log it
       }
     }
