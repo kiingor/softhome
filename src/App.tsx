@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { useDynamicFavicon } from "@/hooks/useDynamicFavicon";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -51,7 +52,10 @@ const queryClient = new QueryClient({
   },
 });
 
-const App = () => (
+const App = () => {
+  useDynamicFavicon();
+  
+  return (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
       <TooltipProvider>
@@ -199,6 +203,7 @@ const App = () => (
     </TooltipProvider>
   </ThemeProvider>
 </QueryClientProvider>
-);
+  );
+};
 
 export default App;
