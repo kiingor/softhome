@@ -49,6 +49,7 @@ const DashboardHome = () => {
     "cargos",
     "empresas",
     "contabilidade",
+    "permissoes",
   ] as ModuleType[]);
 
   // Check if user has any management permission (for showing admin UI)

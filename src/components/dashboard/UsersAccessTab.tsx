@@ -11,9 +11,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Plus, Trash2, Loader2, UserPlus, Mail, Eye, EyeOff } from "lucide-react";
+import { Plus, Trash2, Loader2, UserPlus, Mail, Eye, EyeOff, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
-import { MODULE_LABELS, type ModuleType } from "@/hooks/usePermissions";
+import { MODULE_LABELS, type ModuleType, usePermissions } from "@/hooks/usePermissions";
+import { Switch } from "@/components/ui/switch";
 
 interface CompanyUser {
   id: string;
@@ -42,11 +43,13 @@ const MODULES: ModuleType[] = [
   "financeiro",
   "relatorios",
   "contabilidade",
+  "permissoes",
 ];
 
 export const UsersAccessTab = () => {
   const { currentCompany, user } = useDashboard();
   const queryClient = useQueryClient();
+  const { canView: canViewPermissions, canEdit: canEditPermissions, isAdmin } = usePermissions("permissoes");
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<CompanyUser | null>(null);
   const [userToDelete, setUserToDelete] = useState<CompanyUser | null>(null);
@@ -274,9 +277,54 @@ export const UsersAccessTab = () => {
     },
   });
 
+  // Batch update all permissions (for "Mark as Admin" toggle)
+  const batchUpdatePermissionsMutation = useMutation({
+    mutationFn: async ({ grantAll }: { grantAll: boolean }) => {
+      if (!selectedUser?.user_id) throw new Error("User not accepted yet");
+
+      // Delete all existing permissions for this user in this company
+      await supabase
+        .from("user_permissions")
+        .delete()
+        .eq("user_id", selectedUser.user_id)
+        .eq("company_id", currentCompany!.id);
+
+      // Insert all permissions with the specified value
+      const permissions = MODULES.map((module) => ({
+        user_id: selectedUser.user_id!,
+        company_id: currentCompany!.id,
+        module,
+        can_view: grantAll,
+        can_create: grantAll,
+        can_edit: grantAll,
+        can_delete: grantAll,
+      }));
+
+      const { error } = await supabase.from("user_permissions").insert(permissions);
+      if (error) throw error;
+    },
+    onSuccess: (_, { grantAll }) => {
+      queryClient.invalidateQueries({ queryKey: ["user-permissions"] });
+      toast.success(grantAll ? "Acesso total concedido!" : "Permissões removidas!");
+    },
+    onError: () => {
+      toast.error("Erro ao atualizar permissões.");
+    },
+  });
+
   const getPermissionValue = (module: string, permission: keyof UserPermission) => {
     const perm = userPermissions?.find((p) => p.module === module);
     return perm?.[permission] ?? false;
+  };
+
+  // Check if user has all permissions (is "admin-like")
+  const hasAllPermissions = MODULES.every((module) => {
+    const perm = userPermissions?.find((p) => p.module === module);
+    return perm?.can_view && perm?.can_create && perm?.can_edit && perm?.can_delete;
+  });
+
+  const handleToggleAllPermissions = (checked: boolean) => {
+    batchUpdatePermissionsMutation.mutate({ grantAll: checked });
   };
 
   const handlePermissionChange = (
@@ -534,25 +582,46 @@ export const UsersAccessTab = () => {
       </Card>
 
       {/* Permissions Card */}
-      {selectedUser && (
+      {selectedUser && (isAdmin || canViewPermissions) && (
         <Card>
           <CardHeader className="pb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                <span className="text-primary font-semibold">
-                  {(selectedUser.full_name || selectedUser.email)[0].toUpperCase()}
-                </span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                  <span className="text-primary font-semibold">
+                    {(selectedUser.full_name || selectedUser.email)[0].toUpperCase()}
+                  </span>
+                </div>
+                <div>
+                  <CardTitle className="text-lg">
+                    Permissões de {selectedUser.full_name || selectedUser.email}
+                  </CardTitle>
+                  <CardDescription>
+                    {selectedUser.accepted_at
+                      ? "Configure o que este usuário pode fazer em cada módulo"
+                      : "Este usuário ainda não ativou a conta"}
+                  </CardDescription>
+                </div>
               </div>
-              <div>
-                <CardTitle className="text-lg">
-                  Permissões de {selectedUser.full_name || selectedUser.email}
-                </CardTitle>
-                <CardDescription>
-                  {selectedUser.accepted_at
-                    ? "Configure o que este usuário pode fazer em cada módulo"
-                    : "Este usuário ainda não ativou a conta"}
-                </CardDescription>
-              </div>
+              {selectedUser.accepted_at && (isAdmin || canEditPermissions) && (
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-primary/5 border border-primary/20">
+                  <ShieldCheck className="w-5 h-5 text-primary" />
+                  <div className="flex flex-col">
+                    <Label htmlFor="admin-toggle" className="text-sm font-medium">
+                      Acesso Total
+                    </Label>
+                    <span className="text-xs text-muted-foreground">
+                      Marcar todas as permissões
+                    </span>
+                  </div>
+                  <Switch
+                    id="admin-toggle"
+                    checked={hasAllPermissions}
+                    onCheckedChange={handleToggleAllPermissions}
+                    disabled={batchUpdatePermissionsMutation.isPending}
+                  />
+                </div>
+              )}
             </div>
           </CardHeader>
           <CardContent>
@@ -563,6 +632,10 @@ export const UsersAccessTab = () => {
             ) : isLoadingPermissions ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : !(isAdmin || canEditPermissions) ? (
+              <div className="text-center py-8 text-muted-foreground">
+                Você não tem permissão para editar as permissões deste usuário.
               </div>
             ) : (
               <Table>
