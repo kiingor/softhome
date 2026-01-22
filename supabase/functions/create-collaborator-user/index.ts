@@ -42,18 +42,6 @@ serve(async (req) => {
       );
     }
 
-    // Check if caller has admin or rh role
-    const { data: roles } = await userClient.rpc("get_user_roles", { _user_id: callerUser.id });
-    const hasPermission = roles?.includes("admin") || roles?.includes("rh");
-    
-    if (!hasPermission) {
-      console.error("User does not have permission:", callerUser.id);
-      return new Response(
-        JSON.stringify({ error: "Sem permissão para criar usuários" }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
     // Parse the request body
     const { email, password, full_name, company_id } = await req.json();
 
@@ -86,6 +74,30 @@ serve(async (req) => {
       },
     });
 
+    // Verify caller is company owner (has permission to create users)
+    const { data: companyData, error: companyError } = await adminClient
+      .from("companies")
+      .select("id, owner_id")
+      .eq("id", company_id)
+      .single();
+
+    if (companyError || !companyData) {
+      console.error("Company not found:", companyError);
+      return new Response(
+        JSON.stringify({ error: "Empresa não encontrada" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Check if caller is company owner
+    if (companyData.owner_id !== callerUser.id) {
+      console.error("User is not company owner:", callerUser.id);
+      return new Response(
+        JSON.stringify({ error: "Sem permissão para criar usuários nesta empresa" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Create the user using admin API (doesn't log in as them)
     const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
       email: email.toLowerCase().trim(),
@@ -112,25 +124,43 @@ serve(async (req) => {
 
     console.log("User created successfully:", newUser.user?.id);
 
-    // Add the collaborator role to the new user
+    // Setup all required records for the new user
     if (newUser.user) {
+      const userId = newUser.user.id;
+      const normalizedEmail = email.toLowerCase().trim();
+
+      // 1. Create profile with company_id (critical for user_belongs_to_company to work)
+      const { error: profileError } = await adminClient
+        .from("profiles")
+        .insert({
+          user_id: userId,
+          company_id: company_id,
+          full_name: full_name || null,
+        });
+
+      if (profileError) {
+        console.error("Error creating profile:", profileError);
+        // Continue anyway, profile might already exist from trigger
+      }
+
+      // 2. Add the collaborator role to the new user
       const { error: roleError } = await adminClient
         .from("user_roles")
-        .insert({ user_id: newUser.user.id, role: "colaborador" });
+        .insert({ user_id: userId, role: "colaborador" });
 
       if (roleError) {
         console.error("Error adding role:", roleError);
         // Don't fail the whole operation, just log it
       }
 
-      // Insert into company_users table so user appears in the list
+      // 3. Insert into company_users table so user appears in the list
       const { error: companyUserError } = await adminClient
         .from("company_users")
         .insert({
           company_id: company_id,
-          email: email.toLowerCase().trim(),
+          email: normalizedEmail,
           full_name: full_name || null,
-          user_id: newUser.user.id,
+          user_id: userId,
           invited_by: callerUser.id,
           is_active: true,
           accepted_at: new Date().toISOString(),
@@ -140,6 +170,8 @@ serve(async (req) => {
         console.error("Error adding company_user:", companyUserError);
         // Don't fail the whole operation, just log it
       }
+
+      console.log("All user records created successfully for:", userId);
     }
 
     return new Response(

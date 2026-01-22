@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import RoleGuard from "@/components/dashboard/RoleGuard";
+import PermissionGuard from "@/components/dashboard/PermissionGuard";
 import { useDashboard } from "@/contexts/DashboardContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -220,16 +220,16 @@ const ConfiguracoesPage = () => {
 
   if (isLoading) {
     return (
-      <RoleGuard allowedRoles={["admin", "rh"]}>
+      <PermissionGuard module="configuracoes">
         <div className="flex items-center justify-center h-64">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
-      </RoleGuard>
+      </PermissionGuard>
     );
   }
 
   return (
-    <RoleGuard allowedRoles={["admin", "rh"]}>
+    <PermissionGuard module="configuracoes">
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Configurações</h1>
@@ -607,7 +607,7 @@ const ConfiguracoesPage = () => {
           onSuccess={handlePaymentSuccess}
         />
       </div>
-    </RoleGuard>
+    </PermissionGuard>
   );
 };
 

@@ -27,7 +27,6 @@ import {
   XAxis,
   YAxis,
   Tooltip,
-  Legend,
 } from "recharts";
 import { format, parseISO, isThisMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -37,18 +36,26 @@ import { ModuleType } from "@/hooks/usePermissions";
 const COLORS = ["hsl(var(--primary))", "hsl(var(--accent))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
 
 const DashboardHome = () => {
-  const { profile, currentCompany, hasRole, hasAnyRole } = useDashboard();
+  const { profile, currentCompany } = useDashboard();
   const navigate = useNavigate();
 
-  const isColaborador = hasRole("colaborador") && !hasAnyRole(["admin", "rh", "gestor"]);
-  
-  // Get permissions for all modules to filter quick actions
+  // Get permissions for all modules to filter quick actions and UI
   const { canViewModule, isLoading: permissionsLoading, isAdmin } = useMultiplePermissions([
     "colaboradores",
     "financeiro",
     "relatorios",
     "beneficios",
+    "setores",
+    "cargos",
+    "empresas",
+    "contabilidade",
   ] as ModuleType[]);
+
+  // Check if user has any management permission (for showing admin UI)
+  const hasAnyManagementPermission = isAdmin || 
+    canViewModule("colaboradores") || 
+    canViewModule("financeiro") || 
+    canViewModule("relatorios");
 
   // Fetch collaborators count
   const { data: collaborators = [], isLoading: loadingCollaborators } = useQuery({
@@ -173,7 +180,8 @@ const DashboardHome = () => {
   ];
 
   // Build quick actions based on permissions
-  const allQuickActions = isColaborador
+  // If user has no management permissions, show collaborator-style actions
+  const allQuickActions = !hasAnyManagementPermission
     ? [
         { label: "Meus Documentos", icon: FileText, action: () => navigate("/colaborador/contracheques"), module: null },
         { label: "Meus Benefícios", icon: DollarSign, action: () => navigate("/colaborador/beneficios"), module: null },
@@ -230,14 +238,14 @@ const DashboardHome = () => {
           Olá{profile?.full_name ? `, ${profile.full_name.split(" ")[0]}` : ""}! 👋
         </h1>
         <p className="text-muted-foreground mt-1">
-          {isColaborador
+          {!hasAnyManagementPermission
             ? "Acompanhe suas informações e solicitações."
             : `Aqui está o resumo de ${currentCompany?.company_name || "sua empresa"} hoje.`}
         </p>
       </div>
 
       {/* Stats Grid */}
-      {!isColaborador && (
+      {hasAnyManagementPermission && (
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {adminStats.map((stat, index) => (
             <Card
@@ -283,7 +291,7 @@ const DashboardHome = () => {
       </div>
 
       {/* Charts Section */}
-      {hasAnyRole(["admin", "rh", "gestor"]) && collaborators.length > 0 && (
+      {hasAnyManagementPermission && collaborators.length > 0 && (
         <div className="grid lg:grid-cols-2 gap-6 animate-slide-up" style={{ animationDelay: "300ms" }}>
           {/* Collaborators by Position */}
           {collaboratorsByPosition.length > 0 && (
@@ -410,7 +418,7 @@ const DashboardHome = () => {
       )}
 
       {/* Status Overview */}
-      {hasAnyRole(["admin", "rh", "gestor"]) && collaborators.length > 0 && (
+      {hasAnyManagementPermission && collaborators.length > 0 && (
         <div className="grid sm:grid-cols-3 gap-4 animate-slide-up" style={{ animationDelay: "400ms" }}>
           <Card className="border border-border bg-green-50 dark:bg-green-950/20">
             <CardContent className="p-6 text-center">
@@ -434,7 +442,7 @@ const DashboardHome = () => {
       )}
 
       {/* Getting Started (only if no collaborators) */}
-      {hasAnyRole(["admin", "rh"]) && collaborators.length === 0 && (
+      {(isAdmin || canViewModule("colaboradores")) && collaborators.length === 0 && (
         <Card className="border-2 border-dashed border-primary/30 bg-primary/5 animate-scale-in">
           <CardContent className="p-8 text-center">
             <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
