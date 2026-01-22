@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Plus, Trash2, Crown, Loader2, UserPlus } from "lucide-react";
+import { Plus, Trash2, Loader2, UserPlus, Mail, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { MODULE_LABELS, type ModuleType } from "@/hooks/usePermissions";
 
@@ -50,7 +50,20 @@ export const UsersAccessTab = () => {
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<CompanyUser | null>(null);
   const [userToDelete, setUserToDelete] = useState<CompanyUser | null>(null);
-  const [inviteForm, setInviteForm] = useState({ email: "", full_name: "" });
+  const [inviteForm, setInviteForm] = useState({ 
+    email: "", 
+    full_name: "", 
+    password: "", 
+    confirmPassword: "" 
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Resend access data state
+  const [resendUser, setResendUser] = useState<CompanyUser | null>(null);
+  const [resendPassword, setResendPassword] = useState("");
+  const [resendConfirmPassword, setResendConfirmPassword] = useState("");
+  const [showResendPassword, setShowResendPassword] = useState(false);
 
   // Fetch company users
   const { data: companyUsers, isLoading: isLoadingUsers } = useQuery({
@@ -86,34 +99,42 @@ export const UsersAccessTab = () => {
     enabled: !!selectedUser?.user_id && !!currentCompany?.id,
   });
 
-  // Invite user mutation
+  // Create user mutation (new flow with password)
   const inviteMutation = useMutation({
-    mutationFn: async (data: { email: string; full_name: string }) => {
-      // 1. Inserir na tabela company_users
-      const { error } = await supabase.from("company_users").insert({
-        company_id: currentCompany!.id,
-        email: data.email,
-        full_name: data.full_name,
-        invited_by: user!.id,
+    mutationFn: async (data: { email: string; full_name: string; password: string }) => {
+      // 1. Criar usuário via Edge Function (backend com service role)
+      const { data: createResult, error: createError } = await supabase.functions.invoke("create-collaborator-user", {
+        body: {
+          email: data.email,
+          password: data.password,
+          full_name: data.full_name,
+          company_id: currentCompany!.id,
+        },
       });
 
-      if (error) throw error;
+      if (createError) {
+        console.error("Error creating user:", createError);
+        throw new Error(createError.message || "Erro ao criar usuário");
+      }
 
-      // 2. Enviar email de convite via Edge Function
+      if (!createResult?.success) {
+        throw new Error(createResult?.error || "Erro ao criar usuário");
+      }
+
+      // 2. Enviar email com credenciais de acesso
       try {
         const { error: emailError } = await supabase.functions.invoke("send-invite-email", {
           body: {
             recipientEmail: data.email,
             recipientName: data.full_name,
+            recipientPassword: data.password,
             companyName: currentCompany!.company_name,
             inviterName: user?.email || "Administrador",
           },
         });
 
         if (emailError) {
-          console.error("Error sending invite email:", emailError);
-          // Não falha a operação se o email não for enviado
-          // O convite foi salvo na tabela
+          console.error("Error sending credentials email:", emailError);
         }
       } catch (emailError) {
         console.error("Error invoking send-invite-email:", emailError);
@@ -121,17 +142,65 @@ export const UsersAccessTab = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["company-users"] });
-      toast.success("Convite enviado com sucesso!");
+      toast.success("Usuário criado com sucesso! Credenciais enviadas por email.");
       setIsInviteOpen(false);
-      setInviteForm({ email: "", full_name: "" });
+      setInviteForm({ email: "", full_name: "", password: "", confirmPassword: "" });
     },
     onError: (error: any) => {
-      console.error("Error inviting user:", error);
-      if (error.code === "23505") {
-        toast.error("Este email já foi convidado.");
+      console.error("Error creating user:", error);
+      const message = error.message || "Erro ao criar usuário.";
+      if (message.includes("already registered") || message.includes("já existe")) {
+        toast.error("Este email já está cadastrado no sistema.");
       } else {
-        toast.error("Erro ao enviar convite.");
+        toast.error(message);
       }
+    },
+  });
+
+  // Resend access data mutation
+  const resendMutation = useMutation({
+    mutationFn: async (data: { userId: string; email: string; fullName: string; newPassword: string }) => {
+      // 1. Atualizar senha via Edge Function
+      const { data: updateResult, error: updateError } = await supabase.functions.invoke("update-user-password", {
+        body: {
+          user_id: data.userId,
+          new_password: data.newPassword,
+        },
+      });
+
+      if (updateError) {
+        console.error("Error updating password:", updateError);
+        throw new Error(updateError.message || "Erro ao atualizar senha");
+      }
+
+      if (!updateResult?.success) {
+        throw new Error(updateResult?.error || "Erro ao atualizar senha");
+      }
+
+      // 2. Reenviar email com novas credenciais
+      const { error: emailError } = await supabase.functions.invoke("send-invite-email", {
+        body: {
+          recipientEmail: data.email,
+          recipientName: data.fullName,
+          recipientPassword: data.newPassword,
+          companyName: currentCompany!.company_name,
+          inviterName: user?.email || "Administrador",
+        },
+      });
+
+      if (emailError) {
+        console.error("Error sending credentials email:", emailError);
+        throw new Error("Senha atualizada, mas erro ao enviar email");
+      }
+    },
+    onSuccess: () => {
+      toast.success("Dados de acesso reenviados com sucesso!");
+      setResendUser(null);
+      setResendPassword("");
+      setResendConfirmPassword("");
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Erro ao reenviar dados de acesso.");
     },
   });
 
@@ -171,7 +240,6 @@ export const UsersAccessTab = () => {
     }) => {
       if (!selectedUser?.user_id) throw new Error("User not accepted yet");
 
-      // First try to update existing
       const { data: existing } = await supabase
         .from("user_permissions")
         .select("id")
@@ -188,7 +256,6 @@ export const UsersAccessTab = () => {
 
         if (error) throw error;
       } else {
-        // Insert new permission record
         const { error } = await supabase.from("user_permissions").insert({
           user_id: selectedUser.user_id,
           company_id: currentCompany!.id,
@@ -220,6 +287,56 @@ export const UsersAccessTab = () => {
     updatePermissionMutation.mutate({ module, permission, value });
   };
 
+  const handleInviteSubmit = () => {
+    if (inviteForm.password !== inviteForm.confirmPassword) {
+      toast.error("As senhas não coincidem.");
+      return;
+    }
+    if (inviteForm.password.length < 6) {
+      toast.error("A senha deve ter pelo menos 6 caracteres.");
+      return;
+    }
+    inviteMutation.mutate({
+      email: inviteForm.email,
+      full_name: inviteForm.full_name,
+      password: inviteForm.password,
+    });
+  };
+
+  const handleResendSubmit = () => {
+    if (!resendUser?.user_id) {
+      toast.error("Usuário ainda não ativou a conta.");
+      return;
+    }
+    if (resendPassword !== resendConfirmPassword) {
+      toast.error("As senhas não coincidem.");
+      return;
+    }
+    if (resendPassword.length < 6) {
+      toast.error("A senha deve ter pelo menos 6 caracteres.");
+      return;
+    }
+    resendMutation.mutate({
+      userId: resendUser.user_id,
+      email: resendUser.email,
+      fullName: resendUser.full_name || resendUser.email,
+      newPassword: resendPassword,
+    });
+  };
+
+  const canSubmitInvite = 
+    inviteForm.email && 
+    inviteForm.password && 
+    inviteForm.confirmPassword && 
+    inviteForm.password === inviteForm.confirmPassword &&
+    inviteForm.password.length >= 6;
+
+  const canSubmitResend = 
+    resendPassword && 
+    resendConfirmPassword && 
+    resendPassword === resendConfirmPassword &&
+    resendPassword.length >= 6;
+
   return (
     <div className="space-y-6">
       {/* Users List Card */}
@@ -236,14 +353,14 @@ export const UsersAccessTab = () => {
               <DialogTrigger asChild>
                 <Button size="sm">
                   <UserPlus className="w-4 h-4 mr-2" />
-                  Convidar Usuário
+                  Cadastrar Usuário
                 </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Convidar Novo Usuário</DialogTitle>
+                  <DialogTitle>Cadastrar Novo Usuário</DialogTitle>
                   <DialogDescription>
-                    Envie um convite para um novo usuário acessar o sistema.
+                    Defina o email e senha de acesso. O usuário receberá as credenciais por email.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
@@ -270,21 +387,70 @@ export const UsersAccessTab = () => {
                       }
                     />
                   </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Senha de Acesso</Label>
+                    <div className="relative">
+                      <Input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Mínimo 6 caracteres"
+                        value={inviteForm.password}
+                        onChange={(e) =>
+                          setInviteForm({ ...inviteForm, password: e.target.value })
+                        }
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="confirmPassword">Confirmar Senha</Label>
+                    <div className="relative">
+                      <Input
+                        id="confirmPassword"
+                        type={showConfirmPassword ? "text" : "password"}
+                        placeholder="Repita a senha"
+                        value={inviteForm.confirmPassword}
+                        onChange={(e) =>
+                          setInviteForm({ ...inviteForm, confirmPassword: e.target.value })
+                        }
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      >
+                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                    {inviteForm.confirmPassword && inviteForm.password !== inviteForm.confirmPassword && (
+                      <p className="text-sm text-destructive">As senhas não coincidem</p>
+                    )}
+                  </div>
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setIsInviteOpen(false)}>
                     Cancelar
                   </Button>
                   <Button
-                    onClick={() => inviteMutation.mutate(inviteForm)}
-                    disabled={!inviteForm.email || inviteMutation.isPending}
+                    onClick={handleInviteSubmit}
+                    disabled={!canSubmitInvite || inviteMutation.isPending}
                   >
                     {inviteMutation.isPending ? (
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     ) : (
                       <Plus className="w-4 h-4 mr-2" />
                     )}
-                    Enviar Convite
+                    Criar Usuário
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -298,7 +464,7 @@ export const UsersAccessTab = () => {
             </div>
           ) : companyUsers?.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              Nenhum usuário convidado ainda. Clique em "Convidar Usuário" para adicionar.
+              Nenhum usuário cadastrado ainda. Clique em "Cadastrar Usuário" para adicionar.
             </div>
           ) : (
             <Table>
@@ -307,7 +473,7 @@ export const UsersAccessTab = () => {
                   <TableHead>Nome</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="w-[100px]">Ações</TableHead>
+                  <TableHead className="w-[120px]">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -333,16 +499,31 @@ export const UsersAccessTab = () => {
                       )}
                     </TableCell>
                     <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setUserToDelete(companyUser);
-                        }}
-                      >
-                        <Trash2 className="w-4 h-4 text-destructive" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        {companyUser.user_id && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Reenviar dados de acesso"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setResendUser(companyUser);
+                            }}
+                          >
+                            <Mail className="w-4 h-4" />
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setUserToDelete(companyUser);
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4 text-destructive" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -369,7 +550,7 @@ export const UsersAccessTab = () => {
                 <CardDescription>
                   {selectedUser.accepted_at
                     ? "Configure o que este usuário pode fazer em cada módulo"
-                    : "Este usuário ainda não aceitou o convite"}
+                    : "Este usuário ainda não ativou a conta"}
                 </CardDescription>
               </div>
             </div>
@@ -377,7 +558,7 @@ export const UsersAccessTab = () => {
           <CardContent>
             {!selectedUser.accepted_at ? (
               <div className="text-center py-8 text-muted-foreground">
-                As permissões só podem ser configuradas após o usuário aceitar o convite.
+                As permissões só podem ser configuradas após o usuário ativar a conta.
               </div>
             ) : isLoadingPermissions ? (
               <div className="flex items-center justify-center py-8">
@@ -440,6 +621,79 @@ export const UsersAccessTab = () => {
           </CardContent>
         </Card>
       )}
+
+      {/* Resend Access Data Dialog */}
+      <Dialog open={!!resendUser} onOpenChange={() => {
+        setResendUser(null);
+        setResendPassword("");
+        setResendConfirmPassword("");
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reenviar Dados de Acesso</DialogTitle>
+            <DialogDescription>
+              Defina uma nova senha para <strong>{resendUser?.full_name || resendUser?.email}</strong>. 
+              As novas credenciais serão enviadas por email.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="resendPassword">Nova Senha</Label>
+              <div className="relative">
+                <Input
+                  id="resendPassword"
+                  type={showResendPassword ? "text" : "password"}
+                  placeholder="Mínimo 6 caracteres"
+                  value={resendPassword}
+                  onChange={(e) => setResendPassword(e.target.value)}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                  onClick={() => setShowResendPassword(!showResendPassword)}
+                >
+                  {showResendPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="resendConfirmPassword">Confirmar Nova Senha</Label>
+              <Input
+                id="resendConfirmPassword"
+                type="password"
+                placeholder="Repita a nova senha"
+                value={resendConfirmPassword}
+                onChange={(e) => setResendConfirmPassword(e.target.value)}
+              />
+              {resendConfirmPassword && resendPassword !== resendConfirmPassword && (
+                <p className="text-sm text-destructive">As senhas não coincidem</p>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setResendUser(null);
+              setResendPassword("");
+              setResendConfirmPassword("");
+            }}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleResendSubmit}
+              disabled={!canSubmitResend || resendMutation.isPending}
+            >
+              {resendMutation.isPending ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Mail className="w-4 h-4 mr-2" />
+              )}
+              Reenviar Acesso
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!userToDelete} onOpenChange={() => setUserToDelete(null)}>
