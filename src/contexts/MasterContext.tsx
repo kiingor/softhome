@@ -43,7 +43,7 @@ export function MasterProvider({ children }: { children: ReactNode }) {
         setIsMasterAdmin(false);
         setUserId(null);
         setUserEmail(null);
-        navigate('/login');
+        navigate('/admin-meurh');
         return;
       }
 
