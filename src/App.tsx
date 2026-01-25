@@ -136,8 +136,8 @@ const App = () => {
             }
           />
 
-          {/* Portal Master - Administração RH360 */}
-          <Route path="/master/login" element={<MasterLoginPage />} />
+          {/* Portal Master - Administração MeuRH */}
+          <Route path="/admin-meurh" element={<MasterLoginPage />} />
           <Route
             path="/master"
             element={
