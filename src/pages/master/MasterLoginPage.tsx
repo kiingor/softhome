@@ -189,7 +189,7 @@ export default function MasterLoginPage() {
             Este portal é exclusivo para administradores autorizados do Meu RH.
             <br />
             Se você é um cliente, acesse o{" "}
-            <a href="/login" className="text-primary hover:underline">painel do cliente</a>. Se você é um administrador, acesse <a href="/admin-meurh" className="text-primary hover:underline">aqui</a>.
+            <a href="/login" className="text-primary hover:underline">painel do cliente</a>.
           </p>
         </div>
       </div>
