@@ -86,123 +86,115 @@
    const doc = new jsPDF();
    const pageWidth = doc.internal.pageSize.getWidth();
    const margin = 10;
+   const contentWidth = pageWidth - margin * 2;
    let y = margin;
- 
-   // Header - Recibo de Pagamento
-   doc.setFillColor(240, 240, 240);
-   doc.rect(margin, y, pageWidth - margin * 2, 20, "F");
-   doc.setDrawColor(0);
-   doc.rect(margin, y, pageWidth - margin * 2, 20, "S");
- 
-   doc.setFontSize(14);
-   doc.setFont("helvetica", "bold");
-   doc.text("Recibo de Pagamento", margin + 5, y + 8);
-   doc.setFontSize(10);
-   doc.setFont("helvetica", "normal");
-   doc.text("(Folha de Pagamento)", margin + 5, y + 14);
- 
-   // Date and signature area
-   doc.setFontSize(8);
-   doc.text("Data e Assinatura", pageWidth - margin - 40, y + 8);
-   doc.text("___/___/___", pageWidth - margin - 35, y + 14);
- 
-   y += 25;
- 
-   // Company and employee info header
-   const headerHeight = 12;
    
-   // Row 1: Empregador | Inscrição | Admissão | Competência
+   // Set thin line width for all borders
+   doc.setLineWidth(0.2);
+   doc.setDrawColor(0, 0, 0);
+ 
+   // ============ HEADER ROW ============
+   const headerRowHeight = 18;
+   
+   // Left: Recibo de Pagamento
+   doc.rect(margin, y, contentWidth * 0.55, headerRowHeight, "S");
+   doc.setFontSize(12);
+   doc.setFont("helvetica", "bold");
+   doc.text("Recibo de Pagamento", margin + 4, y + 7);
+   doc.setFontSize(9);
+   doc.setFont("helvetica", "normal");
+   doc.text("( Folha de Pagamento )", margin + 4, y + 13);
+ 
+   // Right: Data e Assinatura
+   doc.rect(margin + contentWidth * 0.55, y, contentWidth * 0.45, headerRowHeight, "S");
    doc.setFontSize(7);
-   doc.setFont("helvetica", "bold");
-   doc.rect(margin, y, 80, headerHeight, "S");
+   doc.text("Data e Assinatura", margin + contentWidth * 0.55 + 4, y + 6);
+   doc.text("____/____/____                    _________________________________", margin + contentWidth * 0.55 + 4, y + 13);
+ 
+   y += headerRowHeight;
+ 
+   // ============ ROW 2: Empregador | Inscrição | Admissão | Competência ============
+   const row2Height = 12;
+   const col1Width = contentWidth * 0.4;
+   const col2Width = contentWidth * 0.25;
+   const col3Width = contentWidth * 0.15;
+   const col4Width = contentWidth * 0.2;
+ 
+   doc.setFontSize(7);
+   doc.rect(margin, y, col1Width, row2Height, "S");
    doc.text("Empregador", margin + 2, y + 4);
-   doc.setFont("helvetica", "normal");
-   doc.text(data.company.name.substring(0, 40), margin + 2, y + 9);
+   doc.text(data.company.name.substring(0, 45), margin + 2, y + 9);
  
-   doc.rect(margin + 80, y, 40, headerHeight, "S");
-   doc.setFont("helvetica", "bold");
-   doc.text("Inscrição (CNPJ)", margin + 82, y + 4);
-   doc.setFont("helvetica", "normal");
-   doc.text(data.company.cnpj || "-", margin + 82, y + 9);
+   doc.rect(margin + col1Width, y, col2Width, row2Height, "S");
+   doc.text("Inscrição", margin + col1Width + 2, y + 4);
+   doc.text(data.company.cnpj || "-", margin + col1Width + 2, y + 9);
  
-   doc.rect(margin + 120, y, 35, headerHeight, "S");
-   doc.setFont("helvetica", "bold");
-   doc.text("Admissão", margin + 122, y + 4);
-   doc.setFont("helvetica", "normal");
-   doc.text(data.collaborator.admissionDate, margin + 122, y + 9);
+   doc.rect(margin + col1Width + col2Width, y, col3Width, row2Height, "S");
+   doc.text("Admissão", margin + col1Width + col2Width + 2, y + 4);
+   doc.text(data.collaborator.admissionDate, margin + col1Width + col2Width + 2, y + 9);
  
-   doc.rect(margin + 155, y, pageWidth - margin * 2 - 155, headerHeight, "S");
-   doc.setFont("helvetica", "bold");
-   doc.text("Competência", margin + 157, y + 4);
-   doc.setFont("helvetica", "normal");
-   doc.text(`${monthNames[data.period.month - 1]}/${data.period.year}`, margin + 157, y + 9);
+   doc.rect(margin + col1Width + col2Width + col3Width, y, col4Width, row2Height, "S");
+   doc.text("Competência", margin + col1Width + col2Width + col3Width + 2, y + 4);
+   doc.text(`${monthNames[data.period.month - 1]} de ${data.period.year}`, margin + col1Width + col2Width + col3Width + 2, y + 9);
  
-   y += headerHeight;
+   y += row2Height;
  
-   // Row 2: Empregado | Cargo | Lotação
-   doc.rect(margin, y, 80, headerHeight, "S");
-   doc.setFont("helvetica", "bold");
+   // ============ ROW 3: Empregado | Cargo | Lotação ============
+   const row3Height = 12;
+   const empCol1 = contentWidth * 0.5;
+   const empCol2 = contentWidth * 0.25;
+   const empCol3 = contentWidth * 0.25;
+ 
+   doc.rect(margin, y, empCol1, row3Height, "S");
    doc.text("Empregado", margin + 2, y + 4);
-   doc.setFont("helvetica", "normal");
-   doc.text(`${data.collaborator.code} ${data.collaborator.name.substring(0, 35)}`, margin + 2, y + 9);
+   doc.text(`${data.collaborator.code} ${data.collaborator.name.substring(0, 50)}`, margin + 2, y + 9);
  
-   doc.rect(margin + 80, y, 55, headerHeight, "S");
-   doc.setFont("helvetica", "bold");
-   doc.text("Cargo", margin + 82, y + 4);
-   doc.setFont("helvetica", "normal");
-   doc.text(data.collaborator.position.substring(0, 25), margin + 82, y + 9);
+   doc.rect(margin + empCol1, y, empCol2, row3Height, "S");
+   doc.text("Cargo", margin + empCol1 + 2, y + 4);
+   doc.text(data.collaborator.position.substring(0, 30), margin + empCol1 + 2, y + 9);
  
-   doc.rect(margin + 135, y, pageWidth - margin * 2 - 135, headerHeight, "S");
-   doc.setFont("helvetica", "bold");
-   doc.text("Lotação", margin + 137, y + 4);
-   doc.setFont("helvetica", "normal");
-   doc.text(data.collaborator.department.substring(0, 20), margin + 137, y + 9);
+   doc.rect(margin + empCol1 + empCol2, y, empCol3, row3Height, "S");
+   doc.text("Lotação", margin + empCol1 + empCol2 + 2, y + 4);
+   doc.text(data.collaborator.department.substring(0, 25) || "GERAL", margin + empCol1 + empCol2 + 2, y + 9);
  
-   y += headerHeight;
+   y += row3Height;
  
-   // Row 3: CPF | Banco | Agência | Conta | Tipo Conta
-   doc.rect(margin, y, 50, headerHeight, "S");
-   doc.setFont("helvetica", "bold");
-   doc.text("CPF", margin + 2, y + 4);
-   doc.setFont("helvetica", "normal");
+   // ============ ROW 4: CPF | Banco | Agência | Conta | Tipo Conta ============
+   const row4Height = 12;
+   const cpfCol = contentWidth * 0.2;
+   const bankCol = contentWidth * 0.2;
+   const agCol = contentWidth * 0.2;
+   const contaCol = contentWidth * 0.2;
+   const tipoCol = contentWidth * 0.2;
+ 
+   doc.rect(margin, y, cpfCol, row4Height, "S");
+   doc.text("CPF:", margin + 2, y + 4);
    doc.text(data.collaborator.cpf, margin + 2, y + 9);
  
-   doc.rect(margin + 50, y, 30, headerHeight, "S");
-   doc.setFont("helvetica", "bold");
-   doc.text("Banco", margin + 52, y + 4);
-   doc.setFont("helvetica", "normal");
-   doc.text("-", margin + 52, y + 9);
+   doc.rect(margin + cpfCol, y, bankCol, row4Height, "S");
+   doc.text("Banco", margin + cpfCol + 2, y + 4);
  
-   doc.rect(margin + 80, y, 30, headerHeight, "S");
-   doc.setFont("helvetica", "bold");
-   doc.text("Agência", margin + 82, y + 4);
-   doc.setFont("helvetica", "normal");
-   doc.text("-", margin + 82, y + 9);
+   doc.rect(margin + cpfCol + bankCol, y, agCol, row4Height, "S");
+   doc.text("Agência", margin + cpfCol + bankCol + 2, y + 4);
  
-   doc.rect(margin + 110, y, 40, headerHeight, "S");
-   doc.setFont("helvetica", "bold");
-   doc.text("Conta", margin + 112, y + 4);
-   doc.setFont("helvetica", "normal");
-   doc.text("-", margin + 112, y + 9);
+   doc.rect(margin + cpfCol + bankCol + agCol, y, contaCol, row4Height, "S");
+   doc.text("Conta", margin + cpfCol + bankCol + agCol + 2, y + 4);
  
-   doc.rect(margin + 150, y, pageWidth - margin * 2 - 150, headerHeight, "S");
-   doc.setFont("helvetica", "bold");
-   doc.text("Tipo Conta", margin + 152, y + 4);
-   doc.setFont("helvetica", "normal");
-   doc.text("-", margin + 152, y + 9);
+   doc.rect(margin + cpfCol + bankCol + agCol + contaCol, y, tipoCol, row4Height, "S");
+   doc.text("Tipo de Conta", margin + cpfCol + bankCol + agCol + contaCol + 2, y + 4);
  
-   y += headerHeight + 5;
+   y += row4Height;
  
-   // Discriminação das Verbas - Table Header
-   doc.setFillColor(220, 220, 220);
-   doc.rect(margin, y, pageWidth - margin * 2, 8, "FD");
-   doc.setFont("helvetica", "bold");
+   // ============ Discriminação das Verbas Header ============
+   const discHeaderHeight = 8;
+   doc.rect(margin, y, contentWidth, discHeaderHeight, "S");
    doc.setFontSize(9);
-   doc.text("Discriminação das Verbas", pageWidth / 2, y + 5, { align: "center" });
+   doc.setFont("helvetica", "bold");
+   doc.text("Discriminação das Verbas", pageWidth / 2, y + 5.5, { align: "center" });
+   doc.setFont("helvetica", "normal");
+   y += discHeaderHeight;
  
-   y += 10;
- 
-   // Entries table
+   // ============ Entries Table ============
    const tableData = data.entries.map((entry) => [
      entry.code,
      entry.description,
@@ -211,99 +203,118 @@
      entry.deductions ? formatCurrencyPDF(entry.deductions) : "",
    ]);
  
+   // Ensure minimum rows for better layout
+   const minRows = 8;
+   while (tableData.length < minRows) {
+     tableData.push(["", "", "", "", ""]);
+   }
+ 
    autoTable(doc, {
      startY: y,
      head: [["Cod.", "Descrição", "Referência", "Provento", "Desconto"]],
      body: tableData,
-     theme: "grid",
+     theme: "plain",
      headStyles: {
-       fillColor: [180, 180, 180],
+       fillColor: [255, 255, 255],
        textColor: [0, 0, 0],
-       fontSize: 8,
-       fontStyle: "bold",
+       fontSize: 7,
+       fontStyle: "normal",
+       lineWidth: 0.2,
+       lineColor: [0, 0, 0],
      },
      styles: {
-       fontSize: 8,
-       cellPadding: 2,
+       fontSize: 7,
+       cellPadding: 1.5,
+       lineWidth: 0.2,
+       lineColor: [0, 0, 0],
+       font: "helvetica",
+       fontStyle: "normal",
      },
      columnStyles: {
-       0: { cellWidth: 15, halign: "center" },
-       1: { cellWidth: 70 },
+       0: { cellWidth: 20, halign: "center" },
+       1: { cellWidth: 80 },
        2: { cellWidth: 30, halign: "center" },
-       3: { cellWidth: 35, halign: "right" },
-       4: { cellWidth: 35, halign: "right" },
+       3: { cellWidth: 30, halign: "right" },
+       4: { cellWidth: 30, halign: "right" },
      },
      margin: { left: margin, right: margin },
+     tableLineWidth: 0.2,
+     tableLineColor: [0, 0, 0],
    });
  
-   y = (doc as any).lastAutoTable.finalY + 2;
+   y = (doc as any).lastAutoTable.finalY;
  
-   // Totals row
-   const totalsData = [
-     ["", "Total de Proventos", "", formatCurrencyPDF(data.totals.earnings), ""],
-     ["", "Total de Descontos", "", "", formatCurrencyPDF(data.totals.deductions)],
-     ["", "Líquido a Receber", "", formatCurrencyPDF(data.totals.netPay), ""],
-   ];
- 
-   autoTable(doc, {
-     startY: y,
-     body: totalsData,
-     theme: "grid",
-     styles: {
-       fontSize: 9,
-       cellPadding: 2,
-       fontStyle: "bold",
-     },
-     columnStyles: {
-       0: { cellWidth: 15 },
-       1: { cellWidth: 70 },
-       2: { cellWidth: 30 },
-       3: { cellWidth: 35, halign: "right" },
-       4: { cellWidth: 35, halign: "right" },
-     },
-     margin: { left: margin, right: margin },
-   });
- 
-   y = (doc as any).lastAutoTable.finalY + 5;
- 
-   // Footer - Tax bases
-   const footerHeight = 12;
-   const colWidth = (pageWidth - margin * 2) / 5;
- 
-   doc.setFillColor(240, 240, 240);
-   doc.rect(margin, y, pageWidth - margin * 2, footerHeight, "FD");
- 
+   // ============ TOTALS ROW ============
+   const totalsRowHeight = 8;
+   
+   // Empty cell for alignment
+   doc.rect(margin, y, contentWidth * 0.55, totalsRowHeight * 3, "S");
+   
+   // Total de Proventos
+   doc.rect(margin + contentWidth * 0.55, y, contentWidth * 0.25, totalsRowHeight, "S");
    doc.setFontSize(7);
-   doc.setFont("helvetica", "bold");
- 
-   // Salário-Base
-   doc.text("Salário", margin + 2, y + 4);
    doc.setFont("helvetica", "normal");
+   doc.text("Total de Proventos", margin + contentWidth * 0.55 + 2, y + 5);
+   
+   doc.rect(margin + contentWidth * 0.8, y, contentWidth * 0.2, totalsRowHeight, "S");
+   doc.text(formatCurrencyPDF(data.totals.earnings), margin + contentWidth - 2, y + 5, { align: "right" });
+   
+   y += totalsRowHeight;
+   
+   // Total de Descontos
+   doc.rect(margin + contentWidth * 0.55, y, contentWidth * 0.25, totalsRowHeight, "S");
+   doc.text("Total de Descontos", margin + contentWidth * 0.55 + 2, y + 5);
+   
+   doc.rect(margin + contentWidth * 0.8, y, contentWidth * 0.2, totalsRowHeight, "S");
+   doc.text(formatCurrencyPDF(data.totals.deductions), margin + contentWidth - 2, y + 5, { align: "right" });
+   
+   y += totalsRowHeight;
+   
+   // Líquido a Receber
+   doc.rect(margin + contentWidth * 0.55, y, contentWidth * 0.25, totalsRowHeight, "S");
+   doc.setFont("helvetica", "bold");
+   doc.text("Líquido a Receber", margin + contentWidth * 0.55 + 2, y + 5);
+   
+   doc.rect(margin + contentWidth * 0.8, y, contentWidth * 0.2, totalsRowHeight, "S");
+   doc.text(formatCurrencyPDF(data.totals.netPay), margin + contentWidth - 2, y + 5, { align: "right" });
+ 
+   y += totalsRowHeight + 2;
+ 
+   // ============ FOOTER - Tax Bases ============
+   const footerHeight = 12;
+   const footerColWidth = contentWidth / 6;
+ 
+   doc.setFontSize(6);
+   doc.setFont("helvetica", "normal");
+ 
+   // Salário Contratual
+   doc.rect(margin, y, footerColWidth, footerHeight, "S");
+   doc.text("Salário Contratual", margin + 2, y + 4);
    doc.text(formatCurrencyPDF(data.footer.baseSalary), margin + 2, y + 9);
  
-   // Base INSS
-   doc.setFont("helvetica", "bold");
-   doc.text("Base INSS", margin + colWidth + 2, y + 4);
-   doc.setFont("helvetica", "normal");
-   doc.text(formatCurrencyPDF(data.footer.inssBase), margin + colWidth + 2, y + 9);
+   // Base de Cálculo do INSS
+   doc.rect(margin + footerColWidth, y, footerColWidth, footerHeight, "S");
+   doc.text("Base de Cálculo do INSS", margin + footerColWidth + 2, y + 4);
+   doc.text(formatCurrencyPDF(data.footer.inssBase), margin + footerColWidth + 2, y + 9);
  
-   // Base FGTS
-   doc.setFont("helvetica", "bold");
-   doc.text("Base FGTS", margin + colWidth * 2 + 2, y + 4);
-   doc.setFont("helvetica", "normal");
-   doc.text(formatCurrencyPDF(data.footer.fgtsBase), margin + colWidth * 2 + 2, y + 9);
+   // Base de Cálculo do FGTS
+   doc.rect(margin + footerColWidth * 2, y, footerColWidth, footerHeight, "S");
+   doc.text("Base de Cálculo do FGTS", margin + footerColWidth * 2 + 2, y + 4);
+   doc.text(formatCurrencyPDF(data.footer.fgtsBase), margin + footerColWidth * 2 + 2, y + 9);
  
-   // FGTS Value
-   doc.setFont("helvetica", "bold");
-   doc.text("FGTS", margin + colWidth * 3 + 2, y + 4);
-   doc.setFont("helvetica", "normal");
-   doc.text(formatCurrencyPDF(data.footer.fgtsValue), margin + colWidth * 3 + 2, y + 9);
+   // FGTS
+   doc.rect(margin + footerColWidth * 3, y, footerColWidth, footerHeight, "S");
+   doc.text("FGTS", margin + footerColWidth * 3 + 2, y + 4);
+   doc.text(formatCurrencyPDF(data.footer.fgtsValue), margin + footerColWidth * 3 + 2, y + 9);
  
-   // Base IRRF
-   doc.setFont("helvetica", "bold");
-   doc.text("Base IRRF", margin + colWidth * 4 + 2, y + 4);
-   doc.setFont("helvetica", "normal");
-   doc.text(formatCurrencyPDF(data.footer.irpfBase), margin + colWidth * 4 + 2, y + 9);
+   // FGTS Contribuição Social
+   doc.rect(margin + footerColWidth * 4, y, footerColWidth, footerHeight, "S");
+   doc.text("FGTS Contribuição Social", margin + footerColWidth * 4 + 2, y + 4);
+ 
+   // Base de Cálculo do IRRF(S)
+   doc.rect(margin + footerColWidth * 5, y, footerColWidth, footerHeight, "S");
+   doc.text("Base de Cálculo do IRRF(S)", margin + footerColWidth * 5 + 2, y + 4);
+   doc.text(formatCurrencyPDF(data.footer.irpfBase), margin + footerColWidth * 5 + 2, y + 9);
  
    // Generate filename
    const fileName = `recibo_${data.collaborator.name.replace(/\s+/g, "_")}_${data.period.month.toString().padStart(2, "0")}_${data.period.year}.pdf`;
