@@ -35,7 +35,7 @@ import { Loader2, Gift, Calculator } from "lucide-react";
 import { getCurrentCompetencia, monthNames, formatCurrency } from "@/lib/formatters";
 
 const entrySchema = z.object({
-  type: z.enum(["salario", "vale", "custo", "despesa", "adicional"]),
+   type: z.enum(["salario", "vale", "custo", "despesa", "adicional", "inss", "fgts", "irpf"]),
   description: z.string().optional(),
   value: z.string().refine(
     (val) => {
@@ -83,6 +83,9 @@ const typeLabels: Record<string, string> = {
   custo: "Custo",
   despesa: "Despesa",
   adicional: "Adicional",
+   inss: "INSS",
+   fgts: "FGTS",
+   irpf: "IRPF",
 };
 
 const PayrollEntryForm = ({
@@ -125,6 +128,25 @@ const PayrollEntryForm = ({
   const watchYear = form.watch("year");
   const watchCollaboratorId = form.watch("collaborator_id");
 
+   // Fetch collaborator with position data for tax calculation
+   const { data: collaboratorWithPosition } = useQuery({
+     queryKey: ["collaborator-position", watchCollaboratorId],
+     queryFn: async () => {
+       if (!watchCollaboratorId) return null;
+       const { data, error } = await supabase
+         .from("collaborators")
+         .select(`
+           id, name, position_id,
+           position:positions(id, name, salary, inss_percent, fgts_percent, irpf_percent)
+         `)
+         .eq("id", watchCollaboratorId)
+         .single();
+       if (error) throw error;
+       return data;
+     },
+     enabled: !!watchCollaboratorId && open,
+   });
+ 
   // Fetch available benefits for the company
   const { data: benefits = [] } = useQuery({
     queryKey: ["benefits-for-form", currentCompany?.id],
@@ -288,7 +310,7 @@ const PayrollEntryForm = ({
       } else {
         // Standard single entry
         const entryData = {
-          type: data.type as "salario" | "vale" | "custo" | "despesa" | "adicional",
+           type: data.type as "salario" | "vale" | "custo" | "despesa" | "adicional" | "inss" | "fgts" | "irpf",
           description: data.description || null,
           value,
           month: data.month,
@@ -318,9 +340,72 @@ const PayrollEntryForm = ({
 
           if (error) throw error;
 
+           // Auto-create tax entries when creating a salary entry
+           if (data.type === "salario" && collaboratorWithPosition?.position) {
+             const position = collaboratorWithPosition.position as any;
+             const taxEntries: any[] = [];
+ 
+             if (position.inss_percent && position.inss_percent > 0) {
+               const inssValue = value * (position.inss_percent / 100);
+               taxEntries.push({
+                 type: "inss" as const,
+                 description: `INSS ${position.inss_percent}%`,
+                 value: inssValue,
+                 month: data.month,
+                 year: data.year,
+                 is_fixed: data.is_fixed,
+                 collaborator_id: data.collaborator_id,
+                 company_id: currentCompany.id,
+                 created_by: user?.id,
+               });
+             }
+ 
+             if (position.fgts_percent && position.fgts_percent > 0) {
+               const fgtsValue = value * (position.fgts_percent / 100);
+               taxEntries.push({
+                 type: "fgts" as const,
+                 description: `FGTS ${position.fgts_percent}%`,
+                 value: fgtsValue,
+                 month: data.month,
+                 year: data.year,
+                 is_fixed: data.is_fixed,
+                 collaborator_id: data.collaborator_id,
+                 company_id: currentCompany.id,
+                 created_by: user?.id,
+               });
+             }
+ 
+             if (position.irpf_percent && position.irpf_percent > 0) {
+               const irpfValue = value * (position.irpf_percent / 100);
+               taxEntries.push({
+                 type: "irpf" as const,
+                 description: `IRPF ${position.irpf_percent}%`,
+                 value: irpfValue,
+                 month: data.month,
+                 year: data.year,
+                 is_fixed: data.is_fixed,
+                 collaborator_id: data.collaborator_id,
+                 company_id: currentCompany.id,
+                 created_by: user?.id,
+               });
+             }
+ 
+             if (taxEntries.length > 0) {
+               const { error: taxError } = await supabase
+                 .from("payroll_entries")
+                 .insert(taxEntries);
+ 
+               if (taxError) {
+                 console.error("Error creating tax entries:", taxError);
+               }
+             }
+           }
+ 
           toast({
             title: "Lançamento criado!",
-            description: "O lançamento foi registrado com sucesso.",
+             description: data.type === "salario" && collaboratorWithPosition?.position
+               ? "O lançamento e impostos foram calculados automaticamente."
+               : "O lançamento foi registrado com sucesso.",
           });
         }
       }

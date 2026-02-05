@@ -46,11 +46,13 @@ import {
   ChevronLeft,
   ChevronRight,
   Users,
+   Receipt,
 } from "lucide-react";
 import { toast } from "sonner";
 import PermissionGuard from "@/components/dashboard/PermissionGuard";
 import { exportToPDF, exportToExcel, groupEntriesByCollaborator } from "@/lib/exportUtils";
 import { formatCurrency, getMonthName } from "@/lib/formatters";
+ import { generatePayslipPDF, convertEntriesToPayslipData } from "@/lib/payslipPdfGenerator";
 
 const typeLabels: Record<string, string> = {
   salario: "Salário",
@@ -58,6 +60,9 @@ const typeLabels: Record<string, string> = {
   custo: "Custo",
   despesa: "Despesa",
   adicional: "Adicional",
+   inss: "INSS",
+   fgts: "FGTS",
+   irpf: "IRPF",
 };
 
 const RelatoriosPage = () => {
@@ -72,6 +77,44 @@ const RelatoriosPage = () => {
   const { isPeriodClosed, closePeriod, reopenPeriod } = useClosedPeriods(currentCompany?.id);
   const periodClosed = isPeriodClosed(selectedMonth, selectedYear);
   const canManage = hasAnyRole(["admin", "rh"]);
+ 
+   // Fetch company details for CNPJ
+   const { data: companyDetails } = useQuery({
+     queryKey: ["company-details", currentCompany?.id],
+     queryFn: async () => {
+       if (!currentCompany?.id) return null;
+       const { data, error } = await supabase
+         .from("companies")
+         .select("company_name, cnpj")
+         .eq("id", currentCompany.id)
+         .single();
+       if (error) throw error;
+       return data;
+     },
+     enabled: !!currentCompany?.id,
+   });
+ 
+   // Fetch collaborators with position and team for payslip generation
+   const { data: collaboratorsWithDetails = [] } = useQuery({
+     queryKey: ["collaborators-with-details", currentCompany?.id],
+     queryFn: async () => {
+       if (!currentCompany?.id) return [];
+       const { data, error } = await supabase
+         .from("collaborators")
+         .select(`
+           id, name, cpf, admission_date,
+           position:positions(name),
+           team:teams(name)
+         `)
+         .eq("company_id", currentCompany.id)
+         .eq("status", "ativo")
+         .eq("is_temp", false)
+         .order("name");
+       if (error) throw error;
+       return data;
+     },
+     enabled: !!currentCompany?.id,
+   });
 
   // Fetch payroll entries
   const { data: entries = [], isLoading } = useQuery({
@@ -226,6 +269,33 @@ const RelatoriosPage = () => {
     setShowReopenDialog(false);
   };
 
+   // Generate individual payslip for a collaborator
+   const handleGeneratePayslip = (collaboratorId: string) => {
+     if (!currentCompany || !companyDetails) return;
+ 
+     const collaboratorData = groupedData.get(collaboratorId);
+     const collaboratorDetails = collaboratorsWithDetails.find(c => c.id === collaboratorId);
+ 
+     if (!collaboratorData || !collaboratorDetails) {
+       toast.error("Dados do colaborador não encontrados");
+       return;
+     }
+ 
+     const payslipData = convertEntriesToPayslipData(
+       collaboratorData.entries,
+       {
+         name: companyDetails.company_name,
+         cnpj: companyDetails.cnpj,
+       },
+       collaboratorDetails as any,
+       selectedMonth,
+       selectedYear
+     );
+ 
+     generatePayslipPDF(payslipData);
+     toast.success("Recibo gerado com sucesso!");
+   };
+ 
   const periodLabel = `${getMonthName(selectedMonth)} de ${selectedYear}`;
 
   return (
@@ -377,6 +447,16 @@ const RelatoriosPage = () => {
                       </div>
                     </AccordionTrigger>
                     <AccordionContent>
+                       <div className="flex justify-end mb-4">
+                         <Button
+                           variant="outline"
+                           size="sm"
+                           onClick={() => handleGeneratePayslip(collabId)}
+                         >
+                           <Receipt className="w-4 h-4 mr-2" />
+                           Gerar Recibo
+                         </Button>
+                       </div>
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -397,7 +477,7 @@ const RelatoriosPage = () => {
                               </TableCell>
                               <TableCell>
                                 {entry.is_fixed ? (
-                                  <Badge className="bg-purple-100 text-purple-700">Fixo</Badge>
+                                   <Badge variant="secondary">Fixo</Badge>
                                 ) : (
                                   <Badge variant="secondary">Variável</Badge>
                                 )}
