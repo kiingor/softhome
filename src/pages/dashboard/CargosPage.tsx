@@ -44,13 +44,16 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { formatCurrency } from '@/lib/formatters';
-import { TableSkeleton } from '@/components/ui/table-skeleton';
+ import { formatCurrency, formatNumberAsCurrency, parseCurrencyInput } from '@/lib/formatters';
+ import { TableSkeleton } from '@/components/ui/table-skeleton';
 
 interface Position {
   id: string;
   name: string;
   salary: number;
+   inss_percent: number;
+   fgts_percent: number;
+   irpf_percent: number;
   created_at: string;
 }
 
@@ -60,7 +63,13 @@ export default function CargosPage() {
   const queryClient = useQueryClient();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPosition, setEditingPosition] = useState<Position | null>(null);
-  const [formData, setFormData] = useState({ name: '', salary: '' });
+   const [formData, setFormData] = useState({ 
+     name: '', 
+     salary: '', 
+     inss_percent: '',
+     fgts_percent: '',
+     irpf_percent: '',
+   });
 
   const { data: positions = [], isLoading } = useQuery({
     queryKey: ['positions', selectedCompanyId],
@@ -78,11 +87,14 @@ export default function CargosPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: { name: string; salary: number }) => {
+     mutationFn: async (data: { name: string; salary: number; inss_percent: number; fgts_percent: number; irpf_percent: number }) => {
       const { error } = await supabase.from('positions').insert({
         company_id: selectedCompanyId,
         name: data.name,
         salary: data.salary,
+         inss_percent: data.inss_percent,
+         fgts_percent: data.fgts_percent,
+         irpf_percent: data.irpf_percent,
       });
       if (error) throw error;
     },
@@ -97,10 +109,16 @@ export default function CargosPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async (data: { id: string; name: string; salary: number }) => {
+     mutationFn: async (data: { id: string; name: string; salary: number; inss_percent: number; fgts_percent: number; irpf_percent: number }) => {
       const { error } = await supabase
         .from('positions')
-        .update({ name: data.name, salary: data.salary })
+         .update({ 
+           name: data.name, 
+           salary: data.salary,
+           inss_percent: data.inss_percent,
+           fgts_percent: data.fgts_percent,
+           irpf_percent: data.irpf_percent,
+         })
         .eq('id', data.id);
       if (error) throw error;
     },
@@ -133,11 +151,14 @@ export default function CargosPage() {
       setEditingPosition(position);
       setFormData({
         name: position.name,
-        salary: position.salary.toString(),
+          salary: formatNumberAsCurrency(position.salary),
+         inss_percent: (position.inss_percent || 0).toString().replace('.', ','),
+         fgts_percent: (position.fgts_percent || 0).toString().replace('.', ','),
+         irpf_percent: (position.irpf_percent || 0).toString().replace('.', ','),
       });
     } else {
       setEditingPosition(null);
-      setFormData({ name: '', salary: '' });
+       setFormData({ name: '', salary: '', inss_percent: '', fgts_percent: '', irpf_percent: '' });
     }
     setIsDialogOpen(true);
   };
@@ -145,25 +166,51 @@ export default function CargosPage() {
   const handleCloseDialog = () => {
     setIsDialogOpen(false);
     setEditingPosition(null);
-    setFormData({ name: '', salary: '' });
+     setFormData({ name: '', salary: '', inss_percent: '', fgts_percent: '', irpf_percent: '' });
   };
 
+   const handleSalaryChange = (value: string) => {
+     // Remove tudo exceto números
+     const numbers = value.replace(/\D/g, '');
+     if (numbers === '') {
+       setFormData({ ...formData, salary: '' });
+       return;
+     }
+     // Converte para centavos e formata
+     const cents = parseInt(numbers, 10);
+     const reais = cents / 100;
+      setFormData({ ...formData, salary: formatNumberAsCurrency(reais) });
+   };
+ 
+   const handlePercentChange = (field: 'inss_percent' | 'fgts_percent' | 'irpf_percent', value: string) => {
+     // Permite apenas números e vírgula
+     const cleaned = value.replace(/[^\d,]/g, '');
+     setFormData({ ...formData, [field]: cleaned });
+   };
+ 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const salary = parseFloat(formData.salary.replace(',', '.'));
+     const salary = parseCurrencyInput(formData.salary);
     if (isNaN(salary) || salary < 0) {
       toast.error('Informe um valor de salário válido');
       return;
     }
 
+     const inss_percent = parseFloat(formData.inss_percent.replace(',', '.')) || 0;
+     const fgts_percent = parseFloat(formData.fgts_percent.replace(',', '.')) || 0;
+     const irpf_percent = parseFloat(formData.irpf_percent.replace(',', '.')) || 0;
+ 
     if (editingPosition) {
       updateMutation.mutate({
         id: editingPosition.id,
         name: formData.name,
         salary,
+         inss_percent,
+         fgts_percent,
+         irpf_percent,
       });
     } else {
-      createMutation.mutate({ name: formData.name, salary });
+       createMutation.mutate({ name: formData.name, salary, inss_percent, fgts_percent, irpf_percent });
     }
   };
 
@@ -215,13 +262,44 @@ export default function CargosPage() {
                     <Input
                       id="salary"
                       value={formData.salary}
-                      onChange={(e) =>
-                        setFormData({ ...formData, salary: e.target.value })
-                      }
-                      placeholder="Ex: 3500.00"
+                       onChange={(e) => handleSalaryChange(e.target.value)}
+                       placeholder="R$ 0,00"
                       required
                     />
                   </div>
+                   
+                   <div className="border-t pt-4 mt-4">
+                     <p className="text-sm font-medium text-muted-foreground mb-3">Impostos (%)</p>
+                     <div className="grid grid-cols-3 gap-3">
+                       <div className="space-y-1">
+                         <Label htmlFor="inss_percent" className="text-xs">INSS</Label>
+                         <Input
+                           id="inss_percent"
+                           value={formData.inss_percent}
+                           onChange={(e) => handlePercentChange('inss_percent', e.target.value)}
+                           placeholder="0,00"
+                         />
+                       </div>
+                       <div className="space-y-1">
+                         <Label htmlFor="fgts_percent" className="text-xs">FGTS</Label>
+                         <Input
+                           id="fgts_percent"
+                           value={formData.fgts_percent}
+                           onChange={(e) => handlePercentChange('fgts_percent', e.target.value)}
+                           placeholder="0,00"
+                         />
+                       </div>
+                       <div className="space-y-1">
+                         <Label htmlFor="irpf_percent" className="text-xs">IRPF</Label>
+                         <Input
+                           id="irpf_percent"
+                           value={formData.irpf_percent}
+                           onChange={(e) => handlePercentChange('irpf_percent', e.target.value)}
+                           placeholder="0,00"
+                         />
+                       </div>
+                     </div>
+                   </div>
                 </div>
                 <DialogFooter>
                   <Button
@@ -270,6 +348,9 @@ export default function CargosPage() {
                   <TableRow>
                     <TableHead>Nome do Cargo</TableHead>
                     <TableHead>Salário</TableHead>
+                     <TableHead>INSS</TableHead>
+                     <TableHead>FGTS</TableHead>
+                     <TableHead>IRPF</TableHead>
                     <TableHead className="w-[100px]">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -280,6 +361,9 @@ export default function CargosPage() {
                         {position.name}
                       </TableCell>
                       <TableCell>{formatCurrency(position.salary)}</TableCell>
+                       <TableCell>{(position.inss_percent || 0).toFixed(2).replace('.', ',')}%</TableCell>
+                       <TableCell>{(position.fgts_percent || 0).toFixed(2).replace('.', ',')}%</TableCell>
+                       <TableCell>{(position.irpf_percent || 0).toFixed(2).replace('.', ',')}%</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Button

@@ -519,21 +519,30 @@ export type Database = {
         Row: {
           company_id: string
           created_at: string
+          fgts_percent: number | null
           id: string
+          inss_percent: number | null
+          irpf_percent: number | null
           name: string
           salary: number
         }
         Insert: {
           company_id: string
           created_at?: string
+          fgts_percent?: number | null
           id?: string
+          inss_percent?: number | null
+          irpf_percent?: number | null
           name: string
           salary?: number
         }
         Update: {
           company_id?: string
           created_at?: string
+          fgts_percent?: number | null
           id?: string
+          inss_percent?: number | null
+          irpf_percent?: number | null
           name?: string
           salary?: number
         }
