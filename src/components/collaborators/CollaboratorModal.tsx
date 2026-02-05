@@ -50,11 +50,11 @@ import { calculateMonthlyBenefitValue, getBenefitCalculationDescription, DayAbbr
 
 interface PendingEntry {
   id: string;
-  type: "salario" | "adicional" | "custo" | "despesa" | "vale";
+  type: "salario" | "adicional" | "custo" | "despesa" | "vale" | "inss" | "fgts" | "irpf";
   description: string;
   value: number;
   is_fixed: boolean;
-  source: "position" | "manual";
+  source: "position" | "manual" | "tax";
 }
 
 interface PendingBenefit {
@@ -102,6 +102,7 @@ const CollaboratorModal = ({
   const [showPasswordField, setShowPasswordField] = useState(false);
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [previousPositionId, setPreviousPositionId] = useState<string | null>(null);
 
   // Pending entries/benefits for new collaborators
   const [pendingEntries, setPendingEntries] = useState<PendingEntry[]>([]);
@@ -285,36 +286,162 @@ const CollaboratorModal = ({
 
   // When position changes, update pending salary entry (for new collaborators)
   useEffect(() => {
-    if (!isNew || !open) return;
+    if (!open) return;
 
     const position = positions.find((p) => p.id === formData.position_id);
     
-    setPendingEntries((prev) => {
-      // Remove old position-based salary entry
-      const filtered = prev.filter((e) => e.source !== "position");
-      
-      // Add new one if position has salary
-      if (position && position.salary > 0) {
-        // Check if already exists with same position id
-        const existingPositionEntry = filtered.find((e) => e.id === `position-${position.id}`);
-        if (existingPositionEntry) return filtered;
+    if (isNew) {
+      // For new collaborators: add to pending entries
+      setPendingEntries((prev) => {
+        // Remove old position-based salary and tax entries
+        const filtered = prev.filter((e) => e.source !== "position" && e.source !== "tax");
         
-        return [
-          ...filtered,
-          {
-            id: `position-${position.id}`,
-            type: "salario" as const,
-            description: `Salário Base - ${position.name}`,
-            value: position.salary,
-            is_fixed: true,
-            source: "position" as const,
-          },
-        ];
-      }
+        // Add new entries if position has salary
+        if (position && position.salary > 0) {
+          const newEntries: PendingEntry[] = [
+            {
+              id: `position-${position.id}`,
+              type: "salario" as const,
+              description: `Salário Base - ${position.name}`,
+              value: position.salary,
+              is_fixed: true,
+              source: "position" as const,
+            },
+          ];
+  
+          // Add tax entries based on position percentages
+          if (position.inss_percent && position.inss_percent > 0) {
+            const inssValue = position.salary * (position.inss_percent / 100);
+            newEntries.push({
+              id: `tax-inss-${position.id}`,
+              type: "inss" as const,
+              description: `INSS ${position.inss_percent}%`,
+              value: inssValue,
+              is_fixed: true,
+              source: "tax" as const,
+            });
+          }
+  
+          if (position.fgts_percent && position.fgts_percent > 0) {
+            const fgtsValue = position.salary * (position.fgts_percent / 100);
+            newEntries.push({
+              id: `tax-fgts-${position.id}`,
+              type: "fgts" as const,
+              description: `FGTS ${position.fgts_percent}%`,
+              value: fgtsValue,
+              is_fixed: true,
+              source: "tax" as const,
+            });
+          }
+  
+          if (position.irpf_percent && position.irpf_percent > 0) {
+            const irpfValue = position.salary * (position.irpf_percent / 100);
+            newEntries.push({
+              id: `tax-irpf-${position.id}`,
+              type: "irpf" as const,
+              description: `IRPF ${position.irpf_percent}%`,
+              value: irpfValue,
+              is_fixed: true,
+              source: "tax" as const,
+            });
+          }
+  
+          return [...filtered, ...newEntries];
+        }
+        
+        return filtered;
+      });
+    } else if (collaboratorId && formData.position_id && formData.position_id !== previousPositionId) {
+      // For existing collaborators: create payroll entries directly in DB when position changes
+      setPreviousPositionId(formData.position_id);
       
-      return filtered;
-    });
-  }, [formData.position_id, positions.length, isNew, open]);
+      if (position && position.salary > 0) {
+        // Create entries in the database for the current period
+        const createTaxEntries = async () => {
+          // First, delete existing position-based and tax entries for this period
+          await supabase
+            .from("payroll_entries")
+            .delete()
+            .eq("collaborator_id", collaboratorId)
+            .eq("month", currentMonth)
+            .eq("year", currentYear)
+            .in("type", ["salario", "inss", "fgts", "irpf"]);
+  
+          const entriesToCreate: any[] = [
+            {
+              collaborator_id: collaboratorId,
+              company_id: currentCompany!.id,
+              type: "salario",
+              description: `Salário Base - ${position.name}`,
+              value: position.salary,
+              month: currentMonth,
+              year: currentYear,
+              is_fixed: true,
+            },
+          ];
+  
+          if (position.inss_percent && position.inss_percent > 0) {
+            const inssValue = position.salary * (position.inss_percent / 100);
+            entriesToCreate.push({
+              collaborator_id: collaboratorId,
+              company_id: currentCompany!.id,
+              type: "inss",
+              description: `INSS ${position.inss_percent}%`,
+              value: inssValue,
+              month: currentMonth,
+              year: currentYear,
+              is_fixed: true,
+            });
+          }
+  
+          if (position.fgts_percent && position.fgts_percent > 0) {
+            const fgtsValue = position.salary * (position.fgts_percent / 100);
+            entriesToCreate.push({
+              collaborator_id: collaboratorId,
+              company_id: currentCompany!.id,
+              type: "fgts",
+              description: `FGTS ${position.fgts_percent}%`,
+              value: fgtsValue,
+              month: currentMonth,
+              year: currentYear,
+              is_fixed: true,
+            });
+          }
+  
+          if (position.irpf_percent && position.irpf_percent > 0) {
+            const irpfValue = position.salary * (position.irpf_percent / 100);
+            entriesToCreate.push({
+              collaborator_id: collaboratorId,
+              company_id: currentCompany!.id,
+              type: "irpf",
+              description: `IRPF ${position.irpf_percent}%`,
+              value: irpfValue,
+              month: currentMonth,
+              year: currentYear,
+              is_fixed: true,
+            });
+          }
+  
+          const { error } = await supabase.from("payroll_entries").insert(entriesToCreate);
+          if (!error) {
+            refetchEntries();
+            toast.success("Salário e impostos atualizados!");
+          }
+        };
+        
+        createTaxEntries();
+      }
+    }
+  }, [formData.position_id, positions.length, isNew, open, collaboratorId, currentCompany, currentMonth, currentYear, previousPositionId]);
+
+  // Initialize previousPositionId when modal opens for existing collaborator
+  useEffect(() => {
+    if (open && collaborator && collaborator.position_id) {
+      setPreviousPositionId(collaborator.position_id);
+    } else if (!open) {
+      setPreviousPositionId(null);
+    }
+  }, [open, collaborator]);
 
   // Handle CPF input with mask
   const handleCPFChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -720,17 +847,34 @@ const CollaboratorModal = ({
   const calculateTotalCost = () => {
     let entriesTotal = 0;
     let benefitsTotal = 0;
+    let taxTotal = 0;
 
     if (isNew) {
       entriesTotal = pendingEntries.reduce((sum, e) => {
+        // FGTS is company cost, not deducted from employee
+        if (e.type === "fgts") return sum;
+        // INSS and IRPF are deductions
+        if (e.type === "inss" || e.type === "irpf") return sum - e.value;
         if (e.type === "custo" || e.type === "despesa") return sum - e.value;
         return sum + e.value;
+      }, 0);
+      taxTotal = pendingEntries.reduce((sum, e) => {
+        if (e.type === "fgts") return sum + e.value;
+        return sum;
       }, 0);
       benefitsTotal = pendingBenefits.reduce((sum, b) => sum + b.monthly_value, 0);
     } else {
       entriesTotal = payrollEntries.reduce((sum, e) => {
+        // FGTS is company cost, not deducted from employee
+        if (e.type === "fgts") return sum;
+        // INSS and IRPF are deductions
+        if (e.type === "inss" || e.type === "irpf") return sum - e.value;
         if (e.type === "custo" || e.type === "despesa") return sum - e.value;
         return sum + e.value;
+      }, 0);
+      taxTotal = payrollEntries.reduce((sum, e) => {
+        if (e.type === "fgts") return sum + e.value;
+        return sum;
       }, 0);
       benefitsTotal = benefitAssignments.reduce((sum, a: any) => {
         if (!a.benefit) return sum;
@@ -745,7 +889,7 @@ const CollaboratorModal = ({
       }, 0);
     }
 
-    return { entriesTotal, benefitsTotal, total: entriesTotal + benefitsTotal };
+    return { entriesTotal, benefitsTotal, taxTotal, total: entriesTotal + benefitsTotal, companyCost: entriesTotal + benefitsTotal + taxTotal };
   };
 
   const totals = calculateTotalCost();
@@ -758,14 +902,18 @@ const CollaboratorModal = ({
       custo: "Custo",
       despesa: "Despesa",
       vale: "Vale",
+      inss: "INSS",
+      fgts: "FGTS",
+      irpf: "IRPF",
     };
     return labels[type] || type;
   };
 
   // Get entry type color
   const getEntryTypeVariant = (type: string): "default" | "secondary" | "destructive" | "outline" => {
-    if (type === "custo" || type === "despesa") return "destructive";
+    if (type === "custo" || type === "despesa" || type === "inss" || type === "irpf") return "destructive";
     if (type === "salario") return "default";
+    if (type === "fgts") return "outline";
     return "secondary";
   };
 
@@ -1209,14 +1357,15 @@ const CollaboratorModal = ({
                   <div className="flex items-center gap-2 mb-1">
                     <DollarSign className="w-5 h-5 text-primary" />
                     <span className="text-sm font-medium">
-                      Custo Total - {currentMonth.toString().padStart(2, "0")}/{currentYear}
+                      Resumo - {currentMonth.toString().padStart(2, "0")}/{currentYear}
                     </span>
                   </div>
                   <div className="text-2xl font-bold text-primary">
-                    {formatCurrency(totals.total)}
+                    {formatCurrency(totals.companyCost)}
                   </div>
-                  <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
-                    <span>Lançamentos: {formatCurrency(totals.entriesTotal)}</span>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-muted-foreground">
+                    <span>Líquido: {formatCurrency(totals.total)}</span>
+                    <span>FGTS: {formatCurrency(totals.taxTotal)}</span>
                     <span>Benefícios: {formatCurrency(totals.benefitsTotal)}</span>
                   </div>
                 </div>
