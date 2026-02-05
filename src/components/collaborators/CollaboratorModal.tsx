@@ -425,7 +425,9 @@ const CollaboratorModal = ({
             body: {
               email: normalizedEmail,
               password: formData.password,
-            },
+             full_name: formData.name,
+             company_id: currentCompany!.id,
+           },
           }
         );
 
