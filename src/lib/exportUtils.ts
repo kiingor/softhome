@@ -23,6 +23,9 @@ const typeLabels: Record<string, string> = {
   custo: "Custo",
   despesa: "Despesa",
   adicional: "Adicional",
+   inss: "INSS",
+   fgts: "FGTS",
+   irpf: "IRPF",
 };
 
 export const exportToPDF = (data: ExportData) => {

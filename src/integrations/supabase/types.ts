@@ -1002,7 +1002,15 @@ export type Database = {
     Enums: {
       app_role: "admin" | "rh" | "gestor" | "contador" | "colaborador"
       collaborator_status: "ativo" | "inativo"
-      payroll_entry_type: "salario" | "vale" | "custo" | "despesa" | "adicional"
+      payroll_entry_type:
+        | "salario"
+        | "vale"
+        | "custo"
+        | "despesa"
+        | "adicional"
+        | "inss"
+        | "fgts"
+        | "irpf"
       plan_tier: "essencial" | "crescer" | "profissional" | "empresa_plus"
     }
     CompositeTypes: {
@@ -1133,7 +1141,16 @@ export const Constants = {
     Enums: {
       app_role: ["admin", "rh", "gestor", "contador", "colaborador"],
       collaborator_status: ["ativo", "inativo"],
-      payroll_entry_type: ["salario", "vale", "custo", "despesa", "adicional"],
+      payroll_entry_type: [
+        "salario",
+        "vale",
+        "custo",
+        "despesa",
+        "adicional",
+        "inss",
+        "fgts",
+        "irpf",
+      ],
       plan_tier: ["essencial", "crescer", "profissional", "empresa_plus"],
     },
   },

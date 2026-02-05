@@ -37,6 +37,9 @@ const typeLabels: Record<string, string> = {
   despesa: "Despesa",
   adicional: "Adicional",
   beneficio: "Benefício",
+   inss: "INSS",
+   fgts: "FGTS",
+   irpf: "IRPF",
 };
 
 const typeColors: Record<string, string> = {
@@ -46,6 +49,9 @@ const typeColors: Record<string, string> = {
   despesa: "bg-red-100 text-red-700",
   adicional: "bg-purple-100 text-purple-700",
   beneficio: "bg-teal-100 text-teal-700",
+   inss: "bg-amber-100 text-amber-700",
+   fgts: "bg-cyan-100 text-cyan-700",
+   irpf: "bg-rose-100 text-rose-700",
 };
 
 interface BenefitAssignment {
