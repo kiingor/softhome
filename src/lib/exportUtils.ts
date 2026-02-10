@@ -29,6 +29,9 @@ const typeLabels: Record<string, string> = {
    irpf: "IRPF",
 };
 
+const deductionTypes = ["inss", "irpf", "despesa", "vale", "custo"];
+const earningsTypes = ["salario", "adicional", "beneficio"];
+
 // Helper to load image as base64
 const loadImageAsBase64 = async (url: string): Promise<string | null> => {
   try {
@@ -43,6 +46,13 @@ const loadImageAsBase64 = async (url: string): Promise<string | null> => {
   } catch {
     return null;
   }
+};
+
+const formatValueWithSign = (value: number, type: string): string => {
+  const formatted = value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  if (deductionTypes.includes(type)) return `- ${formatted}`;
+  if (type === "fgts") return formatted;
+  return `+ ${formatted}`;
 };
 
 export const exportToPDF = async (data: ExportData) => {
@@ -75,55 +85,124 @@ export const exportToPDF = async (data: ExportData) => {
   doc.text(`Competência: ${data.period}`, 14, 42);
   doc.text(`Gerado em: ${new Date().toLocaleDateString("pt-BR")}`, 14, 49);
 
-  // Entries table
-  const tableData = data.entries.map((entry) => [
-    entry.collaborator_name,
-    typeLabels[entry.type] || entry.type,
-    entry.description || "-",
-    entry.value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }),
-  ]);
-
-  autoTable(doc, {
-    startY: 60,
-    head: [["Colaborador", "Tipo", "Descrição", "Valor"]],
-    body: tableData,
-    theme: "striped",
-    headStyles: { fillColor: [99, 102, 241] },
-    styles: { fontSize: 10 },
-    columnStyles: {
-      0: { cellWidth: 50 },
-      1: { cellWidth: 30 },
-      2: { cellWidth: 60 },
-      3: { cellWidth: 35, halign: "right" },
-    },
+  // Group entries by collaborator
+  const grouped = new Map<string, PayrollEntry[]>();
+  data.entries.forEach((entry) => {
+    const name = entry.collaborator_name;
+    if (!grouped.has(name)) grouped.set(name, []);
+    grouped.get(name)!.push(entry);
   });
 
-  // Totals section
-  const finalY = (doc as any).lastAutoTable.finalY + 15;
+  let currentY = 60;
+
+  // Per-collaborator sections
+  let grandEarnings = 0;
+  let grandDeductions = 0;
+  let grandFgts = 0;
+
+  for (const [collabName, collabEntries] of grouped) {
+    // Check page space
+    if (currentY > doc.internal.pageSize.getHeight() - 60) {
+      doc.addPage();
+      currentY = 20;
+    }
+
+    // Collaborator subtitle
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text(collabName, 14, currentY);
+    currentY += 3;
+
+    // Table data with signs
+    const tableData = collabEntries.map((entry) => [
+      typeLabels[entry.type] || entry.type,
+      entry.description || "-",
+      formatValueWithSign(entry.value, entry.type),
+    ]);
+
+    autoTable(doc, {
+      startY: currentY,
+      head: [["Tipo", "Descrição", "Valor"]],
+      body: tableData,
+      theme: "striped",
+      headStyles: { fillColor: [99, 102, 241] },
+      styles: { fontSize: 9 },
+      columnStyles: {
+        0: { cellWidth: 30 },
+        1: { cellWidth: 90 },
+        2: { cellWidth: 40, halign: "right" },
+      },
+      didParseCell: (hookData) => {
+        if (hookData.section === "body" && hookData.column.index === 2) {
+          const text = String(hookData.cell.raw || "");
+          if (text.startsWith("-")) {
+            hookData.cell.styles.textColor = [220, 38, 38];
+          } else if (text.startsWith("+")) {
+            hookData.cell.styles.textColor = [22, 163, 74];
+          }
+        }
+      },
+    });
+
+    currentY = (doc as any).lastAutoTable.finalY + 3;
+
+    // Calculate collaborator totals
+    let earnings = 0;
+    let deductions = 0;
+    let fgts = 0;
+    collabEntries.forEach((e) => {
+      const v = Number(e.value);
+      if (e.type === "fgts") fgts += v;
+      else if (deductionTypes.includes(e.type)) deductions += v;
+      else earnings += v;
+    });
+    const net = earnings - deductions;
+
+    grandEarnings += earnings;
+    grandDeductions += deductions;
+    grandFgts += fgts;
+
+    // Collaborator summary line
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    const summary = `Proventos: R$ ${earnings.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}  |  Descontos: R$ ${deductions.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}  |  Líquido: R$ ${net.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}${fgts > 0 ? `  |  FGTS: R$ ${fgts.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : ""}`;
+    doc.text(summary, 14, currentY);
+    currentY += 10;
+  }
+
+  // Grand total section
+  if (currentY > doc.internal.pageSize.getHeight() - 40) {
+    doc.addPage();
+    currentY = 20;
+  }
+
+  const grandNet = grandEarnings - grandDeductions;
+  const grandCost = grandNet + grandFgts;
 
   doc.setFontSize(12);
   doc.setFont("helvetica", "bold");
-  doc.text("Resumo por Tipo", 14, finalY);
-
-  const totalsData = data.totals.map((t) => [
-    typeLabels[t.type] || t.type,
-    t.total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }),
-  ]);
-
-  totalsData.push([
-    "TOTAL GERAL",
-    data.grandTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }),
-  ]);
+  doc.text("TOTAL GERAL", 14, currentY);
+  currentY += 3;
 
   autoTable(doc, {
-    startY: finalY + 5,
-    head: [["Tipo", "Total"]],
-    body: totalsData,
+    startY: currentY,
+    head: [["Proventos", "Descontos", "Líquido", "FGTS", "Custo Total"]],
+    body: [[
+      `R$ ${grandEarnings.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
+      `R$ ${grandDeductions.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
+      `R$ ${grandNet.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
+      `R$ ${grandFgts.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
+      `R$ ${grandCost.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
+    ]],
     theme: "grid",
     headStyles: { fillColor: [99, 102, 241] },
-    styles: { fontSize: 10 },
+    styles: { fontSize: 10, fontStyle: "bold" },
     columnStyles: {
-      1: { halign: "right", fontStyle: "bold" },
+      0: { halign: "right" },
+      1: { halign: "right" },
+      2: { halign: "right" },
+      3: { halign: "right" },
+      4: { halign: "right" },
     },
   });
 
