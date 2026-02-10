@@ -24,6 +24,7 @@ import {
   Download,
   LogOut,
   Menu,
+  Palmtree,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -36,6 +37,7 @@ const navItems = [
   { title: "Meu Extrato", url: "/colaborador/extrato", icon: FileText },
   { title: "Benefícios", url: "/colaborador/beneficios", icon: Gift },
   { title: "Contracheques", url: "/colaborador/contracheques", icon: Download },
+  { title: "Férias", url: "/colaborador/ferias", icon: Palmtree },
 ];
 
 const PortalLayout = ({ children }: PortalLayoutProps) => {

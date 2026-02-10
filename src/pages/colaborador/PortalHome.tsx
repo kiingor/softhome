@@ -1,6 +1,6 @@
 import { usePortal } from "@/contexts/PortalContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileText, Gift, Download, User } from "lucide-react";
+import { FileText, Gift, Download, User, Palmtree } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const PortalHome = () => {
@@ -27,6 +27,13 @@ const PortalHome = () => {
       icon: Download,
       url: "/colaborador/contracheques",
       color: "bg-purple-100 text-purple-600",
+    },
+    {
+      title: "Minhas Férias",
+      description: "Acompanhe e solicite férias",
+      icon: Palmtree,
+      url: "/colaborador/ferias",
+      color: "bg-orange-100 text-orange-600",
     },
   ];
 
