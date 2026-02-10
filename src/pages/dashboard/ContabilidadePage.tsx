@@ -174,7 +174,8 @@ const ContabilidadePage = () => {
           }
 
           // Upload file to storage
-          const filePath = `${collaboratorId}/${selectedYear}/${selectedMonth}/${file.name}`;
+          const sanitizedName = file.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9._-]/g, "_");
+          const filePath = `${collaboratorId}/${selectedYear}/${selectedMonth}/${sanitizedName}`;
           const { error: uploadError } = await supabase.storage
             .from("payslips")
             .upload(filePath, file, { upsert: true });
