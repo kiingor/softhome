@@ -22,6 +22,7 @@ import RelatoriosPage from "./pages/dashboard/RelatoriosPage";
 import BeneficiosPage from "./pages/dashboard/BeneficiosPage";
 import ConfiguracoesPage from "./pages/dashboard/ConfiguracoesPage";
 import ContabilidadePage from "./pages/dashboard/ContabilidadePage";
+import ExamesPage from "./pages/dashboard/ExamesPage";
 
 // Portal do Colaborador
 import { PortalProvider } from "./contexts/PortalContext";
@@ -33,6 +34,7 @@ import MeuExtratoPage from "./pages/colaborador/MeuExtratoPage";
 import MeusBeneficiosPage from "./pages/colaborador/MeusBeneficiosPage";
 import MeusContracheques from "./pages/colaborador/MeusContracheques";
 import MinhasFeriasPage from "./pages/colaborador/MinhasFeriasPage";
+import MeusExamesPage from "./pages/colaborador/MeusExamesPage";
 
 import { MasterProvider } from "./contexts/MasterContext";
 import { MasterGuard } from "./components/master/MasterGuard";
@@ -82,6 +84,7 @@ const App = () => {
             <Route path="relatorios" element={<RelatoriosPage />} />
             <Route path="configuracoes" element={<ConfiguracoesPage />} />
             <Route path="contabilidade" element={<ContabilidadePage />} />
+            <Route path="exames" element={<ExamesPage />} />
           </Route>
 
           {/* Portal do Colaborador - Login */}
@@ -143,6 +146,18 @@ const App = () => {
                 <PortalGuard>
                   <PortalLayout>
                     <MinhasFeriasPage />
+                  </PortalLayout>
+                </PortalGuard>
+              </PortalProvider>
+            }
+          />
+          <Route
+            path="/colaborador/exames"
+            element={
+              <PortalProvider>
+                <PortalGuard>
+                  <PortalLayout>
+                    <MeusExamesPage />
                   </PortalLayout>
                 </PortalGuard>
               </PortalProvider>

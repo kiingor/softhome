@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, Briefcase } from 'lucide-react';
+import { Plus, Pencil, Trash2, Briefcase, Info } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useDashboard } from '@/contexts/DashboardContext';
 import PermissionGuard from '@/components/dashboard/PermissionGuard';
@@ -43,17 +43,32 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { toast } from 'sonner';
- import { formatCurrency, formatNumberAsCurrency, parseCurrencyInput } from '@/lib/formatters';
- import { TableSkeleton } from '@/components/ui/table-skeleton';
+import { formatCurrency, formatNumberAsCurrency, parseCurrencyInput } from '@/lib/formatters';
+import { TableSkeleton } from '@/components/ui/table-skeleton';
+import { RISK_GROUPS, RISK_GROUP_PERIODICITY, RISK_GROUP_PERIODICITY_LABELS } from '@/lib/riskGroupDefaults';
 
 interface Position {
   id: string;
   name: string;
   salary: number;
-   inss_percent: number;
-   fgts_percent: number;
-   irpf_percent: number;
+  inss_percent: number;
+  fgts_percent: number;
+  irpf_percent: number;
+  risk_group: string | null;
+  exam_periodicity_months: number | null;
   created_at: string;
 }
 
@@ -69,6 +84,8 @@ export default function CargosPage() {
      inss_percent: '',
      fgts_percent: '',
      irpf_percent: '',
+     risk_group: '',
+     exam_periodicity_months: '',
    });
 
   const { data: positions = [], isLoading } = useQuery({
@@ -87,7 +104,7 @@ export default function CargosPage() {
   });
 
   const createMutation = useMutation({
-     mutationFn: async (data: { name: string; salary: number; inss_percent: number; fgts_percent: number; irpf_percent: number }) => {
+     mutationFn: async (data: { name: string; salary: number; inss_percent: number; fgts_percent: number; irpf_percent: number; risk_group: string | null; exam_periodicity_months: number | null }) => {
       const { error } = await supabase.from('positions').insert({
         company_id: selectedCompanyId,
         name: data.name,
@@ -95,6 +112,8 @@ export default function CargosPage() {
          inss_percent: data.inss_percent,
          fgts_percent: data.fgts_percent,
          irpf_percent: data.irpf_percent,
+         risk_group: data.risk_group,
+         exam_periodicity_months: data.exam_periodicity_months,
       });
       if (error) throw error;
     },
@@ -109,7 +128,7 @@ export default function CargosPage() {
   });
 
   const updateMutation = useMutation({
-     mutationFn: async (data: { id: string; name: string; salary: number; inss_percent: number; fgts_percent: number; irpf_percent: number }) => {
+     mutationFn: async (data: { id: string; name: string; salary: number; inss_percent: number; fgts_percent: number; irpf_percent: number; risk_group: string | null; exam_periodicity_months: number | null }) => {
       const { error } = await supabase
         .from('positions')
          .update({ 
@@ -118,6 +137,8 @@ export default function CargosPage() {
            inss_percent: data.inss_percent,
            fgts_percent: data.fgts_percent,
            irpf_percent: data.irpf_percent,
+           risk_group: data.risk_group,
+           exam_periodicity_months: data.exam_periodicity_months,
          })
         .eq('id', data.id);
       if (error) throw error;
@@ -155,10 +176,12 @@ export default function CargosPage() {
          inss_percent: (position.inss_percent || 0).toString().replace('.', ','),
          fgts_percent: (position.fgts_percent || 0).toString().replace('.', ','),
          irpf_percent: (position.irpf_percent || 0).toString().replace('.', ','),
+         risk_group: position.risk_group || '',
+         exam_periodicity_months: position.exam_periodicity_months?.toString() || '',
       });
     } else {
       setEditingPosition(null);
-       setFormData({ name: '', salary: '', inss_percent: '', fgts_percent: '', irpf_percent: '' });
+       setFormData({ name: '', salary: '', inss_percent: '', fgts_percent: '', irpf_percent: '', risk_group: '', exam_periodicity_months: '' });
     }
     setIsDialogOpen(true);
   };
@@ -166,7 +189,7 @@ export default function CargosPage() {
   const handleCloseDialog = () => {
     setIsDialogOpen(false);
     setEditingPosition(null);
-     setFormData({ name: '', salary: '', inss_percent: '', fgts_percent: '', irpf_percent: '' });
+     setFormData({ name: '', salary: '', inss_percent: '', fgts_percent: '', irpf_percent: '', risk_group: '', exam_periodicity_months: '' });
   };
 
    const handleSalaryChange = (value: string) => {
@@ -199,6 +222,8 @@ export default function CargosPage() {
      const inss_percent = parseFloat(formData.inss_percent.replace(',', '.')) || 0;
      const fgts_percent = parseFloat(formData.fgts_percent.replace(',', '.')) || 0;
      const irpf_percent = parseFloat(formData.irpf_percent.replace(',', '.')) || 0;
+     const risk_group = formData.risk_group || null;
+     const exam_periodicity_months = formData.exam_periodicity_months ? parseInt(formData.exam_periodicity_months) : null;
  
     if (editingPosition) {
       updateMutation.mutate({
@@ -208,9 +233,11 @@ export default function CargosPage() {
          inss_percent,
          fgts_percent,
          irpf_percent,
+         risk_group,
+         exam_periodicity_months,
       });
     } else {
-       createMutation.mutate({ name: formData.name, salary, inss_percent, fgts_percent, irpf_percent });
+       createMutation.mutate({ name: formData.name, salary, inss_percent, fgts_percent, irpf_percent, risk_group, exam_periodicity_months });
     }
   };
 
@@ -300,6 +327,56 @@ export default function CargosPage() {
                        </div>
                      </div>
                    </div>
+
+                   {/* Risk Group */}
+                   <div className="border-t pt-4 mt-4">
+                     <p className="text-sm font-medium text-muted-foreground mb-3">Exames Ocupacionais</p>
+                     <div className="space-y-3">
+                       <div className="space-y-2">
+                         <Label htmlFor="risk_group">Grupo de Risco</Label>
+                         <Select
+                           value={formData.risk_group}
+                           onValueChange={(v) => {
+                             const periodicity = RISK_GROUP_PERIODICITY[v];
+                             setFormData({ ...formData, risk_group: v, exam_periodicity_months: periodicity?.toString() || '' });
+                           }}
+                         >
+                           <SelectTrigger>
+                             <SelectValue placeholder="Selecione o grupo de risco" />
+                           </SelectTrigger>
+                           <SelectContent>
+                             {RISK_GROUPS.map((g) => (
+                               <SelectItem key={g.value} value={g.value}>{g.label}</SelectItem>
+                             ))}
+                           </SelectContent>
+                         </Select>
+                       </div>
+                       <div className="space-y-2">
+                         <div className="flex items-center gap-1">
+                           <Label htmlFor="exam_periodicity_months">Periodicidade (meses)</Label>
+                           <Tooltip>
+                             <TooltipTrigger asChild>
+                               <Info className="w-3.5 h-3.5 text-muted-foreground cursor-help" />
+                             </TooltipTrigger>
+                             <TooltipContent className="max-w-xs">
+                               <p className="text-xs">Periodicidade definida pela NR-7. Pode ser ajustada conforme PCMSO da empresa.</p>
+                               {formData.risk_group && (
+                                 <p className="text-xs mt-1 font-medium">{RISK_GROUP_PERIODICITY_LABELS[formData.risk_group]}</p>
+                               )}
+                             </TooltipContent>
+                           </Tooltip>
+                         </div>
+                         <Input
+                           id="exam_periodicity_months"
+                           type="number"
+                           min={1}
+                           value={formData.exam_periodicity_months}
+                           onChange={(e) => setFormData({ ...formData, exam_periodicity_months: e.target.value })}
+                           placeholder="Ex: 12"
+                         />
+                       </div>
+                     </div>
+                   </div>
                 </div>
                 <DialogFooter>
                   <Button
@@ -348,6 +425,8 @@ export default function CargosPage() {
                   <TableRow>
                     <TableHead>Nome do Cargo</TableHead>
                     <TableHead>Salário</TableHead>
+                    <TableHead>Grupo Risco</TableHead>
+                    <TableHead>Periodicidade</TableHead>
                      <TableHead>INSS</TableHead>
                      <TableHead>FGTS</TableHead>
                      <TableHead>IRPF</TableHead>
@@ -361,6 +440,8 @@ export default function CargosPage() {
                         {position.name}
                       </TableCell>
                       <TableCell>{formatCurrency(position.salary)}</TableCell>
+                      <TableCell>{position.risk_group || '-'}</TableCell>
+                      <TableCell>{position.exam_periodicity_months ? `${position.exam_periodicity_months} meses` : '-'}</TableCell>
                        <TableCell>{(position.inss_percent || 0).toFixed(2).replace('.', ',')}%</TableCell>
                        <TableCell>{(position.fgts_percent || 0).toFixed(2).replace('.', ',')}%</TableCell>
                        <TableCell>{(position.irpf_percent || 0).toFixed(2).replace('.', ',')}%</TableCell>

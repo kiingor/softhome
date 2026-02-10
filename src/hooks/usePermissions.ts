@@ -13,7 +13,8 @@ export type ModuleType =
   | "relatorios" 
   | "contabilidade"
   | "configuracoes"
-  | "permissoes";
+  | "permissoes"
+  | "exames";
 
 export interface ModulePermissions {
   canView: boolean;
@@ -36,6 +37,7 @@ export const MODULE_LABELS: Record<ModuleType, string> = {
   contabilidade: "Contabilidade",
   configuracoes: "Configurações",
   permissoes: "Permissões de Usuários",
+  exames: "Exames Ocupacionais",
 };
 
 export const usePermissions = (module: ModuleType): ModulePermissions => {

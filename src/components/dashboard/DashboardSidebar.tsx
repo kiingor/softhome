@@ -16,6 +16,7 @@ import {
   DollarSign,
   Loader2,
   Calendar,
+  ClipboardCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -56,6 +57,7 @@ const menuCategories: MenuCategory[] = [
     items: [
       { icon: DollarSign, label: "Lançamentos", href: "/dashboard/financeiro", module: "financeiro" },
       { icon: Calendar, label: "Férias", href: "/dashboard/ferias", module: "ferias" },
+      { icon: ClipboardCheck, label: "Exames", href: "/dashboard/exames", module: "exames" },
       { icon: BarChart3, label: "Relatórios", href: "/dashboard/relatorios", module: "relatorios" },
       { icon: FileText, label: "Contabilidade", href: "/dashboard/contabilidade", module: "contabilidade" },
     ],
