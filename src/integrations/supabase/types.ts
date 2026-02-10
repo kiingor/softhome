@@ -350,6 +350,64 @@ export type Database = {
           },
         ]
       }
+      exam_documents: {
+        Row: {
+          company_id: string
+          created_at: string
+          exam_id: string
+          file_name: string
+          file_url: string
+          id: string
+          uploaded_at: string
+          uploaded_by: string | null
+          version: number
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          exam_id: string
+          file_name: string
+          file_url: string
+          id?: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+          version?: number
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          exam_id?: string
+          file_name?: string
+          file_url?: string
+          id?: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_documents_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exam_documents_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exam_documents_exam_id_fkey"
+            columns: ["exam_id"]
+            isOneToOne: false
+            referencedRelation: "occupational_exams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       master_admins: {
         Row: {
           created_at: string
@@ -373,6 +431,99 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      occupational_exams: {
+        Row: {
+          auto_generated: boolean
+          collaborator_id: string
+          company_id: string
+          completed_date: string | null
+          created_at: string
+          created_by: string | null
+          due_date: string
+          exam_type: string
+          id: string
+          notes: string | null
+          position_id: string | null
+          previous_position_id: string | null
+          risk_group_at_time: string | null
+          scheduled_date: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          auto_generated?: boolean
+          collaborator_id: string
+          company_id: string
+          completed_date?: string | null
+          created_at?: string
+          created_by?: string | null
+          due_date: string
+          exam_type: string
+          id?: string
+          notes?: string | null
+          position_id?: string | null
+          previous_position_id?: string | null
+          risk_group_at_time?: string | null
+          scheduled_date?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          auto_generated?: boolean
+          collaborator_id?: string
+          company_id?: string
+          completed_date?: string | null
+          created_at?: string
+          created_by?: string | null
+          due_date?: string
+          exam_type?: string
+          id?: string
+          notes?: string | null
+          position_id?: string | null
+          previous_position_id?: string | null
+          risk_group_at_time?: string | null
+          scheduled_date?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "occupational_exams_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "occupational_exams_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "occupational_exams_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "occupational_exams_position_id_fkey"
+            columns: ["position_id"]
+            isOneToOne: false
+            referencedRelation: "positions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "occupational_exams_previous_position_id_fkey"
+            columns: ["previous_position_id"]
+            isOneToOne: false
+            referencedRelation: "positions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       payroll_entries: {
         Row: {
@@ -522,31 +673,37 @@ export type Database = {
         Row: {
           company_id: string
           created_at: string
+          exam_periodicity_months: number | null
           fgts_percent: number | null
           id: string
           inss_percent: number | null
           irpf_percent: number | null
           name: string
+          risk_group: string | null
           salary: number
         }
         Insert: {
           company_id: string
           created_at?: string
+          exam_periodicity_months?: number | null
           fgts_percent?: number | null
           id?: string
           inss_percent?: number | null
           irpf_percent?: number | null
           name: string
+          risk_group?: string | null
           salary?: number
         }
         Update: {
           company_id?: string
           created_at?: string
+          exam_periodicity_months?: number | null
           fgts_percent?: number | null
           id?: string
           inss_percent?: number | null
           irpf_percent?: number | null
           name?: string
+          risk_group?: string | null
           salary?: number
         }
         Relationships: [

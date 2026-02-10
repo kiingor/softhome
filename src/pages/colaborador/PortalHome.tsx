@@ -1,6 +1,6 @@
 import { usePortal } from "@/contexts/PortalContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileText, Gift, Download, User, Palmtree } from "lucide-react";
+import { FileText, Gift, Download, User, Palmtree, ClipboardCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const PortalHome = () => {
@@ -34,6 +34,13 @@ const PortalHome = () => {
       icon: Palmtree,
       url: "/colaborador/ferias",
       color: "bg-orange-100 text-orange-600",
+    },
+    {
+      title: "Meus Exames",
+      description: "Exames ocupacionais e ASOs",
+      icon: ClipboardCheck,
+      url: "/colaborador/exames",
+      color: "bg-teal-100 text-teal-600",
     },
   ];
 

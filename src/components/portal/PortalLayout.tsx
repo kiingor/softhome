@@ -25,6 +25,7 @@ import {
   LogOut,
   Menu,
   Palmtree,
+  ClipboardCheck,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -38,6 +39,7 @@ const navItems = [
   { title: "Benefícios", url: "/colaborador/beneficios", icon: Gift },
   { title: "Contracheques", url: "/colaborador/contracheques", icon: Download },
   { title: "Férias", url: "/colaborador/ferias", icon: Palmtree },
+  { title: "Meus Exames", url: "/colaborador/exames", icon: ClipboardCheck },
 ];
 
 const PortalLayout = ({ children }: PortalLayoutProps) => {
