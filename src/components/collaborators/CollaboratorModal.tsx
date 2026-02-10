@@ -470,22 +470,22 @@ const CollaboratorModal = ({
         await supabase.from("payroll_entries").insert(entriesToCreate);
       }
 
-      // 4. If risk group changed, create mudanca_funcao exam
-      if (riskGroupChanged) {
-        const dueDate = new Date();
-        dueDate.setDate(dueDate.getDate() + 30);
-        await supabase.from("occupational_exams").insert({
-          collaborator_id: collaboratorId,
-          company_id: currentCompany.id,
-          exam_type: "mudanca_funcao",
-          due_date: dueDate.toISOString().slice(0, 10),
-          position_id: newPositionId,
-          previous_position_id: collaborator?.position_id || null,
-          risk_group_at_time: newPosition.risk_group || null,
-          auto_generated: true,
-          notes: "Gerado automaticamente por troca de função",
-        });
-      }
+      // 4. Always create mudanca_funcao exam on position change
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + 30);
+      await supabase.from("occupational_exams").insert({
+        collaborator_id: collaboratorId,
+        company_id: currentCompany.id,
+        exam_type: "mudanca_funcao",
+        due_date: dueDate.toISOString().slice(0, 10),
+        position_id: newPositionId,
+        previous_position_id: collaborator?.position_id || null,
+        risk_group_at_time: newPosition.risk_group || null,
+        auto_generated: true,
+        notes: riskGroupChanged
+          ? "Gerado automaticamente por troca de função (grupo de risco alterado)"
+          : "Gerado automaticamente por troca de função",
+      });
 
       // Update local state
       setFormData((prev) => ({ ...prev, position_id: newPositionId }));
@@ -494,11 +494,9 @@ const CollaboratorModal = ({
       refetchEntries();
       queryClient.invalidateQueries({ queryKey: ["collaborators"] });
       queryClient.invalidateQueries({ queryKey: ["collaborator", collaboratorId] });
+      queryClient.invalidateQueries({ queryKey: ["occupational-exams"] });
 
-      const msg = riskGroupChanged
-        ? "Cargo atualizado! Valores de salário aplicados a partir deste mês. Um exame de Mudança de Função foi criado."
-        : "Cargo atualizado! Valores de salário e impostos aplicados a partir deste mês.";
-      toast.success(msg);
+      toast.success("Cargo atualizado! Valores de salário aplicados a partir deste mês. Um exame de Mudança de Função foi criado.");
     } catch (error: any) {
       toast.error("Erro ao trocar cargo: " + error.message);
     }

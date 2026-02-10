@@ -37,6 +37,7 @@ export const EXAM_STATUS_LABELS: Record<string, string> = {
   realizado: "Realizado",
   vencido: "Vencido",
   cancelado: "Cancelado",
+  arquivado: "Arquivado",
 };
 
 export const EXAM_STATUS_COLORS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
@@ -45,4 +46,5 @@ export const EXAM_STATUS_COLORS: Record<string, "default" | "secondary" | "destr
   realizado: "outline",
   vencido: "destructive",
   cancelado: "destructive",
+  arquivado: "outline",
 };
