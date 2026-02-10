@@ -1,228 +1,99 @@
 
-# Plano: Controle de Ferias Completo
 
-## Visao Geral
+# Plano Atualizado: Sistema de Controle de Exames Ocupacionais
 
-Implementar um modulo completo de gestao de ferias seguindo as regras da CLT brasileira, com fluxo de solicitacao, aprovacao, calculo automatico de periodos aquisitivos e integracao com o Portal do Colaborador.
-
----
-
-## Regras de Negocio (CLT)
-
-- **Periodo Aquisitivo**: A cada 12 meses de trabalho, o colaborador adquire direito a 30 dias de ferias
-- **Periodo Concessivo**: A empresa tem 12 meses apos o periodo aquisitivo para conceder as ferias
-- **Fracionamento**: As ferias podem ser divididas em ate 3 periodos (um deles com no minimo 14 dias corridos, os demais com no minimo 5 dias cada)
-- **Abono Pecuniario**: O colaborador pode vender ate 1/3 das ferias (10 dias)
-- **Aviso**: A empresa deve comunicar as ferias com pelo menos 30 dias de antecedencia
-- **Status do fluxo**: Pendente -> Aprovada -> Em Gozo -> Concluida (ou Rejeitada/Cancelada)
+Este plano incorpora todas as funcionalidades ja descritas anteriormente, com o acrescimo dos **filtros avancados** e **impressao/exportacao** na listagem de exames.
 
 ---
 
-## 1. Banco de Dados
+## Acrescimos ao Plano Original
 
-### Tabela `vacation_periods` (Periodos Aquisitivos)
+### Filtros na Listagem de Exames (`ExamesPage.tsx`)
 
-| Coluna | Tipo | Descricao |
-|--------|------|-----------|
-| id | uuid PK | |
-| collaborator_id | uuid FK | Colaborador |
-| company_id | uuid FK | Empresa |
-| start_date | date | Inicio do periodo aquisitivo |
-| end_date | date | Fim do periodo aquisitivo (start + 12 meses) |
-| days_entitled | integer | Dias de direito (padrao 30) |
-| days_taken | integer | Dias ja gozados |
-| days_sold | integer | Dias vendidos (abono) |
-| days_remaining | integer | Dias restantes (calculado via trigger) |
-| status | text | pending, available, partially_used, used, expired |
-| created_at | timestamptz | |
+A aba "Todos os Exames" tera os seguintes filtros combinaveis:
 
-### Tabela `vacation_requests` (Solicitacoes de Ferias)
+| Filtro | Tipo de Componente | Opcoes |
+|--------|--------------------|--------|
+| Colaborador | Input de busca por nome | Texto livre |
+| Status | Select | Todos, Pendente, Agendado, Realizado, Vencido, Cancelado |
+| Tipo de Exame | Select | Todos, Admissional, Periodico, Mudanca de Funcao, Retorno ao Trabalho, Demissional, Avulso |
+| Periodo (Data) | Dois campos de data (De/Ate) | Filtra por `due_date` ou `completed_date` |
 
-| Coluna | Tipo | Descricao |
-|--------|------|-----------|
-| id | uuid PK | |
-| collaborator_id | uuid FK | Colaborador |
-| company_id | uuid FK | Empresa |
-| vacation_period_id | uuid FK | Periodo aquisitivo referente |
-| start_date | date | Inicio das ferias |
-| end_date | date | Fim das ferias |
-| days_count | integer | Qtd de dias |
-| sell_days | integer | Dias de abono pecuniario (0 ou ate 10) |
-| status | text | pending, approved, rejected, in_progress, completed, cancelled |
-| requested_by | uuid | Quem solicitou |
-| approved_by | uuid | Quem aprovou/rejeitou |
-| approved_at | timestamptz | Data da aprovacao |
-| rejection_reason | text | Motivo da rejeicao |
-| notes | text | Observacoes |
-| created_at | timestamptz | |
-| updated_at | timestamptz | |
+Os filtros funcionam de forma combinada (AND), seguindo o mesmo padrao ja utilizado na pagina de Ferias (`FeriasPage.tsx`).
 
-### RLS Policies
+### Impressao e Exportacao
 
-- SELECT: `can_view_module(ferias)` + colaboradores podem ver os proprios
-- INSERT: `has_module_permission(ferias, can_create)` + colaboradores podem solicitar as proprias
-- UPDATE: `has_module_permission(ferias, can_edit)` para aprovar/rejeitar
-- DELETE: `has_module_permission(ferias, can_delete)`
+Botoes no topo da listagem filtrada:
 
-### Trigger de calculo
+- **Exportar PDF**: Gera relatorio com cabecalho da empresa (nome, CNPJ, logo), data de geracao, e tabela com todos os exames filtrados. Usa `jsPDF` + `jspdf-autotable`, mesmo padrao de `src/lib/exportUtils.ts`.
+- **Exportar Excel**: Gera planilha com colunas: Colaborador, Tipo, Status, Grupo de Risco, Data Limite, Data Agendada, Data Realizada, ASO Enviado. Usa `xlsx`, mesmo padrao existente.
+- **Imprimir**: Abre janela de impressao do navegador (`window.print()`) com a tabela atual formatada, ou alternativamente gera o PDF e abre para impressao.
 
-- Ao inserir/atualizar `vacation_requests` com status `completed`, atualizar `days_taken` em `vacation_periods`
-- Ao criar um colaborador com `admission_date`, gerar automaticamente o primeiro `vacation_period`
+Os exports respeitam os filtros ativos (so exportam os dados filtrados).
 
 ---
 
-## 2. Pagina de Ferias (Dashboard) - `FeriasPage.tsx`
+## Resumo Completo do Plano (com acrescimos)
 
-Refatorar completamente a pagina placeholder atual com:
+### Banco de Dados
 
-### 2.1 Cards de Resumo (topo)
-- **Solicitacoes Pendentes**: quantidade aguardando aprovacao
-- **Colaboradores em Ferias**: quantidade atualmente em gozo
-- **Proximas Ferias**: proximas ferias agendadas (aprovadas)
-- **Periodos Vencendo**: periodos aquisitivos prestes a expirar (< 60 dias)
+1. ALTER TABLE `positions` - adicionar `risk_group` (text) e `exam_periodicity_months` (integer)
+2. CREATE TABLE `occupational_exams` com RLS (modulo `exames`)
+3. CREATE TABLE `exam_documents` com RLS (sem DELETE)
+4. CREATE storage bucket `exam-documents` (privado)
+5. Trigger `auto_create_admission_exam` em collaborators
+6. Funcao de geracao de periodicos ao completar exame
 
-### 2.2 Abas
-
-**Aba "Solicitacoes"** (padrao)
-- Tabela com: Colaborador, Periodo, Data Inicio, Data Fim, Dias, Abono, Status, Acoes
-- Filtros: Status (Pendente/Aprovada/Rejeitada/Em Gozo/Concluida), Busca por nome
-- Botao "Nova Solicitacao" (para RH/gestor registrar ferias de qualquer colaborador)
-- Acoes por linha: Aprovar, Rejeitar (com motivo), Cancelar, Visualizar detalhes
-
-**Aba "Periodos Aquisitivos"**
-- Tabela com: Colaborador, Periodo Aquisitivo (datas), Dias de Direito, Dias Gozados, Dias Vendidos, Saldo, Status
-- Indicador visual: verde (disponivel), amarelo (parcialmente usado), vermelho (vencendo), cinza (expirado)
-- Filtro por status e busca por colaborador
-
-**Aba "Calendario"** (visual)
-- Visao mensal mostrando quais colaboradores estarao de ferias em quais periodos
-- Barras coloridas horizontais por colaborador
-
-### 2.3 Modal de Nova Solicitacao / Registro de Ferias
-- Select de Colaborador (com busca)
-- Exibe automaticamente os periodos aquisitivos disponiveis
-- Campos: Data Inicio, Data Fim (calcula dias automaticamente)
-- Checkbox "Abono Pecuniario" com campo de dias (maximo 10, ou 1/3 do saldo)
-- Validacoes:
-  - Minimo 14 dias se for periodo unico, ou fracionamento valido (14 + 5 + 5)
-  - Nao pode exceder saldo disponivel
-  - Nao pode sobrepor com outras ferias do mesmo colaborador
-- Observacoes (textarea)
-
----
-
-## 3. Cadastro do Colaborador - `CollaboratorModal.tsx`
-
-### Nova aba "Ferias" no modal do colaborador
-
-- Exibir lista de periodos aquisitivos com saldo
-- Exibir historico de ferias (solicitacoes concluidas)
-- Botao "Registrar Ferias" abrindo o modal de solicitacao pre-preenchido
-- Indicador visual do proximo periodo aquisitivo
-
-### Campo `admission_date` obrigatorio
-
-- Ao salvar colaborador com `admission_date`, gerar automaticamente os periodos aquisitivos (desde a admissao ate hoje)
-
----
-
-## 4. Portal do Colaborador
-
-### Nova pagina `MinhasFeriasPage.tsx`
-
-- Card com saldo de ferias atual (dias disponiveis)
-- Lista de periodos aquisitivos com dias restantes
-- Historico de ferias gozadas
-- Botao "Solicitar Ferias" (abre modal simplificado)
-- Status das solicitacoes pendentes com timeline visual
-
-### Atualizacao do `PortalHome.tsx`
-
-- Adicionar card "Minhas Ferias" nos quick links
-- Mostrar badge se houver solicitacoes pendentes
-
-### Nova rota em `App.tsx`
-
-- `/colaborador/ferias` -> `MinhasFeriasPage`
-
----
-
-## 5. Sidebar do Dashboard
-
-- Adicionar item "Ferias" na categoria "Gestao" do menu lateral
-- Icone: `Calendar` ou `Palmtree`
-- Modulo: `ferias`
-
----
-
-## 6. Funcao de Geracao de Periodos Aquisitivos
-
-Funcao SQL `generate_vacation_periods(collaborator_id, admission_date)`:
-- Calcula todos os periodos aquisitivos desde a admissao ate a data atual
-- Cria registros na tabela `vacation_periods`
-- Chamada via trigger ao inserir/atualizar `admission_date` no collaborator
-
----
-
-## Detalhes Tecnicos
-
-### Arquivos a criar:
+### Arquivos a Criar
 
 | Arquivo | Descricao |
 |---------|-----------|
-| `src/pages/dashboard/FeriasPage.tsx` | Reescrita completa da pagina |
-| `src/components/ferias/VacationRequestModal.tsx` | Modal de solicitacao/registro |
-| `src/components/ferias/VacationCalendar.tsx` | Visao calendario mensal |
-| `src/components/ferias/VacationPeriodsList.tsx` | Lista de periodos aquisitivos |
-| `src/pages/colaborador/MinhasFeriasPage.tsx` | Pagina do portal do colaborador |
-| `src/hooks/useVacations.ts` | Hook com queries e mutations |
+| `src/pages/dashboard/ExamesPage.tsx` | Pagina principal com filtros, abas, e botoes de exportacao |
+| `src/components/exames/ExamRequestModal.tsx` | Modal de exame avulso |
+| `src/components/exames/ExamUploadModal.tsx` | Modal de upload de ASO com versionamento |
+| `src/components/exames/ExamCalendar.tsx` | Calendario visual de exames |
+| `src/components/exames/PositionChangeDialog.tsx` | Dialog de troca de funcao |
+| `src/hooks/useExams.ts` | Hook com queries, mutations e tipos |
+| `src/pages/colaborador/MeusExamesPage.tsx` | Portal do colaborador (leitura) |
+| `src/lib/riskGroupDefaults.ts` | Constantes NR-7 por grupo de risco |
+| `src/lib/examExportUtils.ts` | Funcoes de exportacao PDF/Excel para exames |
 
-### Arquivos a modificar:
+### Arquivos a Modificar
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `src/components/dashboard/DashboardSidebar.tsx` | Adicionar item "Ferias" na categoria Gestao |
-| `src/components/collaborators/CollaboratorModal.tsx` | Adicionar aba/secao de ferias |
-| `src/pages/colaborador/PortalHome.tsx` | Adicionar quick link "Minhas Ferias" |
-| `src/App.tsx` | Adicionar rota `/colaborador/ferias` |
-| `src/components/portal/PortalLayout.tsx` | Adicionar link de ferias no menu do portal |
+| `src/pages/dashboard/CargosPage.tsx` | Campos grupo de risco e periodicidade |
+| `src/components/collaborators/CollaboratorModal.tsx` | Cargo travado, troca de funcao, aba exames |
+| `src/components/dashboard/DashboardSidebar.tsx` | Item "Exames" no menu |
+| `src/App.tsx` | Rotas /dashboard/exames e /colaborador/exames |
+| `src/components/portal/PortalLayout.tsx` | Link "Meus Exames" |
+| `src/pages/colaborador/PortalHome.tsx` | Quick link "Meus Exames" |
 
-### Migracoes SQL:
+### Detalhes da ExamesPage (UI)
 
-1. Criar tabela `vacation_periods` com RLS
-2. Criar tabela `vacation_requests` com RLS
-3. Criar funcao `generate_vacation_periods()` (SECURITY DEFINER)
-4. Criar trigger na tabela `collaborators` para gerar periodos ao definir `admission_date`
-5. Criar funcao de atualizacao de saldo ao completar ferias
-6. Habilitar realtime em `vacation_requests` para notificacoes
+**Cards de resumo**: Pendentes, Vencidos, Proximos 30 dias, Realizados no mes
 
-### Fluxo de dados:
+**Aba "Todos os Exames"**:
+- Barra de filtros: Input busca colaborador + Select status + Select tipo + Campos data de/ate
+- Botoes de acao: "Novo Exame Avulso" + "Exportar PDF" + "Exportar Excel" + "Imprimir"
+- Tabela: Colaborador, Tipo, Status (badge colorido), Grupo de Risco, Data Limite, Data Realizada, ASO (icone), Acoes
+- Acoes por linha: Agendar, Marcar Realizado, Enviar ASO, Cancelar
 
-```text
-Colaborador cadastrado com admission_date
-  -> Trigger gera vacation_periods automaticamente
+**Aba "Vencimentos"**: Lista ordenada por urgencia com indicadores visuais
 
-RH cria solicitacao (ou colaborador solicita via portal)
-  -> vacation_requests com status "pending"
+**Aba "Calendario"**: Visao mensal dos exames
 
-RH/Gestor aprova
-  -> status "approved", approved_by, approved_at
+### Sequencia de Implementacao
 
-Data de inicio chega
-  -> status "in_progress" (pode ser via cron ou manual)
+1. Migracoes SQL (tabelas, triggers, RLS, storage)
+2. Constantes de grupo de risco
+3. Cadastro de cargos (novos campos)
+4. Hook `useExams.ts`
+5. `examExportUtils.ts` (PDF/Excel)
+6. `CollaboratorModal.tsx` (cargo travado, troca funcao, aba exames)
+7. Sidebar e permissoes (modulo exames)
+8. `ExamesPage.tsx` com filtros e exportacao
+9. Modais (exame avulso, upload ASO)
+10. Portal do colaborador (MeusExamesPage)
+11. Rotas e links
 
-Data de fim chega
-  -> status "completed"
-  -> Trigger atualiza days_taken no vacation_period
-```
-
-### Sequencia de implementacao:
-
-1. Migracoes SQL (tabelas, funcoes, triggers, RLS)
-2. Hook `useVacations.ts`
-3. Sidebar (adicionar link)
-4. `FeriasPage.tsx` completa (abas, tabelas, filtros)
-5. `VacationRequestModal.tsx`
-6. Aba de ferias no `CollaboratorModal.tsx`
-7. `MinhasFeriasPage.tsx` (portal)
-8. Rotas e links no portal
