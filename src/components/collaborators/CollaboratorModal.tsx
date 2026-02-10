@@ -118,12 +118,16 @@ const CollaboratorModal = ({
   const [newStoreName, setNewStoreName] = useState("");
   const [newTeamName, setNewTeamName] = useState("");
 
-  // Entry form state
+  // Entry form state - extended with month/year/installment
   const [entryForm, setEntryForm] = useState({
     type: "adicional" as "salario" | "adicional" | "custo" | "despesa" | "vale",
     description: "",
     value: "",
     is_fixed: false,
+    month: currentMonth,
+    year: currentYear,
+    is_installment: false,
+    installment_count: 2,
   });
 
   // Benefit assignment state
@@ -261,7 +265,6 @@ const CollaboratorModal = ({
           is_temp: collaborator.is_temp || false,
           password: "",
         });
-        // Only show password field for collaborators without user_id
         setShowPasswordField(!collaborator.user_id);
       } else {
         setFormData({
@@ -291,12 +294,9 @@ const CollaboratorModal = ({
     const position = positions.find((p) => p.id === formData.position_id);
     
     if (isNew) {
-      // For new collaborators: add to pending entries
       setPendingEntries((prev) => {
-        // Remove old position-based salary and tax entries
         const filtered = prev.filter((e) => e.source !== "position" && e.source !== "tax");
         
-        // Add new entries if position has salary
         if (position && position.salary > 0) {
           const newEntries: PendingEntry[] = [
             {
@@ -309,7 +309,6 @@ const CollaboratorModal = ({
             },
           ];
   
-          // Add tax entries based on position percentages
           if (position.inss_percent && position.inss_percent > 0) {
             const inssValue = position.salary * (position.inss_percent / 100);
             newEntries.push({
@@ -352,13 +351,10 @@ const CollaboratorModal = ({
         return filtered;
       });
     } else if (collaboratorId && formData.position_id && formData.position_id !== previousPositionId) {
-      // For existing collaborators: create payroll entries directly in DB when position changes
       setPreviousPositionId(formData.position_id);
       
       if (position && position.salary > 0) {
-        // Create entries in the database for the current period
         const createTaxEntries = async () => {
-          // First, delete existing position-based and tax entries for this period
           await supabase
             .from("payroll_entries")
             .delete()
@@ -509,7 +505,6 @@ const CollaboratorModal = ({
 
   // Save collaborator
   const handleSave = async () => {
-    // Validate
     if (!formData.name.trim()) {
       toast.error("Nome é obrigatório");
       return;
@@ -521,7 +516,6 @@ const CollaboratorModal = ({
       return;
     }
 
-    // Validate email if provided
     if (formData.email.trim()) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(formData.email.trim())) {
@@ -530,7 +524,6 @@ const CollaboratorModal = ({
       }
     }
 
-    // Validate password if provided
     if (formData.password && formData.password.length < 6) {
       toast.error("A senha deve ter no mínimo 6 caracteres");
       return;
@@ -540,12 +533,10 @@ const CollaboratorModal = ({
     try {
       let userId: string | null = null;
 
-      // Create auth user via edge function if email and password are provided
       if (formData.email.trim() && formData.password) {
         setIsCreatingUser(true);
         const normalizedEmail = formData.email.trim().toLowerCase();
         
-        // Use edge function to create user without logging in as them
         const { data: createData, error: createError } = await supabase.functions.invoke(
           "create-collaborator-user",
           {
@@ -568,7 +559,6 @@ const CollaboratorModal = ({
         if (createData?.error) {
           toast.error(createData.error);
           setIsCreatingUser(false);
-          // Continue without user - collaborator will be created without portal access
         } else if (createData?.user_id) {
           userId = createData.user_id;
         }
@@ -593,7 +583,6 @@ const CollaboratorModal = ({
       };
 
       if (isNew) {
-        // Create new collaborator
         const { data: newCollab, error } = await supabase
           .from("collaborators")
           .insert(saveData)
@@ -608,7 +597,6 @@ const CollaboratorModal = ({
           throw error;
         }
 
-        // Create pending entries
         if (pendingEntries.length > 0) {
           const entriesToCreate = pendingEntries.map((e) => ({
             collaborator_id: newCollab.id,
@@ -623,7 +611,6 @@ const CollaboratorModal = ({
           await supabase.from("payroll_entries").insert(entriesToCreate);
         }
 
-        // Create pending benefit assignments (benefits are calculated dynamically, not as payroll entries)
         if (pendingBenefits.length > 0) {
           const assignmentsToCreate = pendingBenefits.map((b) => ({
             benefit_id: b.benefit_id,
@@ -637,13 +624,11 @@ const CollaboratorModal = ({
           : "Colaborador criado com sucesso!";
         toast.success(message);
       } else {
-        // Update existing collaborator
         const updateData = {
           ...saveData,
-          // Only update user_id if we created a new user
           ...(userId ? { user_id: userId } : {}),
         };
-        delete (updateData as any).user_id; // Remove if not set
+        delete (updateData as any).user_id;
         if (userId) {
           (updateData as any).user_id = userId;
         }
@@ -686,20 +671,41 @@ const CollaboratorModal = ({
     }
 
     const numericValue = parseCurrencyInput(entryForm.value);
-    setPendingEntries((prev) => [
-      ...prev,
-      {
-        id: `manual-${Date.now()}`,
-        type: entryForm.type,
-        description: entryForm.description || getEntryTypeLabel(entryForm.type),
-        value: numericValue,
-        is_fixed: entryForm.is_fixed,
-        source: "manual",
-      },
-    ]);
+
+    if (entryForm.is_installment && entryForm.installment_count > 1) {
+      const valuePerInstallment = numericValue / entryForm.installment_count;
+      for (let i = 0; i < entryForm.installment_count; i++) {
+        const entryMonth = ((entryForm.month + i - 1) % 12) + 1;
+        const entryYear = entryForm.year + Math.floor((entryForm.month + i - 1) / 12);
+        const desc = `${entryForm.description || getEntryTypeLabel(entryForm.type)} (${i + 1}/${entryForm.installment_count})`;
+        setPendingEntries((prev) => [
+          ...prev,
+          {
+            id: `manual-${Date.now()}-${i}`,
+            type: entryForm.type,
+            description: desc,
+            value: valuePerInstallment,
+            is_fixed: false,
+            source: "manual",
+          },
+        ]);
+      }
+    } else {
+      setPendingEntries((prev) => [
+        ...prev,
+        {
+          id: `manual-${Date.now()}`,
+          type: entryForm.type,
+          description: entryForm.description || getEntryTypeLabel(entryForm.type),
+          value: numericValue,
+          is_fixed: entryForm.is_fixed,
+          source: "manual",
+        },
+      ]);
+    }
 
     setAddEntryOpen(false);
-    setEntryForm({ type: "adicional", description: "", value: "", is_fixed: false });
+    setEntryForm({ type: "adicional", description: "", value: "", is_fixed: false, month: currentMonth, year: currentYear, is_installment: false, installment_count: 2 });
     toast.success("Lançamento adicionado!");
   };
 
@@ -712,20 +718,49 @@ const CollaboratorModal = ({
 
     try {
       const numericValue = parseCurrencyInput(entryForm.value);
-      await supabase.from("payroll_entries").insert({
-        collaborator_id: collaboratorId,
-        company_id: currentCompany!.id,
-        type: entryForm.type,
-        value: numericValue,
-        description: entryForm.description || null,
-        month: currentMonth,
-        year: currentYear,
-        is_fixed: entryForm.is_fixed,
-      });
+
+      if (entryForm.is_installment && entryForm.installment_count > 1) {
+        const valuePerInstallment = numericValue / entryForm.installment_count;
+        const groupId = crypto.randomUUID();
+        const entriesToCreate = [];
+
+        for (let i = 0; i < entryForm.installment_count; i++) {
+          const entryMonth = ((entryForm.month + i - 1) % 12) + 1;
+          const entryYear = entryForm.year + Math.floor((entryForm.month + i - 1) / 12);
+          const desc = `${entryForm.description || ""} (${i + 1}/${entryForm.installment_count})`;
+          
+          entriesToCreate.push({
+            collaborator_id: collaboratorId,
+            company_id: currentCompany!.id,
+            type: entryForm.type,
+            value: valuePerInstallment,
+            description: desc.trim(),
+            month: entryMonth,
+            year: entryYear,
+            is_fixed: false,
+            installment_group_id: groupId,
+            installment_number: i + 1,
+            installment_total: entryForm.installment_count,
+          });
+        }
+
+        await supabase.from("payroll_entries").insert(entriesToCreate);
+      } else {
+        await supabase.from("payroll_entries").insert({
+          collaborator_id: collaboratorId,
+          company_id: currentCompany!.id,
+          type: entryForm.type,
+          value: numericValue,
+          description: entryForm.description || null,
+          month: entryForm.month,
+          year: entryForm.year,
+          is_fixed: entryForm.is_fixed,
+        });
+      }
 
       refetchEntries();
       setAddEntryOpen(false);
-      setEntryForm({ type: "adicional", description: "", value: "", is_fixed: false });
+      setEntryForm({ type: "adicional", description: "", value: "", is_fixed: false, month: currentMonth, year: currentYear, is_installment: false, installment_count: 2 });
       toast.success("Lançamento adicionado!");
     } catch (error) {
       toast.error("Erro ao adicionar lançamento");
@@ -737,7 +772,6 @@ const CollaboratorModal = ({
     if (!deletingEntry) return;
     
     if (isNew) {
-      // Remove from pending
       setPendingEntries((prev) => prev.filter((e) => e.id !== deletingEntry.id));
       setDeletingEntry(null);
       toast.success("Lançamento removido!");
@@ -793,7 +827,6 @@ const CollaboratorModal = ({
   };
 
   // Add benefit assignment (for existing collaborators)
-  // Benefits are calculated dynamically from benefits_assignments, not stored as payroll_entries
   const handleAddBenefit = async () => {
     if (!selectedBenefitId) {
       toast.error("Selecione um benefício");
@@ -851,9 +884,7 @@ const CollaboratorModal = ({
 
     if (isNew) {
       entriesTotal = pendingEntries.reduce((sum, e) => {
-        // FGTS is company cost, not deducted from employee
         if (e.type === "fgts") return sum;
-        // INSS and IRPF are deductions
         if (e.type === "inss" || e.type === "irpf") return sum - e.value;
         if (e.type === "custo" || e.type === "despesa") return sum - e.value;
         return sum + e.value;
@@ -865,9 +896,7 @@ const CollaboratorModal = ({
       benefitsTotal = pendingBenefits.reduce((sum, b) => sum + b.monthly_value, 0);
     } else {
       entriesTotal = payrollEntries.reduce((sum, e) => {
-        // FGTS is company cost, not deducted from employee
         if (e.type === "fgts") return sum;
-        // INSS and IRPF are deductions
         if (e.type === "inss" || e.type === "irpf") return sum - e.value;
         if (e.type === "custo" || e.type === "despesa") return sum - e.value;
         return sum + e.value;
@@ -928,7 +957,7 @@ const CollaboratorModal = ({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-5xl h-[85vh] max-h-[85vh] p-0 flex flex-col overflow-hidden">
+        <DialogContent className="max-w-5xl max-h-[90vh] p-0 flex flex-col overflow-hidden">
           {/* Header */}
           <DialogHeader className="shrink-0 px-6 pt-6 pb-4 border-b">
             <DialogTitle className="text-xl">
@@ -942,7 +971,7 @@ const CollaboratorModal = ({
             </div>
           ) : (
             /* Content - Two Columns */
-            <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 divide-x overflow-hidden">
+            <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 divide-x min-h-0 overflow-hidden">
               {/* Left Column - Dados Cadastrais */}
               <ScrollArea className="h-full">
                 <div className="p-6 space-y-4">
@@ -984,7 +1013,6 @@ const CollaboratorModal = ({
                         value={formData.email}
                         onChange={(e) => {
                           setFormData((prev) => ({ ...prev, email: e.target.value }));
-                          // Show password field when email is entered (for new collaborators or those without user_id)
                           if (e.target.value.trim() && (isNew || showPasswordField)) {
                             setShowPasswordField(true);
                           }
@@ -1004,7 +1032,7 @@ const CollaboratorModal = ({
                     </div>
                   </div>
 
-                  {/* Password Field - Only shown when email is entered and user doesn't have access yet */}
+                  {/* Password Field */}
                   {formData.email.trim() && showPasswordField && (
                     <div className="space-y-2 p-4 bg-muted/50 rounded-lg border border-dashed">
                       <div className="flex items-center gap-2">
@@ -1162,7 +1190,7 @@ const CollaboratorModal = ({
               </ScrollArea>
 
               {/* Right Column - Financeiro */}
-              <div className="flex flex-col h-full bg-muted/30">
+              <div className="flex flex-col min-h-0 bg-muted/30">
                 {/* Financeiro Header */}
                 <div className="shrink-0 p-4 border-b bg-muted/50">
                   <h3 className="font-semibold text-lg flex items-center gap-2">
@@ -1219,6 +1247,11 @@ const CollaboratorModal = ({
                                     </Badge>
                                     {entry.is_fixed && (
                                       <Badge variant="outline" className="text-xs h-5 px-1.5">Fixo</Badge>
+                                    )}
+                                    {entry.installment_number && (
+                                      <Badge variant="outline" className="text-xs h-5 px-1.5">
+                                        {entry.installment_number}/{entry.installment_total}
+                                      </Badge>
                                     )}
                                   </div>
                                 </div>
@@ -1390,13 +1423,51 @@ const CollaboratorModal = ({
         </DialogContent>
       </Dialog>
 
-      {/* Add Entry Dialog */}
+      {/* Add Entry Dialog - Extended with month/year/installment */}
       <Dialog open={addEntryOpen} onOpenChange={setAddEntryOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Novo Lançamento</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Mês</Label>
+                <Select
+                  value={entryForm.month.toString()}
+                  onValueChange={(v) => setEntryForm((prev) => ({ ...prev, month: parseInt(v) }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                      <SelectItem key={m} value={m.toString()}>
+                        {m.toString().padStart(2, "0")}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Ano</Label>
+                <Select
+                  value={entryForm.year.toString()}
+                  onValueChange={(v) => setEntryForm((prev) => ({ ...prev, year: parseInt(v) }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[currentYear - 1, currentYear, currentYear + 1].map((y) => (
+                      <SelectItem key={y} value={y.toString()}>
+                        {y}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
             <div className="space-y-2">
               <Label>Tipo</Label>
               <Select
@@ -1424,20 +1495,51 @@ const CollaboratorModal = ({
               />
             </div>
             <div className="space-y-2">
-              <Label>Valor</Label>
+              <Label>Valor Total</Label>
               <Input
                 value={entryForm.value}
                 onChange={handleValueChange}
                 placeholder="R$ 0,00"
               />
             </div>
-            <div className="flex items-center space-x-2">
-              <Switch
-                checked={entryForm.is_fixed}
-                onCheckedChange={(v) => setEntryForm((prev) => ({ ...prev, is_fixed: v }))}
-              />
-              <Label>Lançamento fixo (repete mensalmente)</Label>
+            
+            {/* Fixed vs Installment */}
+            <div className="space-y-3">
+              <div className="flex items-center space-x-2">
+                <Switch
+                  checked={entryForm.is_fixed}
+                  onCheckedChange={(v) => setEntryForm((prev) => ({ ...prev, is_fixed: v, is_installment: v ? false : prev.is_installment }))}
+                  disabled={entryForm.is_installment}
+                />
+                <Label>Lançamento fixo (repete mensalmente)</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Switch
+                  checked={entryForm.is_installment}
+                  onCheckedChange={(v) => setEntryForm((prev) => ({ ...prev, is_installment: v, is_fixed: v ? false : prev.is_fixed }))}
+                  disabled={entryForm.is_fixed}
+                />
+                <Label>Parcelado</Label>
+              </div>
+              {entryForm.is_installment && (
+                <div className="space-y-2 pl-6">
+                  <Label>Número de Parcelas</Label>
+                  <Input
+                    type="number"
+                    min={2}
+                    max={48}
+                    value={entryForm.installment_count}
+                    onChange={(e) => setEntryForm((prev) => ({ ...prev, installment_count: Math.max(2, parseInt(e.target.value) || 2) }))}
+                  />
+                  {entryForm.value && (
+                    <p className="text-xs text-muted-foreground">
+                      {entryForm.installment_count}x de {formatCurrency(parseCurrencyInput(entryForm.value) / entryForm.installment_count)}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
+
             <div className="flex justify-end gap-2 pt-4">
               <Button variant="outline" onClick={() => setAddEntryOpen(false)}>
                 Cancelar
@@ -1578,7 +1680,7 @@ const CollaboratorModal = ({
           <AlertDialogHeader>
             <AlertDialogTitle>Remover Benefício</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem certeza que deseja remover este benefício? Esta ação não pode ser desfeita.
+              Tem certeza que deseja remover este benefício do colaborador?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
