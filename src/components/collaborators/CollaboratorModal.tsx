@@ -1238,13 +1238,11 @@ const CollaboratorModal = ({
                                       {entry.description || getEntryTypeLabel(entry.type)}
                                     </span>
                                     <span className={`font-mono text-sm font-semibold shrink-0 ${
-                                      ["inss", "irpf", "despesa", "vale", "custo"].includes(entry.type) 
+                                      ["inss", "irpf", "despesa", "vale", "custo", "fgts"].includes(entry.type) 
                                         ? "text-destructive" 
-                                        : entry.type === "fgts" 
-                                          ? "text-muted-foreground" 
-                                          : "text-green-600"
+                                        : "text-green-600"
                                     }`}>
-                                      {["inss", "irpf", "despesa", "vale", "custo"].includes(entry.type) ? "- " : entry.type === "fgts" ? "" : "+ "}
+                                      {["inss", "irpf", "despesa", "vale", "custo", "fgts"].includes(entry.type) ? "- " : "+ "}
                                       {formatCurrency(entry.value)}
                                     </span>
                                   </div>

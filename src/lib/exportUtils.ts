@@ -11,6 +11,7 @@ interface PayrollEntry {
 
 interface ExportData {
   companyName: string;
+  companyCnpj?: string;
   period: string;
   entries: PayrollEntry[];
   totals: { type: string; total: number }[];
@@ -50,40 +51,60 @@ const loadImageAsBase64 = async (url: string): Promise<string | null> => {
 
 const formatValueWithSign = (value: number, type: string): string => {
   const formatted = value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-  if (deductionTypes.includes(type)) return `- ${formatted}`;
-  if (type === "fgts") return formatted;
+  if (deductionTypes.includes(type) || type === "fgts") return `- ${formatted}`;
   return `+ ${formatted}`;
 };
 
 export const exportToPDF = async (data: ExportData) => {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 14;
 
-  let headerY = 20;
+  let y = 10;
 
-  // Add logo if available
+  // ============ HEADER: Logo + Company info left | Period info right ============
+  let logoWidth = 0;
   if (data.logoUrl) {
     const logoBase64 = await loadImageAsBase64(data.logoUrl);
     if (logoBase64) {
       try {
-        doc.addImage(logoBase64, "PNG", 14, 8, 20, 20);
-        headerY = 20;
+        doc.addImage(logoBase64, "PNG", margin, y, 16, 16);
+        logoWidth = 19;
       } catch (e) {
         console.error("Error adding logo to PDF:", e);
       }
     }
   }
 
-  // Header
-  doc.setFontSize(18);
+  // Left side: company info
+  const textX = margin + logoWidth;
+  doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
-  doc.text("Relatório de Folha de Pagamento", pageWidth / 2, headerY, { align: "center" });
-
-  doc.setFontSize(12);
+  doc.text(data.companyName, textX, y + 5);
+  doc.setFontSize(7);
   doc.setFont("helvetica", "normal");
-  doc.text(`Empresa: ${data.companyName}`, 14, 35);
-  doc.text(`Competência: ${data.period}`, 14, 42);
-  doc.text(`Gerado em: ${new Date().toLocaleDateString("pt-BR")}`, 14, 49);
+  if (data.companyCnpj) {
+    doc.text(`CNPJ: ${data.companyCnpj}`, textX, y + 10);
+  }
+
+  // Right side: period info
+  doc.setFontSize(7);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Competência: ${data.period}`, pageWidth - margin, y + 5, { align: "right" });
+  doc.text(`Gerado em: ${new Date().toLocaleDateString("pt-BR")}`, pageWidth - margin, y + 10, { align: "right" });
+
+  y += 18;
+
+  // Separator line
+  doc.setLineWidth(0.3);
+  doc.line(margin, y, pageWidth - margin, y);
+  y += 4;
+
+  // Report title centered
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "bold");
+  doc.text("Relatório de Folha de Pagamento", pageWidth / 2, y, { align: "center" });
+  y += 8;
 
   // Group entries by collaborator
   const grouped = new Map<string, PayrollEntry[]>();
