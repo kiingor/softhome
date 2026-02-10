@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import PermissionGuard from "@/components/dashboard/PermissionGuard";
@@ -33,6 +33,9 @@ import {
   Save,
   Users,
   Clock,
+  Upload,
+  Trash2,
+  Image as ImageIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PLANS, getPlanById, PlanId } from "@/lib/planUtils";
@@ -52,6 +55,8 @@ const ConfiguracoesPage = () => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedPlanForPayment, setSelectedPlanForPayment] = useState<PlanId>("essencial");
   const [activeTab, setActiveTab] = useState("conta");
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   // Handle tab from URL params
   useEffect(() => {
@@ -82,7 +87,6 @@ const ConfiguracoesPage = () => {
         .single();
       if (error) throw error;
       
-      // Initialize form data
       setFormData({
         company_name: data.company_name || "",
         cnpj: data.cnpj || "",
@@ -143,7 +147,6 @@ const ConfiguracoesPage = () => {
     mutationFn: async () => {
       if (!currentCompany?.id) throw new Error("Empresa não encontrada");
       
-      // Call edge function to cancel on Asaas
       if (company?.asaas_subscription_id) {
         const { error } = await supabase.functions.invoke("asaas", {
           body: {
@@ -154,7 +157,6 @@ const ConfiguracoesPage = () => {
         if (error) throw error;
       }
 
-      // Update local status
       const { error: updateError } = await supabase
         .from("companies")
         .update({
@@ -171,6 +173,84 @@ const ConfiguracoesPage = () => {
       toast.error("Erro ao cancelar assinatura");
     },
   });
+
+  // Logo upload handler
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !currentCompany?.id) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("Selecione um arquivo de imagem (PNG, JPG)");
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("A imagem deve ter no máximo 2MB");
+      return;
+    }
+
+    setIsUploadingLogo(true);
+    try {
+      const ext = file.name.split(".").pop() || "png";
+      const filePath = `${currentCompany.id}/logo.${ext}`;
+
+      // Upload to storage
+      const { error: uploadError } = await supabase.storage
+        .from("company-logos")
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from("company-logos")
+        .getPublicUrl(filePath);
+
+      // Save URL to company
+      const { error: updateError } = await supabase
+        .from("companies")
+        .update({ logo_url: urlData.publicUrl })
+        .eq("id", currentCompany.id);
+
+      if (updateError) throw updateError;
+
+      queryClient.invalidateQueries({ queryKey: ["company-settings"] });
+      toast.success("Logomarca atualizada com sucesso!");
+    } catch (error: any) {
+      console.error("Error uploading logo:", error);
+      toast.error("Erro ao enviar logomarca");
+    } finally {
+      setIsUploadingLogo(false);
+      if (logoInputRef.current) logoInputRef.current.value = "";
+    }
+  };
+
+  // Logo remove handler
+  const handleRemoveLogo = async () => {
+    if (!currentCompany?.id) return;
+
+    try {
+      // Remove from storage
+      const { error: deleteError } = await supabase.storage
+        .from("company-logos")
+        .remove([`${currentCompany.id}/logo.png`, `${currentCompany.id}/logo.jpg`, `${currentCompany.id}/logo.jpeg`]);
+
+      if (deleteError) console.error("Error deleting logo file:", deleteError);
+
+      // Clear URL from company
+      const { error: updateError } = await supabase
+        .from("companies")
+        .update({ logo_url: null })
+        .eq("id", currentCompany.id);
+
+      if (updateError) throw updateError;
+
+      queryClient.invalidateQueries({ queryKey: ["company-settings"] });
+      toast.success("Logomarca removida!");
+    } catch (error) {
+      toast.error("Erro ao remover logomarca");
+    }
+  };
 
   // Calculate trial info
   const trialDaysRemaining = company?.trial_ends_at 
@@ -381,6 +461,75 @@ const ConfiguracoesPage = () => {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Logomarca */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ImageIcon className="w-5 h-5 text-primary" />
+                  Logomarca
+                </CardTitle>
+                <CardDescription>
+                  A logomarca será exibida nos relatórios e recibos em PDF
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-6">
+                  {/* Logo Preview */}
+                  <div className="w-24 h-24 rounded-lg border-2 border-dashed border-muted-foreground/30 flex items-center justify-center overflow-hidden bg-muted/30">
+                    {company?.logo_url ? (
+                      <img
+                        src={company.logo_url}
+                        alt="Logomarca da empresa"
+                        className="w-full h-full object-contain"
+                      />
+                    ) : (
+                      <ImageIcon className="w-8 h-8 text-muted-foreground/50" />
+                    )}
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => logoInputRef.current?.click()}
+                        disabled={isUploadingLogo}
+                      >
+                        {isUploadingLogo ? (
+                          <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                        ) : (
+                          <Upload className="w-4 h-4 mr-2" />
+                        )}
+                        {company?.logo_url ? "Alterar Logo" : "Enviar Logo"}
+                      </Button>
+                      {company?.logo_url && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleRemoveLogo}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Remover
+                        </Button>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      PNG ou JPG. Tamanho máximo: 2MB.
+                    </p>
+                  </div>
+
+                  <input
+                    ref={logoInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg"
+                    className="hidden"
+                    onChange={handleLogoUpload}
+                  />
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* Tab: Usuários e Acessos */}
@@ -423,7 +572,6 @@ const ConfiguracoesPage = () => {
                     </div>
                   </div>
                   
-                  {/* Subscribe Button for Trial Users */}
                   {isTrial && (
                     <div className="flex items-center gap-3">
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -439,7 +587,6 @@ const ConfiguracoesPage = () => {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Usage */}
                 <div>
                   <div className="flex items-center justify-between text-sm mb-2">
                     <span className="text-muted-foreground">
@@ -471,7 +618,6 @@ const ConfiguracoesPage = () => {
 
                 <Separator />
 
-                {/* Plan Features */}
                 <div>
                   <p className="text-sm font-medium mb-2">
                     Recursos do seu plano:

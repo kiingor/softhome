@@ -7,23 +7,19 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Get the authorization header to verify the caller is authenticated
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      console.error("No authorization header provided");
       return new Response(
         JSON.stringify({ error: "Não autorizado" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Create a client with the user's token to verify they're authenticated
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -32,17 +28,14 @@ serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
 
-    // Verify the user is authenticated and has permission
     const { data: { user: callerUser }, error: authError } = await userClient.auth.getUser();
     if (authError || !callerUser) {
-      console.error("Auth error:", authError);
       return new Response(
         JSON.stringify({ error: "Não autorizado" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Parse the request body
     const { email, password, full_name, company_id } = await req.json();
 
     if (!email || !password) {
@@ -66,7 +59,6 @@ serve(async (req) => {
       );
     }
 
-    // Create admin client with service role key
     const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
       auth: {
         autoRefreshToken: false,
@@ -74,7 +66,7 @@ serve(async (req) => {
       },
     });
 
-    // Verify caller is company owner (has permission to create users)
+    // Verify caller is company owner
     const { data: companyData, error: companyError } = await adminClient
       .from("companies")
       .select("id, owner_id")
@@ -82,37 +74,115 @@ serve(async (req) => {
       .single();
 
     if (companyError || !companyData) {
-      console.error("Company not found:", companyError);
       return new Response(
         JSON.stringify({ error: "Empresa não encontrada" }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Check if caller is company owner
     if (companyData.owner_id !== callerUser.id) {
-      console.error("User is not company owner:", callerUser.id);
       return new Response(
         JSON.stringify({ error: "Sem permissão para criar usuários nesta empresa" }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Create the user using admin API (doesn't log in as them)
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Try to create the user
     const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
-      email: email.toLowerCase().trim(),
+      email: normalizedEmail,
       password,
-      email_confirm: true, // Auto-confirm the email
+      email_confirm: true,
     });
 
+    let userId: string;
+
     if (createError) {
-      console.error("Error creating user:", createError);
-      
+      // If user already exists, try to link them to this company
       if (createError.message?.includes("already been registered") || 
           createError.message?.includes("already exists")) {
+        
+        console.log("User already exists, attempting to link to company:", normalizedEmail);
+        
+        // Find existing user
+        const { data: existingUsers, error: listError } = await adminClient.auth.admin.listUsers();
+        
+        if (listError) {
+          console.error("Error listing users:", listError);
+          return new Response(
+            JSON.stringify({ error: "Erro ao buscar usuário existente" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        const existingUser = existingUsers.users.find(
+          (u) => u.email?.toLowerCase() === normalizedEmail
+        );
+
+        if (!existingUser) {
+          return new Response(
+            JSON.stringify({ error: "Usuário não encontrado" }),
+            { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        userId = existingUser.id;
+
+        // Check if already linked to this company
+        const { data: existingLink } = await adminClient
+          .from("company_users")
+          .select("id")
+          .eq("company_id", company_id)
+          .eq("email", normalizedEmail)
+          .maybeSingle();
+
+        if (existingLink) {
+          return new Response(
+            JSON.stringify({ error: "Este usuário já está cadastrado nesta empresa" }),
+            { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Update password for existing user
+        await adminClient.auth.admin.updateUserById(userId, { password });
+
+        // Link to company
+        const { error: companyUserError } = await adminClient
+          .from("company_users")
+          .insert({
+            company_id: company_id,
+            email: normalizedEmail,
+            full_name: full_name || null,
+            user_id: userId,
+            invited_by: callerUser.id,
+            is_active: true,
+            accepted_at: new Date().toISOString(),
+          });
+
+        if (companyUserError) {
+          console.error("Error adding company_user:", companyUserError);
+        }
+
+        // Update profile to point to this company
+        const { error: profileUpdateError } = await adminClient
+          .from("profiles")
+          .update({ company_id: company_id, full_name: full_name || null })
+          .eq("user_id", userId);
+
+        if (profileUpdateError) {
+          console.error("Error updating profile:", profileUpdateError);
+        }
+
+        console.log("Existing user linked to company successfully:", userId);
+
         return new Response(
-          JSON.stringify({ error: "Este email já possui uma conta cadastrada" }),
-          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ 
+            success: true, 
+            user_id: userId,
+            message: "Usuário existente vinculado à empresa com sucesso" 
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       
@@ -122,62 +192,55 @@ serve(async (req) => {
       );
     }
 
-    console.log("User created successfully:", newUser.user?.id);
+    userId = newUser.user!.id;
+    console.log("User created successfully:", userId);
 
     // Setup all required records for the new user
-    if (newUser.user) {
-      const userId = newUser.user.id;
-      const normalizedEmail = email.toLowerCase().trim();
+    // 1. Create profile
+    const { error: profileError } = await adminClient
+      .from("profiles")
+      .insert({
+        user_id: userId,
+        company_id: company_id,
+        full_name: full_name || null,
+      });
 
-      // 1. Create profile with company_id (critical for user_belongs_to_company to work)
-      const { error: profileError } = await adminClient
-        .from("profiles")
-        .insert({
-          user_id: userId,
-          company_id: company_id,
-          full_name: full_name || null,
-        });
-
-      if (profileError) {
-        console.error("Error creating profile:", profileError);
-        // Continue anyway, profile might already exist from trigger
-      }
-
-      // 2. Add the collaborator role to the new user
-      const { error: roleError } = await adminClient
-        .from("user_roles")
-        .insert({ user_id: userId, role: "colaborador" });
-
-      if (roleError) {
-        console.error("Error adding role:", roleError);
-        // Don't fail the whole operation, just log it
-      }
-
-      // 3. Insert into company_users table so user appears in the list
-      const { error: companyUserError } = await adminClient
-        .from("company_users")
-        .insert({
-          company_id: company_id,
-          email: normalizedEmail,
-          full_name: full_name || null,
-          user_id: userId,
-          invited_by: callerUser.id,
-          is_active: true,
-          accepted_at: new Date().toISOString(),
-        });
-
-      if (companyUserError) {
-        console.error("Error adding company_user:", companyUserError);
-        // Don't fail the whole operation, just log it
-      }
-
-      console.log("All user records created successfully for:", userId);
+    if (profileError) {
+      console.error("Error creating profile:", profileError);
     }
+
+    // 2. Add the collaborator role
+    const { error: roleError } = await adminClient
+      .from("user_roles")
+      .insert({ user_id: userId, role: "colaborador" });
+
+    if (roleError) {
+      console.error("Error adding role:", roleError);
+    }
+
+    // 3. Insert into company_users
+    const { error: companyUserError } = await adminClient
+      .from("company_users")
+      .insert({
+        company_id: company_id,
+        email: normalizedEmail,
+        full_name: full_name || null,
+        user_id: userId,
+        invited_by: callerUser.id,
+        is_active: true,
+        accepted_at: new Date().toISOString(),
+      });
+
+    if (companyUserError) {
+      console.error("Error adding company_user:", companyUserError);
+    }
+
+    console.log("All user records created successfully for:", userId);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        user_id: newUser.user?.id,
+        user_id: userId,
         message: "Usuário criado com sucesso" 
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }

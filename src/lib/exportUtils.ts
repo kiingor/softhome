@@ -15,6 +15,7 @@ interface ExportData {
   entries: PayrollEntry[];
   totals: { type: string; total: number }[];
   grandTotal: number;
+  logoUrl?: string;
 }
 
 const typeLabels: Record<string, string> = {
@@ -28,14 +29,45 @@ const typeLabels: Record<string, string> = {
    irpf: "IRPF",
 };
 
-export const exportToPDF = (data: ExportData) => {
+// Helper to load image as base64
+const loadImageAsBase64 = async (url: string): Promise<string | null> => {
+  try {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+};
+
+export const exportToPDF = async (data: ExportData) => {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
+
+  let headerY = 20;
+
+  // Add logo if available
+  if (data.logoUrl) {
+    const logoBase64 = await loadImageAsBase64(data.logoUrl);
+    if (logoBase64) {
+      try {
+        doc.addImage(logoBase64, "PNG", 14, 8, 20, 20);
+        headerY = 20;
+      } catch (e) {
+        console.error("Error adding logo to PDF:", e);
+      }
+    }
+  }
 
   // Header
   doc.setFontSize(18);
   doc.setFont("helvetica", "bold");
-  doc.text("Relatório de Folha de Pagamento", pageWidth / 2, 20, { align: "center" });
+  doc.text("Relatório de Folha de Pagamento", pageWidth / 2, headerY, { align: "center" });
 
   doc.setFontSize(12);
   doc.setFont("helvetica", "normal");

@@ -250,6 +250,7 @@ export type Database = {
           email: string | null
           id: string
           is_blocked: boolean | null
+          logo_url: string | null
           owner_id: string
           phone: string | null
           plan_type: string
@@ -267,6 +268,7 @@ export type Database = {
           email?: string | null
           id?: string
           is_blocked?: boolean | null
+          logo_url?: string | null
           owner_id: string
           phone?: string | null
           plan_type?: string
@@ -284,6 +286,7 @@ export type Database = {
           email?: string | null
           id?: string
           is_blocked?: boolean | null
+          logo_url?: string | null
           owner_id?: string
           phone?: string | null
           plan_type?: string

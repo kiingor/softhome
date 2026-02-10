@@ -13,6 +13,7 @@
    company: {
      name: string;
      cnpj: string | null;
+     logoUrl?: string | null;
    };
    collaborator: {
      code: string;
@@ -81,31 +82,61 @@
  
  // Types that are deductions (descontos)
  const deductionTypes = ["inss", "irpf", "despesa"];
+
+ // Helper to load image as base64
+ const loadImageAsBase64 = async (url: string): Promise<string | null> => {
+   try {
+     const response = await fetch(url);
+     const blob = await response.blob();
+     return new Promise((resolve) => {
+       const reader = new FileReader();
+       reader.onloadend = () => resolve(reader.result as string);
+       reader.onerror = () => resolve(null);
+       reader.readAsDataURL(blob);
+     });
+   } catch {
+     return null;
+   }
+ };
  
- export const generatePayslipPDF = (data: PayslipData): void => {
+ export const generatePayslipPDF = async (data: PayslipData): Promise<void> => {
    const doc = new jsPDF();
    const pageWidth = doc.internal.pageSize.getWidth();
    const margin = 10;
    const contentWidth = pageWidth - margin * 2;
    let y = margin;
    
-   // Set thin line width for all borders
    doc.setLineWidth(0.2);
    doc.setDrawColor(0, 0, 0);
+
+   // Load logo if available
+   let logoBase64: string | null = null;
+   if (data.company.logoUrl) {
+     logoBase64 = await loadImageAsBase64(data.company.logoUrl);
+   }
  
    // ============ HEADER ROW ============
    const headerRowHeight = 18;
    
-   // Left: Recibo de Pagamento
    doc.rect(margin, y, contentWidth * 0.55, headerRowHeight, "S");
+   
+   let textStartX = margin + 4;
+   if (logoBase64) {
+     try {
+       doc.addImage(logoBase64, "PNG", margin + 2, y + 1, 16, 16);
+       textStartX = margin + 20;
+     } catch (e) {
+       console.error("Error adding logo to PDF:", e);
+     }
+   }
+   
    doc.setFontSize(12);
    doc.setFont("helvetica", "bold");
-   doc.text("Recibo de Pagamento", margin + 4, y + 7);
+   doc.text("Recibo de Pagamento", textStartX, y + 7);
    doc.setFontSize(9);
    doc.setFont("helvetica", "normal");
-   doc.text("( Folha de Pagamento )", margin + 4, y + 13);
+   doc.text("( Folha de Pagamento )", textStartX, y + 13);
  
-   // Right: Data e Assinatura
    doc.rect(margin + contentWidth * 0.55, y, contentWidth * 0.45, headerRowHeight, "S");
    doc.setFontSize(7);
    doc.text("Data e Assinatura", margin + contentWidth * 0.55 + 4, y + 6);
@@ -203,7 +234,6 @@
      entry.deductions ? formatCurrencyPDF(entry.deductions) : "",
    ]);
  
-   // Ensure minimum rows for better layout
    const minRows = 8;
    while (tableData.length < minRows) {
      tableData.push(["", "", "", "", ""]);
@@ -247,10 +277,8 @@
    // ============ TOTALS ROW ============
    const totalsRowHeight = 8;
    
-   // Empty cell for alignment
    doc.rect(margin, y, contentWidth * 0.55, totalsRowHeight * 3, "S");
    
-   // Total de Proventos
    doc.rect(margin + contentWidth * 0.55, y, contentWidth * 0.25, totalsRowHeight, "S");
    doc.setFontSize(7);
    doc.setFont("helvetica", "normal");
@@ -261,7 +289,6 @@
    
    y += totalsRowHeight;
    
-   // Total de Descontos
    doc.rect(margin + contentWidth * 0.55, y, contentWidth * 0.25, totalsRowHeight, "S");
    doc.text("Total de Descontos", margin + contentWidth * 0.55 + 2, y + 5);
    
@@ -270,7 +297,6 @@
    
    y += totalsRowHeight;
    
-   // Líquido a Receber
    doc.rect(margin + contentWidth * 0.55, y, contentWidth * 0.25, totalsRowHeight, "S");
    doc.setFont("helvetica", "bold");
    doc.text("Líquido a Receber", margin + contentWidth * 0.55 + 2, y + 5);
@@ -287,36 +313,29 @@
    doc.setFontSize(6);
    doc.setFont("helvetica", "normal");
  
-   // Salário Contratual
    doc.rect(margin, y, footerColWidth, footerHeight, "S");
    doc.text("Salário Contratual", margin + 2, y + 4);
    doc.text(formatCurrencyPDF(data.footer.baseSalary), margin + 2, y + 9);
  
-   // Base de Cálculo do INSS
    doc.rect(margin + footerColWidth, y, footerColWidth, footerHeight, "S");
    doc.text("Base de Cálculo do INSS", margin + footerColWidth + 2, y + 4);
    doc.text(formatCurrencyPDF(data.footer.inssBase), margin + footerColWidth + 2, y + 9);
  
-   // Base de Cálculo do FGTS
    doc.rect(margin + footerColWidth * 2, y, footerColWidth, footerHeight, "S");
    doc.text("Base de Cálculo do FGTS", margin + footerColWidth * 2 + 2, y + 4);
    doc.text(formatCurrencyPDF(data.footer.fgtsBase), margin + footerColWidth * 2 + 2, y + 9);
  
-   // FGTS
    doc.rect(margin + footerColWidth * 3, y, footerColWidth, footerHeight, "S");
    doc.text("FGTS", margin + footerColWidth * 3 + 2, y + 4);
    doc.text(formatCurrencyPDF(data.footer.fgtsValue), margin + footerColWidth * 3 + 2, y + 9);
  
-   // FGTS Contribuição Social
    doc.rect(margin + footerColWidth * 4, y, footerColWidth, footerHeight, "S");
    doc.text("FGTS Contribuição Social", margin + footerColWidth * 4 + 2, y + 4);
  
-   // Base de Cálculo do IRRF(S)
    doc.rect(margin + footerColWidth * 5, y, footerColWidth, footerHeight, "S");
    doc.text("Base de Cálculo do IRRF(S)", margin + footerColWidth * 5 + 2, y + 4);
    doc.text(formatCurrencyPDF(data.footer.irpfBase), margin + footerColWidth * 5 + 2, y + 9);
  
-   // Generate filename
    const fileName = `recibo_${data.collaborator.name.replace(/\s+/g, "_")}_${data.period.month.toString().padStart(2, "0")}_${data.period.year}.pdf`;
    doc.save(fileName);
  };
@@ -324,7 +343,7 @@
  // Helper function to convert payroll entries to payslip format
  export const convertEntriesToPayslipData = (
    entries: any[],
-   company: { name: string; cnpj: string | null },
+   company: { name: string; cnpj: string | null; logoUrl?: string | null },
    collaborator: {
      id: string;
      name: string;
@@ -342,22 +361,19 @@
    let baseSalary = 0;
    let fgtsValue = 0;
  
-   // Process each entry
    entries.forEach((entry) => {
      const type = entry.type as string;
      const code = typeCodes[type] || "999";
      const description = entry.description || typeDescriptions[type] || type;
      const value = Number(entry.value);
  
-     // Track base salary
      if (type === "salario") {
        baseSalary += value;
      }
  
-     // Track FGTS value (not a deduction, goes to footer)
      if (type === "fgts") {
        fgtsValue += value;
-       return; // Don't add FGTS to entries list, it goes in footer
+       return;
      }
  
      const isEarning = earningsTypes.includes(type);
@@ -374,7 +390,6 @@
        });
      } else if (isDeduction) {
        totalDeductions += value;
-       // Extract percentage from description if available
        const percentMatch = entry.description?.match(/(\d+(?:,\d+)?%)/);
        payslipEntries.push({
          code,
@@ -386,7 +401,6 @@
      }
    });
  
-   // Sort entries: earnings first, then deductions
    payslipEntries.sort((a, b) => {
      if (a.earnings && !b.earnings) return -1;
      if (!a.earnings && b.earnings) return 1;
@@ -402,6 +416,7 @@
      company: {
        name: company.name,
        cnpj: company.cnpj,
+       logoUrl: company.logoUrl,
      },
      collaborator: {
        code: collaborator.id.substring(0, 6).toUpperCase(),

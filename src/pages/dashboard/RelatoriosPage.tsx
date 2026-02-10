@@ -20,6 +20,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TableFooter,
 } from "@/components/ui/table";
 import {
   AlertDialog,
@@ -65,6 +66,11 @@ const typeLabels: Record<string, string> = {
    irpf: "IRPF",
 };
 
+// Types that are earnings (proventos)
+const earningsTypes = ["salario", "adicional", "vale"];
+// Types that are deductions (descontos) 
+const deductionTypes = ["inss", "irpf", "despesa", "custo"];
+
 const RelatoriosPage = () => {
   const { currentCompany, hasAnyRole } = useDashboard();
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
@@ -85,7 +91,7 @@ const RelatoriosPage = () => {
        if (!currentCompany?.id) return null;
        const { data, error } = await supabase
          .from("companies")
-         .select("company_name, cnpj")
+         .select("company_name, cnpj, logo_url")
          .eq("id", currentCompany.id)
          .single();
        if (error) throw error;
@@ -188,16 +194,47 @@ const RelatoriosPage = () => {
     return groupEntriesByCollaborator(filteredEntries);
   }, [filteredEntries]);
 
-  // Calculate totals by type
-  const totalsByType = useMemo(() => {
-    const totals: Record<string, number> = {};
-    filteredEntries.forEach((entry: any) => {
-      totals[entry.type] = (totals[entry.type] || 0) + Number(entry.value);
-    });
-    return Object.entries(totals).map(([type, total]) => ({ type, total }));
-  }, [filteredEntries]);
+  // Calculate collaborator-level totals
+  const calculateCollaboratorTotals = (collabEntries: any[]) => {
+    let earnings = 0;
+    let deductions = 0;
+    let fgts = 0;
 
-  const grandTotal = totalsByType.reduce((sum, t) => sum + t.total, 0);
+    collabEntries.forEach((entry: any) => {
+      const value = Number(entry.value);
+      if (entry.type === "fgts") {
+        fgts += value;
+      } else if (earningsTypes.includes(entry.type)) {
+        earnings += value;
+      } else if (deductionTypes.includes(entry.type)) {
+        deductions += value;
+      }
+    });
+
+    return { earnings, deductions, fgts, net: earnings - deductions };
+  };
+
+  // Calculate grand totals
+  const grandTotals = useMemo(() => {
+    let totalEarnings = 0;
+    let totalDeductions = 0;
+    let totalFgts = 0;
+
+    Array.from(groupedData.values()).forEach((data) => {
+      const totals = calculateCollaboratorTotals(data.entries);
+      totalEarnings += totals.earnings;
+      totalDeductions += totals.deductions;
+      totalFgts += totals.fgts;
+    });
+
+    return {
+      earnings: totalEarnings,
+      deductions: totalDeductions,
+      fgts: totalFgts,
+      net: totalEarnings - totalDeductions,
+      companyCost: totalEarnings - totalDeductions + totalFgts,
+    };
+  }, [groupedData]);
 
   // Period navigation
   const navigatePeriod = (direction: "prev" | "next") => {
@@ -231,8 +268,14 @@ const RelatoriosPage = () => {
         value: Number(e.value),
         description: e.description,
       })),
-      totals: totalsByType,
-      grandTotal,
+      totals: Object.entries(
+        filteredEntries.reduce((acc: Record<string, number>, e: any) => {
+          acc[e.type] = (acc[e.type] || 0) + Number(e.value);
+          return acc;
+        }, {})
+      ).map(([type, total]) => ({ type, total })),
+      grandTotal: grandTotals.net,
+      logoUrl: companyDetails?.logo_url || undefined,
     };
     
     exportToPDF(exportData);
@@ -251,8 +294,13 @@ const RelatoriosPage = () => {
         value: Number(e.value),
         description: e.description,
       })),
-      totals: totalsByType,
-      grandTotal,
+      totals: Object.entries(
+        filteredEntries.reduce((acc: Record<string, number>, e: any) => {
+          acc[e.type] = (acc[e.type] || 0) + Number(e.value);
+          return acc;
+        }, {})
+      ).map(([type, total]) => ({ type, total })),
+      grandTotal: grandTotals.net,
     };
     
     exportToExcel(exportData);
@@ -270,7 +318,7 @@ const RelatoriosPage = () => {
   };
 
    // Generate individual payslip for a collaborator
-   const handleGeneratePayslip = (collaboratorId: string) => {
+   const handleGeneratePayslip = async (collaboratorId: string) => {
      if (!currentCompany || !companyDetails) return;
  
      const collaboratorData = groupedData.get(collaboratorId);
@@ -286,13 +334,14 @@ const RelatoriosPage = () => {
        {
          name: companyDetails.company_name,
          cnpj: companyDetails.cnpj,
+         logoUrl: companyDetails.logo_url,
        },
        collaboratorDetails as any,
        selectedMonth,
        selectedYear
      );
  
-     generatePayslipPDF(payslipData);
+     await generatePayslipPDF(payslipData);
      toast.success("Recibo gerado com sucesso!");
    };
  
@@ -394,18 +443,34 @@ const RelatoriosPage = () => {
 
         {/* Summary Cards */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-          {totalsByType.map(({ type, total }) => (
-            <Card key={type}>
-              <CardContent className="p-4">
-                <p className="text-sm text-muted-foreground">{typeLabels[type] || type}</p>
-                <p className="text-xl font-bold text-foreground">{formatCurrency(total)}</p>
-              </CardContent>
-            </Card>
-          ))}
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-sm text-muted-foreground">Proventos</p>
+              <p className="text-xl font-bold text-green-600">{formatCurrency(grandTotals.earnings)}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-sm text-muted-foreground">Descontos</p>
+              <p className="text-xl font-bold text-destructive">{formatCurrency(grandTotals.deductions)}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-sm text-muted-foreground">Líquido</p>
+              <p className="text-xl font-bold text-foreground">{formatCurrency(grandTotals.net)}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-sm text-muted-foreground">FGTS</p>
+              <p className="text-xl font-bold text-foreground">{formatCurrency(grandTotals.fgts)}</p>
+            </CardContent>
+          </Card>
           <Card className="bg-primary/5 border-primary/20">
             <CardContent className="p-4">
-              <p className="text-sm text-primary font-medium">Total Geral</p>
-              <p className="text-xl font-bold text-primary">{formatCurrency(grandTotal)}</p>
+              <p className="text-sm text-primary font-medium">Custo Total Empresa</p>
+              <p className="text-xl font-bold text-primary">{formatCurrency(grandTotals.companyCost)}</p>
             </CardContent>
           </Card>
         </div>
@@ -433,7 +498,9 @@ const RelatoriosPage = () => {
               </div>
             ) : (
               <Accordion type="multiple" className="w-full">
-                {Array.from(groupedData.entries()).map(([collabId, data]) => (
+                {Array.from(groupedData.entries()).map(([collabId, data]) => {
+                  const collabTotals = calculateCollaboratorTotals(data.entries);
+                  return (
                   <AccordionItem key={collabId} value={collabId}>
                     <AccordionTrigger className="hover:no-underline">
                       <div className="flex items-center justify-between w-full pr-4">
@@ -441,7 +508,7 @@ const RelatoriosPage = () => {
                         <div className="flex items-center gap-4">
                           <Badge variant="secondary">{data.entries.length} lançamentos</Badge>
                           <span className="font-bold text-primary">
-                            {formatCurrency(data.total)}
+                            Líq: {formatCurrency(collabTotals.net)}
                           </span>
                         </div>
                       </div>
@@ -488,14 +555,66 @@ const RelatoriosPage = () => {
                             </TableRow>
                           ))}
                         </TableBody>
+                        <TableFooter>
+                          <TableRow>
+                            <TableCell colSpan={3} className="text-right font-medium text-green-600">Proventos:</TableCell>
+                            <TableCell className="text-right font-bold text-green-600">{formatCurrency(collabTotals.earnings)}</TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell colSpan={3} className="text-right font-medium text-destructive">Descontos:</TableCell>
+                            <TableCell className="text-right font-bold text-destructive">{formatCurrency(collabTotals.deductions)}</TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell colSpan={3} className="text-right font-medium">Líquido:</TableCell>
+                            <TableCell className="text-right font-bold text-primary">{formatCurrency(collabTotals.net)}</TableCell>
+                          </TableRow>
+                          {collabTotals.fgts > 0 && (
+                            <TableRow>
+                              <TableCell colSpan={3} className="text-right font-medium text-muted-foreground">FGTS (empresa):</TableCell>
+                              <TableCell className="text-right font-bold text-muted-foreground">{formatCurrency(collabTotals.fgts)}</TableCell>
+                            </TableRow>
+                          )}
+                        </TableFooter>
                       </Table>
                     </AccordionContent>
                   </AccordionItem>
-                ))}
+                  );
+                })}
               </Accordion>
             )}
           </CardContent>
         </Card>
+
+        {/* Grand Total Card */}
+        {groupedData.size > 0 && (
+          <Card className="bg-primary/5 border-primary/20">
+            <CardContent className="p-6">
+              <h3 className="text-lg font-bold text-primary mb-4">Total Geral - {periodLabel}</h3>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Colaboradores</p>
+                  <p className="text-xl font-bold">{groupedData.size}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Proventos</p>
+                  <p className="text-xl font-bold text-green-600">{formatCurrency(grandTotals.earnings)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Descontos</p>
+                  <p className="text-xl font-bold text-destructive">{formatCurrency(grandTotals.deductions)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Líquido Total</p>
+                  <p className="text-xl font-bold">{formatCurrency(grandTotals.net)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Custo Total Empresa</p>
+                  <p className="text-xl font-bold text-primary">{formatCurrency(grandTotals.companyCost)}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Close Period Dialog */}
         <AlertDialog open={showCloseDialog} onOpenChange={setShowCloseDialog}>
