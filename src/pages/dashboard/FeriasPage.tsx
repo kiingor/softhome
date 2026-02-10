@@ -1,7 +1,9 @@
 import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import PermissionGuard from "@/components/dashboard/PermissionGuard";
 import { useDashboard } from "@/contexts/DashboardContext";
-import { useVacationRequests, useVacationPeriods, useUpdateVacationRequest, useDeleteVacationRequest, vacationRequestStatusLabels, vacationRequestStatusColors, vacationPeriodStatusLabels, vacationPeriodStatusColors, VacationRequest } from "@/hooks/useVacations";
+import { useVacationRequests, useVacationPeriods, useUpdateVacationRequest, useDeleteVacationRequest, vacationRequestStatusLabels, vacationRequestStatusColors, vacationPeriodStatusLabels, vacationPeriodStatusColors, VacationRequest, VacationPeriod } from "@/hooks/useVacations";
 import VacationRequestModal from "@/components/ferias/VacationRequestModal";
 import VacationCalendar from "@/components/ferias/VacationCalendar";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,12 +17,12 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Plus, Clock, Users, CalendarCheck, AlertTriangle, Search, Check, X, Loader2, Calendar, Trash2, Eye } from "lucide-react";
+import { Plus, Clock, Users, CalendarCheck, AlertTriangle, Search, Check, X, Loader2, Calendar, Trash2, Eye, UserCheck } from "lucide-react";
 import { format, parseISO, isAfter, addDays } from "date-fns";
 import { toast } from "sonner";
 
 const FeriasPage = () => {
-  const { hasAnyRole, user } = useDashboard();
+  const { hasAnyRole, user, currentCompany } = useDashboard();
   const canManage = hasAnyRole(["admin", "rh", "gestor"]);
 
   const { data: requests = [], isLoading: loadingRequests } = useVacationRequests();
@@ -28,7 +30,25 @@ const FeriasPage = () => {
   const updateRequest = useUpdateVacationRequest();
   const deleteRequest = useDeleteVacationRequest();
 
+  // Fetch all active collaborators for overview tab
+  const { data: allCollaborators = [] } = useQuery({
+    queryKey: ["collaborators-vacation-overview", currentCompany?.id],
+    queryFn: async () => {
+      if (!currentCompany?.id) return [];
+      const { data, error } = await supabase
+        .from("collaborators")
+        .select("id, name, position, admission_date")
+        .eq("company_id", currentCompany.id)
+        .eq("status", "ativo")
+        .order("name");
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!currentCompany?.id,
+  });
+
   const [requestModalOpen, setRequestModalOpen] = useState(false);
+  const [requestModalCollaboratorId, setRequestModalCollaboratorId] = useState<string | undefined>();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [periodStatusFilter, setPeriodStatusFilter] = useState("all");
@@ -67,6 +87,37 @@ const FeriasPage = () => {
       return matchSearch && matchStatus;
     });
   }, [periods, searchTerm, periodStatusFilter]);
+
+  // Collaborators overview: merge collaborators with their vacation periods
+  const collaboratorsOverview = useMemo(() => {
+    return allCollaborators
+      .filter(c => !searchTerm || c.name.toLowerCase().includes(searchTerm.toLowerCase()))
+      .map(collab => {
+        const collabPeriods = periods.filter(p => p.collaborator_id === collab.id);
+        const activePeriod = collabPeriods.find(p => p.status === "available" || p.status === "partially_used");
+        const pendingPeriod = collabPeriods.find(p => p.status === "pending");
+        const currentPeriod = activePeriod || pendingPeriod;
+        const totalRemaining = collabPeriods
+          .filter(p => p.status === "available" || p.status === "partially_used" || p.status === "pending")
+          .reduce((sum, p) => sum + p.days_remaining, 0);
+        const activeRequest = requests.find(r => r.collaborator_id === collab.id && (r.status === "approved" || r.status === "in_progress"));
+
+        // Calculate concessivo deadline (12 months after end of acquisitive period)
+        let concessiveDeadline: Date | null = null;
+        if (activePeriod) {
+          concessiveDeadline = addDays(parseISO(activePeriod.end_date), 365);
+        }
+
+        return {
+          ...collab,
+          periods: collabPeriods,
+          currentPeriod,
+          totalRemaining,
+          activeRequest,
+          concessiveDeadline,
+        };
+      });
+  }, [allCollaborators, periods, requests, searchTerm]);
 
   const handleApprove = async (request: VacationRequest) => {
     await updateRequest.mutateAsync({
@@ -115,7 +166,7 @@ const FeriasPage = () => {
               {canManage ? "Gerencie solicitações de férias dos colaboradores" : "Acompanhe suas férias e ausências"}
             </p>
           </div>
-          <Button variant="hero" onClick={() => setRequestModalOpen(true)}>
+          <Button variant="hero" onClick={() => { setRequestModalCollaboratorId(undefined); setRequestModalOpen(true); }}>
             <Plus className="w-4 h-4 mr-2" />
             {canManage ? "Nova Solicitação" : "Solicitar Férias"}
           </Button>
@@ -170,14 +221,124 @@ const FeriasPage = () => {
         </div>
 
         {/* Tabs */}
-        <Tabs defaultValue="requests" className="space-y-4">
+        <Tabs defaultValue="overview" className="space-y-4">
           <TabsList>
+            <TabsTrigger value="overview">Colaboradores</TabsTrigger>
             <TabsTrigger value="requests">Solicitações</TabsTrigger>
             <TabsTrigger value="periods">Períodos Aquisitivos</TabsTrigger>
             <TabsTrigger value="calendar">Calendário</TabsTrigger>
           </TabsList>
 
-          {/* Requests Tab */}
+          {/* Collaborators Overview Tab */}
+          <TabsContent value="overview" className="space-y-4">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input placeholder="Buscar colaborador..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-9" />
+              </div>
+            </div>
+
+            <Card>
+              {isLoading ? (
+                <CardContent className="p-8 text-center">
+                  <Loader2 className="w-6 h-6 animate-spin mx-auto text-muted-foreground" />
+                </CardContent>
+              ) : collaboratorsOverview.length === 0 ? (
+                <CardContent className="p-12 text-center">
+                  <Users className="w-12 h-12 text-muted-foreground/40 mx-auto mb-3" />
+                  <p className="text-muted-foreground">Nenhum colaborador encontrado.</p>
+                </CardContent>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Colaborador</TableHead>
+                      <TableHead>Cargo</TableHead>
+                      <TableHead>Admissão</TableHead>
+                      <TableHead>Período Atual</TableHead>
+                      <TableHead className="text-center">Saldo (dias)</TableHead>
+                      <TableHead>Vencimento Concessivo</TableHead>
+                      <TableHead>Situação</TableHead>
+                      {canManage && <TableHead className="text-right">Ações</TableHead>}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody className="stagger-animation">
+                    {collaboratorsOverview.map(c => {
+                      const isExpiring = c.concessiveDeadline && c.concessiveDeadline <= addDays(new Date(), 60);
+                      const isOverdue = c.concessiveDeadline && c.concessiveDeadline < new Date();
+                      let situationLabel = "Sem período";
+                      let situationClass = "bg-muted text-muted-foreground";
+                      if (c.activeRequest?.status === "in_progress") {
+                        situationLabel = "Em Gozo";
+                        situationClass = "bg-green-100 text-green-800 border-green-200";
+                      } else if (c.activeRequest?.status === "approved") {
+                        situationLabel = "Férias Agendadas";
+                        situationClass = "bg-blue-100 text-blue-800 border-blue-200";
+                      } else if (isOverdue) {
+                        situationLabel = "Vencido!";
+                        situationClass = "bg-red-100 text-red-800 border-red-200";
+                      } else if (isExpiring) {
+                        situationLabel = "Vencendo";
+                        situationClass = "bg-yellow-100 text-yellow-800 border-yellow-200";
+                      } else if (c.currentPeriod?.status === "pending") {
+                        situationLabel = "Adquirindo";
+                        situationClass = "bg-blue-50 text-blue-700 border-blue-200";
+                      } else if (c.currentPeriod?.status === "available") {
+                        situationLabel = "Disponível";
+                        situationClass = "bg-green-50 text-green-700 border-green-200";
+                      }
+
+                      return (
+                        <TableRow key={c.id} className="table-row-animate">
+                          <TableCell className="font-medium">{c.name}</TableCell>
+                          <TableCell className="text-muted-foreground">{c.position || "—"}</TableCell>
+                          <TableCell>
+                            {c.admission_date ? format(parseISO(c.admission_date), "dd/MM/yyyy") : <span className="text-muted-foreground italic">Não informada</span>}
+                          </TableCell>
+                          <TableCell>
+                            {c.currentPeriod ? (
+                              <span className="text-sm">
+                                {format(parseISO(c.currentPeriod.start_date), "dd/MM/yy")} - {format(parseISO(c.currentPeriod.end_date), "dd/MM/yy")}
+                              </span>
+                            ) : "—"}
+                          </TableCell>
+                          <TableCell className="text-center font-bold">{c.totalRemaining}</TableCell>
+                          <TableCell>
+                            {c.concessiveDeadline ? (
+                              <span className={isOverdue ? "text-destructive font-semibold" : isExpiring ? "text-yellow-600 font-semibold" : ""}>
+                                {format(c.concessiveDeadline, "dd/MM/yyyy")}
+                              </span>
+                            ) : "—"}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={situationClass}>{situationLabel}</Badge>
+                          </TableCell>
+                          {canManage && (
+                            <TableCell className="text-right">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 text-xs"
+                                disabled={!c.admission_date}
+                                onClick={() => {
+                                  setRequestModalCollaboratorId(c.id);
+                                  setRequestModalOpen(true);
+                                }}
+                              >
+                                <Plus className="w-3 h-3 mr-1" />
+                                Solicitar
+                              </Button>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </Card>
+          </TabsContent>
+
           <TabsContent value="requests" className="space-y-4">
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="relative flex-1">
@@ -354,7 +515,7 @@ const FeriasPage = () => {
         </Tabs>
 
         {/* Request Modal */}
-        <VacationRequestModal open={requestModalOpen} onOpenChange={setRequestModalOpen} />
+        <VacationRequestModal open={requestModalOpen} onOpenChange={setRequestModalOpen} preSelectedCollaboratorId={requestModalCollaboratorId} />
 
         {/* Reject Dialog */}
         <Dialog open={!!rejectingRequest} onOpenChange={() => setRejectingRequest(null)}>

@@ -54,7 +54,7 @@ const VacationRequestModal = ({ open, onOpenChange, preSelectedCollaboratorId }:
   const { data: periods = [], isLoading: loadingPeriods } = useCollaboratorVacationPeriods(collaboratorId || undefined);
 
   const availablePeriods = useMemo(() => {
-    return periods.filter(p => p.status === "available" || p.status === "partially_used");
+    return periods.filter(p => p.status === "available" || p.status === "partially_used" || p.status === "pending");
   }, [periods]);
 
   const selectedPeriod = useMemo(() => {
