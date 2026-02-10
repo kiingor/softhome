@@ -171,6 +171,7 @@ export const useExamDocuments = (examId?: string) => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["exam-documents"] });
       queryClient.invalidateQueries({ queryKey: ["occupational-exams"] });
+      queryClient.invalidateQueries({ queryKey: ["exam-doc-counts"] });
       toast.success("ASO enviado com sucesso!");
     },
     onError: (e: any) => toast.error("Erro ao enviar ASO: " + e.message),
