@@ -67,9 +67,9 @@ const typeLabels: Record<string, string> = {
 };
 
 // Types that are earnings (proventos)
-const earningsTypes = ["salario", "adicional", "vale"];
+const earningsTypes = ["salario", "adicional"];
 // Types that are deductions (descontos) 
-const deductionTypes = ["inss", "irpf", "despesa", "custo"];
+const deductionTypes = ["inss", "irpf", "despesa", "custo", "vale"];
 
 const RelatoriosPage = () => {
   const { currentCompany, hasAnyRole } = useDashboard();
@@ -549,7 +549,10 @@ const RelatoriosPage = () => {
                                   <Badge variant="secondary">Variável</Badge>
                                 )}
                               </TableCell>
-                              <TableCell className="text-right font-medium">
+                              <TableCell className={`text-right font-medium ${
+                                deductionTypes.includes(entry.type) ? "text-destructive" : entry.type === "fgts" ? "text-muted-foreground" : "text-green-600"
+                              }`}>
+                                {deductionTypes.includes(entry.type) ? "- " : entry.type === "fgts" ? "" : "+ "}
                                 {formatCurrency(entry.value)}
                               </TableCell>
                             </TableRow>

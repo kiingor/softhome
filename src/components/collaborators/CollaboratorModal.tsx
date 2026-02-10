@@ -940,7 +940,7 @@ const CollaboratorModal = ({
 
   // Get entry type color
   const getEntryTypeVariant = (type: string): "default" | "secondary" | "destructive" | "outline" => {
-    if (type === "custo" || type === "despesa" || type === "inss" || type === "irpf") return "destructive";
+    if (type === "custo" || type === "despesa" || type === "inss" || type === "irpf" || type === "vale") return "destructive";
     if (type === "salario") return "default";
     if (type === "fgts") return "outline";
     return "secondary";
@@ -1237,7 +1237,14 @@ const CollaboratorModal = ({
                                     <span className="text-sm font-medium truncate pr-2">
                                       {entry.description || getEntryTypeLabel(entry.type)}
                                     </span>
-                                    <span className="font-mono text-sm font-semibold shrink-0">
+                                    <span className={`font-mono text-sm font-semibold shrink-0 ${
+                                      ["inss", "irpf", "despesa", "vale", "custo"].includes(entry.type) 
+                                        ? "text-destructive" 
+                                        : entry.type === "fgts" 
+                                          ? "text-muted-foreground" 
+                                          : "text-green-600"
+                                    }`}>
+                                      {["inss", "irpf", "despesa", "vale", "custo"].includes(entry.type) ? "- " : entry.type === "fgts" ? "" : "+ "}
                                       {formatCurrency(entry.value)}
                                     </span>
                                   </div>

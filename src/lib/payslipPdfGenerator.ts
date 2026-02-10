@@ -78,10 +78,10 @@
  };
  
  // Types that are earnings (proventos)
- const earningsTypes = ["salario", "adicional", "vale", "beneficio"];
- 
- // Types that are deductions (descontos)
- const deductionTypes = ["inss", "irpf", "despesa"];
+  const earningsTypes = ["salario", "adicional", "beneficio"];
+  
+  // Types that are deductions (descontos)
+  const deductionTypes = ["inss", "irpf", "despesa", "vale", "custo"];
 
  // Helper to load image as base64
  const loadImageAsBase64 = async (url: string): Promise<string | null> => {
