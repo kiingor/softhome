@@ -123,8 +123,8 @@
    let textStartX = margin + 4;
    if (logoBase64) {
      try {
-       doc.addImage(logoBase64, "PNG", margin + 2, y + 1, 16, 16);
-       textStartX = margin + 20;
+        doc.addImage(logoBase64, "PNG", margin + 2, y + 2, 10, 10);
+        textStartX = margin + 14;
      } catch (e) {
        console.error("Error adding logo to PDF:", e);
      }
