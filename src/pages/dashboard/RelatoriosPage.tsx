@@ -261,6 +261,7 @@ const RelatoriosPage = () => {
     
     const exportData = {
       companyName: currentCompany.company_name,
+      companyCnpj: companyDetails?.cnpj || undefined,
       period: `${getMonthName(selectedMonth)}/${selectedYear}`,
       entries: filteredEntries.map((e: any) => ({
         collaborator_name: e.collaborator?.name || "Sem colaborador",
@@ -550,9 +551,9 @@ const RelatoriosPage = () => {
                                 )}
                               </TableCell>
                               <TableCell className={`text-right font-medium ${
-                                deductionTypes.includes(entry.type) ? "text-destructive" : entry.type === "fgts" ? "text-muted-foreground" : "text-green-600"
+                                deductionTypes.includes(entry.type) || entry.type === "fgts" ? "text-destructive" : "text-green-600"
                               }`}>
-                                {deductionTypes.includes(entry.type) ? "- " : entry.type === "fgts" ? "" : "+ "}
+                                {deductionTypes.includes(entry.type) || entry.type === "fgts" ? "- " : "+ "}
                                 {formatCurrency(entry.value)}
                               </TableCell>
                             </TableRow>
