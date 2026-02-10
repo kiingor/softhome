@@ -49,7 +49,7 @@ export default function ExamesPage() {
     d.setDate(d.getDate() - 30);
     return d.toISOString().slice(0, 10);
   });
-  const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const [dateTo, setDateTo] = useState("");
 
   // Check if exam has documents
   const { data: examDocCounts = {} } = useQuery({
@@ -312,12 +312,19 @@ export default function ExamesPage() {
                                       <CheckCircle className="w-4 h-4 mr-2" />Marcar Realizado
                                     </DropdownMenuItem>
                                   )}
-                                  <DropdownMenuItem onClick={() => setUploadExam(exam)}>
-                                    <Upload className="w-4 h-4 mr-2" />Enviar ASO
-                                  </DropdownMenuItem>
+                                  {exam.status !== "cancelado" && (
+                                    <DropdownMenuItem onClick={() => setUploadExam(exam)}>
+                                      <Upload className="w-4 h-4 mr-2" />Enviar ASO
+                                    </DropdownMenuItem>
+                                  )}
                                   {exam.status !== "cancelado" && exam.status !== "realizado" && (
                                     <DropdownMenuItem onClick={() => updateExam({ id: exam.id, status: "cancelado" })} className="text-destructive">
                                       <XCircle className="w-4 h-4 mr-2" />Cancelar
+                                    </DropdownMenuItem>
+                                  )}
+                                  {exam.status === "cancelado" && (
+                                    <DropdownMenuItem onClick={() => updateExam({ id: exam.id, status: "arquivado" })}>
+                                      <XCircle className="w-4 h-4 mr-2" />Arquivar
                                     </DropdownMenuItem>
                                   )}
                                 </DropdownMenuContent>
