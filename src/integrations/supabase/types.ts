@@ -910,6 +910,156 @@ export type Database = {
         }
         Relationships: []
       }
+      vacation_periods: {
+        Row: {
+          collaborator_id: string
+          company_id: string
+          created_at: string
+          days_entitled: number
+          days_remaining: number
+          days_sold: number
+          days_taken: number
+          end_date: string
+          id: string
+          start_date: string
+          status: string
+        }
+        Insert: {
+          collaborator_id: string
+          company_id: string
+          created_at?: string
+          days_entitled?: number
+          days_remaining?: number
+          days_sold?: number
+          days_taken?: number
+          end_date: string
+          id?: string
+          start_date: string
+          status?: string
+        }
+        Update: {
+          collaborator_id?: string
+          company_id?: string
+          created_at?: string
+          days_entitled?: number
+          days_remaining?: number
+          days_sold?: number
+          days_taken?: number
+          end_date?: string
+          id?: string
+          start_date?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vacation_periods_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vacation_periods_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vacation_periods_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_overview"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vacation_requests: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          collaborator_id: string
+          company_id: string
+          created_at: string
+          days_count: number
+          end_date: string
+          id: string
+          notes: string | null
+          rejection_reason: string | null
+          requested_by: string | null
+          sell_days: number
+          start_date: string
+          status: string
+          updated_at: string
+          vacation_period_id: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          collaborator_id: string
+          company_id: string
+          created_at?: string
+          days_count: number
+          end_date: string
+          id?: string
+          notes?: string | null
+          rejection_reason?: string | null
+          requested_by?: string | null
+          sell_days?: number
+          start_date: string
+          status?: string
+          updated_at?: string
+          vacation_period_id: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          collaborator_id?: string
+          company_id?: string
+          created_at?: string
+          days_count?: number
+          end_date?: string
+          id?: string
+          notes?: string | null
+          rejection_reason?: string | null
+          requested_by?: string | null
+          sell_days?: number
+          start_date?: string
+          status?: string
+          updated_at?: string
+          vacation_period_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vacation_requests_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vacation_requests_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vacation_requests_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vacation_requests_vacation_period_id_fkey"
+            columns: ["vacation_period_id"]
+            isOneToOne: false
+            referencedRelation: "vacation_periods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       companies_overview: {
@@ -961,6 +1111,14 @@ export type Database = {
       can_view_module: {
         Args: { _company_id: string; _module: string; _user_id: string }
         Returns: boolean
+      }
+      generate_vacation_periods: {
+        Args: {
+          _admission_date: string
+          _collaborator_id: string
+          _company_id: string
+        }
+        Returns: undefined
       }
       get_plan_limit: { Args: { plan: string }; Returns: number }
       get_user_permissions: {

@@ -32,6 +32,7 @@ import PortalHome from "./pages/colaborador/PortalHome";
 import MeuExtratoPage from "./pages/colaborador/MeuExtratoPage";
 import MeusBeneficiosPage from "./pages/colaborador/MeusBeneficiosPage";
 import MeusContracheques from "./pages/colaborador/MeusContracheques";
+import MinhasFeriasPage from "./pages/colaborador/MinhasFeriasPage";
 
 import { MasterProvider } from "./contexts/MasterContext";
 import { MasterGuard } from "./components/master/MasterGuard";
@@ -130,6 +131,18 @@ const App = () => {
                 <PortalGuard>
                   <PortalLayout>
                     <MeusContracheques />
+                  </PortalLayout>
+                </PortalGuard>
+              </PortalProvider>
+            }
+          />
+          <Route
+            path="/colaborador/ferias"
+            element={
+              <PortalProvider>
+                <PortalGuard>
+                  <PortalLayout>
+                    <MinhasFeriasPage />
                   </PortalLayout>
                 </PortalGuard>
               </PortalProvider>
