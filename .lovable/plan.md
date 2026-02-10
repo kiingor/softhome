@@ -1,136 +1,134 @@
 
-# Plano Completo: 5 Correções e Melhorias
+# Plano: Classificacao Proventos/Descontos e Ajustes nos PDFs
 
-## 1. Scroll no Modal do Colaborador (monitores pequenos)
+## Resumo
 
-**Problema:** O modal usa altura fixa que nao permite scroll em monitores pequenos, impedindo ver campos como Data de Admissao.
-
-**Solucao:**
-- Arquivo: `src/components/collaborators/CollaboratorModal.tsx`
-- Alterar `DialogContent` para `max-h-[90vh]` com `min-h-0`
-- Garantir que o grid de duas colunas tenha `min-h-0` e `overflow-y-auto` como fallback
+Corrigir a classificacao de tipos financeiros em todas as telas e PDFs, e garantir que a logomarca apareca em todos os PDFs gerados.
 
 ---
 
-## 2. Novo Lancamento no Modal com mesmas opcoes do lancamento normal
+## 1. Classificacao correta dos tipos
 
-**Problema:** O dialog "Novo Lancamento" dentro do modal do colaborador tem apenas Tipo, Descricao, Valor e Fixo. Faltam: mes/ano, parcelamento.
+**Regra de negocio:**
 
-**Solucao:**
-- Arquivo: `src/components/collaborators/CollaboratorModal.tsx`
-- Adicionar ao `entryForm` state: `month`, `year`, `is_installment`, `installment_count`
-- No dialog, adicionar seletores de Mes/Ano, Switch de Parcelamento e campo de numero de parcelas
-- Atualizar logica de criacao para suportar parcelas com meses incrementais e descricao com sufixo (1/N), (2/N)
+| Tipo | Categoria | Sinal |
+|------|-----------|-------|
+| salario | Provento | + |
+| adicional | Provento | + |
+| beneficio | Provento | + |
+| inss | Desconto | - |
+| irpf | Desconto | - |
+| despesa | Desconto | - |
+| vale | Desconto | - |
+| custo | Desconto | - |
+| fgts | Custo empresa | (separado) |
 
----
-
-## 3. Relatorio de Folha separado por colaborador
-
-**Problema:** Os totais somam tudo junto sem separar por colaborador.
-
-**Solucao:**
-- Arquivo: `src/pages/dashboard/RelatoriosPage.tsx`
-- Para cada colaborador, mostrar linha de rodape com: Total Proventos, Total Descontos, Liquido, FGTS
-- Adicionar card de "Total Geral" no final com soma de todos os colaboradores
-- Ajustar `AccordionTrigger` para mostrar liquido (proventos - descontos)
+**Nota:** Vale e Despesa passam a ser Descontos (eram tratados como Proventos em alguns lugares).
 
 ---
 
-## 4. Erro no cadastro de usuario em Configuracoes (Edge Function 409)
+## 2. Alteracoes no Modal do Colaborador
 
-**Problema:** O `create-collaborator-user` retorna 409 quando o email ja existe.
+**Arquivo:** `src/components/collaborators/CollaboratorModal.tsx`
 
-**Solucao:**
-- Arquivo: `supabase/functions/create-collaborator-user/index.ts`
-  - Antes de criar, buscar usuario existente com `listUsers`
-  - Se existir, vincular a empresa (inserir em `company_users`) em vez de retornar erro
-  - So retornar erro se ja estiver vinculado a mesma empresa
-- Arquivo: `src/components/dashboard/UsersAccessTab.tsx`
-  - Melhorar tratamento de erro para mensagens mais claras
+- Na listagem de lancamentos (linha ~1240), alterar a exibicao do valor para incluir sinal:
+  - Proventos: texto verde, prefixo `+`
+  - Descontos (inss, irpf, despesa, vale, custo): texto vermelho, prefixo `-`
+  - FGTS: texto neutro (custo empresa)
+- A badge `getEntryTypeVariant` ja marca custo/despesa/inss/irpf como `destructive` - adicionar `vale` tambem
 
 ---
 
-## 5. Logomarca da Empresa em Configuracoes e PDFs (NOVO)
+## 3. Alteracoes na tela de Relatorios
 
-**Problema:** Nao existe funcionalidade para cadastrar logomarca da empresa, e os relatorios PDF nao incluem logo.
+**Arquivo:** `src/pages/dashboard/RelatoriosPage.tsx`
 
-**Solucao em 3 partes:**
+- Atualizar `earningsTypes` (linha 70) removendo `vale`:
+  - De: `["salario", "adicional", "vale"]`
+  - Para: `["salario", "adicional"]`
+- Atualizar `deductionTypes` (linha 72) adicionando `vale`:
+  - De: `["inss", "irpf", "despesa", "custo"]`
+  - Para: `["inss", "irpf", "despesa", "custo", "vale"]`
+- Na tabela de cada colaborador (linha ~552), mostrar o valor com sinal:
+  - Descontos: texto vermelho com prefixo `-`
+  - Proventos: texto verde com prefixo `+`
 
-### 5a. Criar bucket de storage e coluna no banco
+---
 
-- Criar bucket `company-logos` (publico) para armazenar as imagens
-- Adicionar coluna `logo_url` (text, nullable) na tabela `companies`
-- Criar politicas RLS para o bucket: usuarios autenticados da empresa podem fazer upload, qualquer um pode ler (publico)
+## 4. Alteracoes no PDF do Relatorio de Folha
 
-### 5b. Tela de Configuracoes - Upload de Logomarca
+**Arquivo:** `src/lib/exportUtils.ts`
 
-- Arquivo: `src/pages/dashboard/ConfiguracoesPage.tsx`
-- Na tab "Dados da Conta", adicionar secao de "Logomarca" com:
-  - Preview da imagem atual (se existir)
-  - Botao de upload (aceitar PNG, JPG, max 2MB)
-  - Botao de remover logo
-- Ao fazer upload:
-  - Enviar arquivo para `company-logos/{company_id}/logo.png`
-  - Obter URL publica
-  - Salvar URL na coluna `logo_url` da tabela `companies`
+- Refatorar `exportToPDF` para agrupar dados por colaborador (usando `groupEntriesByCollaborator` ou dados ja agrupados)
+- Para cada colaborador, gerar uma secao com:
+  - Nome do colaborador como subtitulo
+  - Tabela com lancamentos mostrando valores com sinal (+/-)
+  - Rodape com Proventos, Descontos, Liquido, FGTS
+- Ao final, secao de Total Geral
+- Atualizar interface `ExportData` para aceitar dados agrupados por colaborador
+- A logomarca ja esta implementada neste arquivo
 
-### 5c. Incluir logomarca nos PDFs
+---
 
-- Arquivo: `src/lib/payslipPdfGenerator.ts` (recibo de pagamento)
-  - Adicionar campo `logoUrl` opcional em `PayslipData.company`
-  - No header do PDF, se `logoUrl` existir, carregar a imagem com `doc.addImage()` no canto esquerdo
-  - Ajustar posicao do texto do titulo para acomodar a logo
+## 5. Alteracoes no PDF do Recibo de Pagamento
 
-- Arquivo: `src/lib/exportUtils.ts` (relatorio de folha)
-  - Adicionar `logoUrl` opcional em `ExportData`
-  - Na funcao `exportToPDF`, se `logoUrl` existir, inserir imagem no header antes do titulo
+**Arquivo:** `src/lib/payslipPdfGenerator.ts`
 
-- Nos componentes que chamam essas funcoes, passar o `logo_url` da empresa como parametro
+- Atualizar classificacao: mover `vale` de `earningsTypes` para `deductionTypes` (linha 81-84)
+- A logomarca ja esta implementada neste arquivo
+
+---
+
+## 6. Logomarca nos PDFs
+
+A logomarca ja foi implementada em ambos os arquivos (`payslipPdfGenerator.ts` e `exportUtils.ts`) na iteracao anterior. Verificar que:
+- `handleExportPDF` em `RelatoriosPage.tsx` ja passa `logoUrl` (linha 278) - OK
+- `handleGeneratePayslip` ja passa `logoUrl` via `companyDetails.logo_url` (linha 337) - OK
+
+Nenhuma alteracao adicional necessaria para a logomarca.
 
 ---
 
 ## Detalhes Tecnicos
 
-### Migracao SQL:
-
-```text
-1. Criar bucket storage "company-logos" (publico)
-2. Politicas RLS para o bucket:
-   - SELECT: publico
-   - INSERT/UPDATE/DELETE: usuario autenticado que pertence a empresa
-3. ALTER TABLE companies ADD COLUMN logo_url TEXT
-```
-
-### Fluxo de Upload da Logo:
-
-```text
-Usuario clica "Enviar Logo"
-  -> Seleciona arquivo (PNG/JPG, max 2MB)
-  -> Upload para storage: company-logos/{company_id}/logo.ext
-  -> Recebe URL publica
-  -> UPDATE companies SET logo_url = url WHERE id = company_id
-  -> Preview atualizado na tela
-```
-
-### Inclusao nos PDFs:
-
-```text
-Para carregar imagem no jsPDF:
-  1. Fetch da URL publica da logo
-  2. Converter para base64 (via canvas ou fetch blob)
-  3. doc.addImage(base64, 'PNG', x, y, width, height)
-  4. Logo posicionada no header, tamanho maximo ~25x25mm
-```
-
 ### Arquivos a modificar:
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `src/components/collaborators/CollaboratorModal.tsx` | Fix scroll + campos mes/ano/parcelamento |
-| `src/pages/dashboard/RelatoriosPage.tsx` | Separar totais por colaborador + total geral |
-| `src/components/dashboard/UsersAccessTab.tsx` | Melhorar tratamento erro 409 |
-| `supabase/functions/create-collaborator-user/index.ts` | Vincular usuario existente |
-| `src/pages/dashboard/ConfiguracoesPage.tsx` | Secao de upload de logomarca |
-| `src/lib/payslipPdfGenerator.ts` | Adicionar logo no header do recibo |
-| `src/lib/exportUtils.ts` | Adicionar logo no header do relatorio PDF |
-| Nova migracao SQL | Bucket + coluna logo_url |
+| `src/components/collaborators/CollaboratorModal.tsx` | Adicionar sinal +/- e cores nos valores dos lancamentos; adicionar `vale` como destructive |
+| `src/pages/dashboard/RelatoriosPage.tsx` | Corrigir `earningsTypes`/`deductionTypes`; adicionar sinal +/- na tabela |
+| `src/lib/exportUtils.ts` | Refatorar PDF para agrupar por colaborador com sinais +/- e totais individuais |
+| `src/lib/payslipPdfGenerator.ts` | Mover `vale` para `deductionTypes` |
+
+### Logica de exibicao do valor:
+
+```text
+Tipos Desconto: inss, irpf, despesa, vale, custo
+  -> Exibir: "- R$ 150,00" em vermelho
+
+Tipos Provento: salario, adicional, beneficio
+  -> Exibir: "+ R$ 1.500,00" em verde
+
+FGTS (custo empresa):
+  -> Exibir: "R$ 120,00" em cinza (sem sinal, separado)
+```
+
+### Estrutura do PDF do Relatorio (refatorado):
+
+```text
+[Logo] Relatorio de Folha de Pagamento
+Empresa: XXX | Competencia: XXX
+
+--- Colaborador: Joao Silva ---
+| Tipo     | Descricao    | Valor        |
+| Salario  | Salario-Base | + R$ 2.000   |
+| INSS     | INSS 7,5%    | - R$ 150     |
+| IRPF     | IRPF 15%     | - R$ 300     |
+  Proventos: R$ 2.000 | Descontos: R$ 450 | Liquido: R$ 1.550 | FGTS: R$ 160
+
+--- Colaborador: Maria Santos ---
+...
+
+=== TOTAL GERAL ===
+Proventos | Descontos | Liquido | FGTS | Custo Total
+```
