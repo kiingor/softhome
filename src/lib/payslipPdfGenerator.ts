@@ -106,17 +106,17 @@
    const contentWidth = pageWidth - margin * 2;
    let y = margin;
    
-   doc.setLineWidth(0.2);
-   doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.1);
+    doc.setDrawColor(0, 0, 0);
 
-   // Load logo if available
+    // Load logo if available
    let logoBase64: string | null = null;
    if (data.company.logoUrl) {
      logoBase64 = await loadImageAsBase64(data.company.logoUrl);
    }
  
    // ============ HEADER ROW ============
-   const headerRowHeight = 18;
+   const headerRowHeight = 14;
    
    doc.rect(margin, y, contentWidth * 0.55, headerRowHeight, "S");
    
@@ -130,100 +130,100 @@
      }
    }
    
-   doc.setFontSize(12);
-   doc.setFont("helvetica", "bold");
-   doc.text("Recibo de Pagamento", textStartX, y + 7);
-   doc.setFontSize(9);
-   doc.setFont("helvetica", "normal");
-   doc.text("( Folha de Pagamento )", textStartX, y + 13);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.text("Recibo de Pagamento", textStartX, y + 5);
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "normal");
+    doc.text("( Folha de Pagamento )", textStartX, y + 10);
  
    doc.rect(margin + contentWidth * 0.55, y, contentWidth * 0.45, headerRowHeight, "S");
-   doc.setFontSize(7);
-   doc.text("Data e Assinatura", margin + contentWidth * 0.55 + 4, y + 6);
-   doc.text("____/____/____                    _________________________________", margin + contentWidth * 0.55 + 4, y + 13);
+    doc.setFontSize(6);
+    doc.text("Data e Assinatura", margin + contentWidth * 0.55 + 3, y + 5);
+    doc.text("____/____/____                    _________________________________", margin + contentWidth * 0.55 + 3, y + 10);
  
    y += headerRowHeight;
  
    // ============ ROW 2: Empregador | Inscrição | Admissão | Competência ============
-   const row2Height = 12;
-   const col1Width = contentWidth * 0.4;
-   const col2Width = contentWidth * 0.25;
-   const col3Width = contentWidth * 0.15;
-   const col4Width = contentWidth * 0.2;
- 
-   doc.setFontSize(7);
-   doc.rect(margin, y, col1Width, row2Height, "S");
-   doc.text("Empregador", margin + 2, y + 4);
-   doc.text(data.company.name.substring(0, 45), margin + 2, y + 9);
- 
-   doc.rect(margin + col1Width, y, col2Width, row2Height, "S");
-   doc.text("Inscrição", margin + col1Width + 2, y + 4);
-   doc.text(data.company.cnpj || "-", margin + col1Width + 2, y + 9);
- 
-   doc.rect(margin + col1Width + col2Width, y, col3Width, row2Height, "S");
-   doc.text("Admissão", margin + col1Width + col2Width + 2, y + 4);
-   doc.text(data.collaborator.admissionDate, margin + col1Width + col2Width + 2, y + 9);
- 
-   doc.rect(margin + col1Width + col2Width + col3Width, y, col4Width, row2Height, "S");
-   doc.text("Competência", margin + col1Width + col2Width + col3Width + 2, y + 4);
-   doc.text(`${monthNames[data.period.month - 1]} de ${data.period.year}`, margin + col1Width + col2Width + col3Width + 2, y + 9);
+    const row2Height = 10;
+    const col1Width = contentWidth * 0.4;
+    const col2Width = contentWidth * 0.25;
+    const col3Width = contentWidth * 0.15;
+    const col4Width = contentWidth * 0.2;
+
+    doc.setFontSize(6);
+    doc.rect(margin, y, col1Width, row2Height, "S");
+    doc.text("Empregador", margin + 2, y + 3.5);
+    doc.text(data.company.name.substring(0, 45), margin + 2, y + 7.5);
+
+    doc.rect(margin + col1Width, y, col2Width, row2Height, "S");
+    doc.text("Inscrição", margin + col1Width + 2, y + 3.5);
+    doc.text(data.company.cnpj || "-", margin + col1Width + 2, y + 7.5);
+
+    doc.rect(margin + col1Width + col2Width, y, col3Width, row2Height, "S");
+    doc.text("Admissão", margin + col1Width + col2Width + 2, y + 3.5);
+    doc.text(data.collaborator.admissionDate, margin + col1Width + col2Width + 2, y + 7.5);
+
+    doc.rect(margin + col1Width + col2Width + col3Width, y, col4Width, row2Height, "S");
+    doc.text("Competência", margin + col1Width + col2Width + col3Width + 2, y + 3.5);
+    doc.text(`${monthNames[data.period.month - 1]} de ${data.period.year}`, margin + col1Width + col2Width + col3Width + 2, y + 7.5);
  
    y += row2Height;
  
    // ============ ROW 3: Empregado | Cargo | Lotação ============
-   const row3Height = 12;
-   const empCol1 = contentWidth * 0.5;
-   const empCol2 = contentWidth * 0.25;
-   const empCol3 = contentWidth * 0.25;
- 
-   doc.rect(margin, y, empCol1, row3Height, "S");
-   doc.text("Empregado", margin + 2, y + 4);
-   doc.text(`${data.collaborator.code} ${data.collaborator.name.substring(0, 50)}`, margin + 2, y + 9);
- 
-   doc.rect(margin + empCol1, y, empCol2, row3Height, "S");
-   doc.text("Cargo", margin + empCol1 + 2, y + 4);
-   doc.text(data.collaborator.position.substring(0, 30), margin + empCol1 + 2, y + 9);
- 
-   doc.rect(margin + empCol1 + empCol2, y, empCol3, row3Height, "S");
-   doc.text("Lotação", margin + empCol1 + empCol2 + 2, y + 4);
-   doc.text(data.collaborator.department.substring(0, 25) || "GERAL", margin + empCol1 + empCol2 + 2, y + 9);
+    const row3Height = 10;
+    const empCol1 = contentWidth * 0.5;
+    const empCol2 = contentWidth * 0.25;
+    const empCol3 = contentWidth * 0.25;
+
+    doc.rect(margin, y, empCol1, row3Height, "S");
+    doc.text("Empregado", margin + 2, y + 3.5);
+    doc.text(`${data.collaborator.code} ${data.collaborator.name.substring(0, 50)}`, margin + 2, y + 7.5);
+
+    doc.rect(margin + empCol1, y, empCol2, row3Height, "S");
+    doc.text("Cargo", margin + empCol1 + 2, y + 3.5);
+    doc.text(data.collaborator.position.substring(0, 30), margin + empCol1 + 2, y + 7.5);
+
+    doc.rect(margin + empCol1 + empCol2, y, empCol3, row3Height, "S");
+    doc.text("Lotação", margin + empCol1 + empCol2 + 2, y + 3.5);
+    doc.text(data.collaborator.department.substring(0, 25) || "GERAL", margin + empCol1 + empCol2 + 2, y + 7.5);
  
    y += row3Height;
  
    // ============ ROW 4: CPF | Banco | Agência | Conta | Tipo Conta ============
-   const row4Height = 12;
-   const cpfCol = contentWidth * 0.2;
-   const bankCol = contentWidth * 0.2;
-   const agCol = contentWidth * 0.2;
-   const contaCol = contentWidth * 0.2;
-   const tipoCol = contentWidth * 0.2;
- 
-   doc.rect(margin, y, cpfCol, row4Height, "S");
-   doc.text("CPF:", margin + 2, y + 4);
-   doc.text(data.collaborator.cpf, margin + 2, y + 9);
- 
-   doc.rect(margin + cpfCol, y, bankCol, row4Height, "S");
-   doc.text("Banco", margin + cpfCol + 2, y + 4);
- 
-   doc.rect(margin + cpfCol + bankCol, y, agCol, row4Height, "S");
-   doc.text("Agência", margin + cpfCol + bankCol + 2, y + 4);
- 
-   doc.rect(margin + cpfCol + bankCol + agCol, y, contaCol, row4Height, "S");
-   doc.text("Conta", margin + cpfCol + bankCol + agCol + 2, y + 4);
- 
-   doc.rect(margin + cpfCol + bankCol + agCol + contaCol, y, tipoCol, row4Height, "S");
-   doc.text("Tipo de Conta", margin + cpfCol + bankCol + agCol + contaCol + 2, y + 4);
- 
-   y += row4Height;
+    const row4Height = 10;
+    const cpfCol = contentWidth * 0.2;
+    const bankCol = contentWidth * 0.2;
+    const agCol = contentWidth * 0.2;
+    const contaCol = contentWidth * 0.2;
+    const tipoCol = contentWidth * 0.2;
+
+    doc.rect(margin, y, cpfCol, row4Height, "S");
+    doc.text("CPF:", margin + 2, y + 3.5);
+    doc.text(data.collaborator.cpf, margin + 2, y + 7.5);
+
+    doc.rect(margin + cpfCol, y, bankCol, row4Height, "S");
+    doc.text("Banco", margin + cpfCol + 2, y + 3.5);
+
+    doc.rect(margin + cpfCol + bankCol, y, agCol, row4Height, "S");
+    doc.text("Agência", margin + cpfCol + bankCol + 2, y + 3.5);
+
+    doc.rect(margin + cpfCol + bankCol + agCol, y, contaCol, row4Height, "S");
+    doc.text("Conta", margin + cpfCol + bankCol + agCol + 2, y + 3.5);
+
+    doc.rect(margin + cpfCol + bankCol + agCol + contaCol, y, tipoCol, row4Height, "S");
+    doc.text("Tipo de Conta", margin + cpfCol + bankCol + agCol + contaCol + 2, y + 3.5);
+
+    y += row4Height;
  
    // ============ Discriminação das Verbas Header ============
-   const discHeaderHeight = 8;
-   doc.rect(margin, y, contentWidth, discHeaderHeight, "S");
-   doc.setFontSize(9);
-   doc.setFont("helvetica", "bold");
-   doc.text("Discriminação das Verbas", pageWidth / 2, y + 5.5, { align: "center" });
-   doc.setFont("helvetica", "normal");
-   y += discHeaderHeight;
+    const discHeaderHeight = 6;
+    doc.rect(margin, y, contentWidth, discHeaderHeight, "S");
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "bold");
+    doc.text("Discriminação das Verbas", pageWidth / 2, y + 4, { align: "center" });
+    doc.setFont("helvetica", "normal");
+    y += discHeaderHeight;
  
    // ============ Entries Table ============
    const tableData = data.entries.map((entry) => [
@@ -234,10 +234,7 @@
      entry.deductions ? formatCurrencyPDF(entry.deductions) : "",
    ]);
  
-   const minRows = 8;
-   while (tableData.length < minRows) {
-     tableData.push(["", "", "", "", ""]);
-   }
+    // Dynamic rows - no empty padding rows
  
    autoTable(doc, {
      startY: y,
@@ -245,96 +242,97 @@
      body: tableData,
      theme: "plain",
      headStyles: {
-       fillColor: [255, 255, 255],
-       textColor: [0, 0, 0],
-       fontSize: 7,
-       fontStyle: "normal",
-       lineWidth: 0.2,
-       lineColor: [0, 0, 0],
-     },
-     styles: {
-       fontSize: 7,
-       cellPadding: 1.5,
-       lineWidth: 0.2,
-       lineColor: [0, 0, 0],
-       font: "helvetica",
-       fontStyle: "normal",
-     },
-     columnStyles: {
-       0: { cellWidth: 20, halign: "center" },
-       1: { cellWidth: 80 },
-       2: { cellWidth: 30, halign: "center" },
-       3: { cellWidth: 30, halign: "right" },
-       4: { cellWidth: 30, halign: "right" },
-     },
-     margin: { left: margin, right: margin },
-     tableLineWidth: 0.2,
-     tableLineColor: [0, 0, 0],
-   });
+        fillColor: [255, 255, 255],
+        textColor: [0, 0, 0],
+        fontSize: 6,
+        fontStyle: "normal",
+        lineWidth: 0.1,
+        lineColor: [0, 0, 0],
+        cellPadding: 1,
+      },
+      styles: {
+        fontSize: 6,
+        cellPadding: 1,
+        lineWidth: 0.1,
+        lineColor: [0, 0, 0],
+        font: "helvetica",
+        fontStyle: "normal",
+      },
+      columnStyles: {
+        0: { cellWidth: 20, halign: "center" },
+        1: { cellWidth: 80 },
+        2: { cellWidth: 30, halign: "center" },
+        3: { cellWidth: 30, halign: "right" },
+        4: { cellWidth: 30, halign: "right" },
+      },
+      margin: { left: margin, right: margin },
+      tableLineWidth: 0.1,
+      tableLineColor: [0, 0, 0],
+    });
  
    y = (doc as any).lastAutoTable.finalY;
  
    // ============ TOTALS ROW ============
-   const totalsRowHeight = 8;
+   const totalsRowHeight = 6;
    
    doc.rect(margin, y, contentWidth * 0.55, totalsRowHeight * 3, "S");
    
    doc.rect(margin + contentWidth * 0.55, y, contentWidth * 0.25, totalsRowHeight, "S");
-   doc.setFontSize(7);
+    doc.setFontSize(6);
    doc.setFont("helvetica", "normal");
-   doc.text("Total de Proventos", margin + contentWidth * 0.55 + 2, y + 5);
-   
-   doc.rect(margin + contentWidth * 0.8, y, contentWidth * 0.2, totalsRowHeight, "S");
-   doc.text(formatCurrencyPDF(data.totals.earnings), margin + contentWidth - 2, y + 5, { align: "right" });
-   
-   y += totalsRowHeight;
-   
-   doc.rect(margin + contentWidth * 0.55, y, contentWidth * 0.25, totalsRowHeight, "S");
-   doc.text("Total de Descontos", margin + contentWidth * 0.55 + 2, y + 5);
-   
-   doc.rect(margin + contentWidth * 0.8, y, contentWidth * 0.2, totalsRowHeight, "S");
-   doc.text(formatCurrencyPDF(data.totals.deductions), margin + contentWidth - 2, y + 5, { align: "right" });
+    doc.text("Total de Proventos", margin + contentWidth * 0.55 + 2, y + 4);
+    
+    doc.rect(margin + contentWidth * 0.8, y, contentWidth * 0.2, totalsRowHeight, "S");
+    doc.text(formatCurrencyPDF(data.totals.earnings), margin + contentWidth - 2, y + 4, { align: "right" });
    
    y += totalsRowHeight;
    
-   doc.rect(margin + contentWidth * 0.55, y, contentWidth * 0.25, totalsRowHeight, "S");
-   doc.setFont("helvetica", "bold");
-   doc.text("Líquido a Receber", margin + contentWidth * 0.55 + 2, y + 5);
+    doc.rect(margin + contentWidth * 0.55, y, contentWidth * 0.25, totalsRowHeight, "S");
+    doc.text("Total de Descontos", margin + contentWidth * 0.55 + 2, y + 4);
+    
+    doc.rect(margin + contentWidth * 0.8, y, contentWidth * 0.2, totalsRowHeight, "S");
+    doc.text(formatCurrencyPDF(data.totals.deductions), margin + contentWidth - 2, y + 4, { align: "right" });
    
-   doc.rect(margin + contentWidth * 0.8, y, contentWidth * 0.2, totalsRowHeight, "S");
-   doc.text(formatCurrencyPDF(data.totals.netPay), margin + contentWidth - 2, y + 5, { align: "right" });
+   y += totalsRowHeight;
+   
+    doc.rect(margin + contentWidth * 0.55, y, contentWidth * 0.25, totalsRowHeight, "S");
+    doc.setFont("helvetica", "bold");
+    doc.text("Líquido a Receber", margin + contentWidth * 0.55 + 2, y + 4);
+    
+    doc.rect(margin + contentWidth * 0.8, y, contentWidth * 0.2, totalsRowHeight, "S");
+    doc.text(formatCurrencyPDF(data.totals.netPay), margin + contentWidth - 2, y + 4, { align: "right" });
  
    y += totalsRowHeight + 2;
  
    // ============ FOOTER - Tax Bases ============
-   const footerHeight = 12;
-   const footerColWidth = contentWidth / 6;
- 
-   doc.setFontSize(6);
-   doc.setFont("helvetica", "normal");
- 
-   doc.rect(margin, y, footerColWidth, footerHeight, "S");
-   doc.text("Salário Contratual", margin + 2, y + 4);
-   doc.text(formatCurrencyPDF(data.footer.baseSalary), margin + 2, y + 9);
- 
-   doc.rect(margin + footerColWidth, y, footerColWidth, footerHeight, "S");
-   doc.text("Base de Cálculo do INSS", margin + footerColWidth + 2, y + 4);
-   doc.text(formatCurrencyPDF(data.footer.inssBase), margin + footerColWidth + 2, y + 9);
- 
-   doc.rect(margin + footerColWidth * 2, y, footerColWidth, footerHeight, "S");
-   doc.text("Base de Cálculo do FGTS", margin + footerColWidth * 2 + 2, y + 4);
-   doc.text(formatCurrencyPDF(data.footer.fgtsBase), margin + footerColWidth * 2 + 2, y + 9);
- 
-   doc.rect(margin + footerColWidth * 3, y, footerColWidth, footerHeight, "S");
-   doc.text("FGTS", margin + footerColWidth * 3 + 2, y + 4);
-   doc.text(formatCurrencyPDF(data.footer.fgtsValue), margin + footerColWidth * 3 + 2, y + 9);
- 
-   doc.rect(margin + footerColWidth * 4, y, footerColWidth, footerHeight, "S");
-   doc.text("FGTS Contribuição Social", margin + footerColWidth * 4 + 2, y + 4);
- 
-   doc.rect(margin + footerColWidth * 5, y, footerColWidth, footerHeight, "S");
-   doc.text("Base de Cálculo do IRRF(S)", margin + footerColWidth * 5 + 2, y + 4);
-   doc.text(formatCurrencyPDF(data.footer.irpfBase), margin + footerColWidth * 5 + 2, y + 9);
+    const footerHeight = 10;
+    const footerColWidth = contentWidth / 6;
+
+    doc.setFontSize(5.5);
+    doc.setFont("helvetica", "normal");
+
+    doc.rect(margin, y, footerColWidth, footerHeight, "S");
+    doc.text("Salário Contratual", margin + 2, y + 3.5);
+    doc.text(formatCurrencyPDF(data.footer.baseSalary), margin + 2, y + 7.5);
+
+    doc.rect(margin + footerColWidth, y, footerColWidth, footerHeight, "S");
+    doc.text("Base de Cálculo do INSS", margin + footerColWidth + 2, y + 3.5);
+    doc.text(formatCurrencyPDF(data.footer.inssBase), margin + footerColWidth + 2, y + 7.5);
+
+    doc.rect(margin + footerColWidth * 2, y, footerColWidth, footerHeight, "S");
+    doc.text("Base de Cálculo do FGTS", margin + footerColWidth * 2 + 2, y + 3.5);
+    doc.text(formatCurrencyPDF(data.footer.fgtsBase), margin + footerColWidth * 2 + 2, y + 7.5);
+
+    doc.rect(margin + footerColWidth * 3, y, footerColWidth, footerHeight, "S");
+    doc.text("FGTS", margin + footerColWidth * 3 + 2, y + 3.5);
+    doc.text(formatCurrencyPDF(data.footer.fgtsValue), margin + footerColWidth * 3 + 2, y + 7.5);
+
+    doc.rect(margin + footerColWidth * 4, y, footerColWidth, footerHeight, "S");
+    doc.text("FGTS Contribuição Social", margin + footerColWidth * 4 + 2, y + 3.5);
+
+    doc.rect(margin + footerColWidth * 5, y, footerColWidth, footerHeight, "S");
+    doc.text("Base de Cálculo do IRRF(S)", margin + footerColWidth * 5 + 2, y + 3.5);
+    doc.text(formatCurrencyPDF(data.footer.irpfBase), margin + footerColWidth * 5 + 2, y + 7.5);
  
    const fileName = `recibo_${data.collaborator.name.replace(/\s+/g, "_")}_${data.period.month.toString().padStart(2, "0")}_${data.period.year}.pdf`;
    doc.save(fileName);
