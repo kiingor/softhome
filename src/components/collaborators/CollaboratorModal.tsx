@@ -48,6 +48,8 @@ import { toast } from "sonner";
 import { formatCPFInput, cleanCPF, validateCPF, formatPhoneInput } from "@/lib/validators";
 import { formatCurrency, formatCurrencyForInput, parseCurrencyInput, getCurrentCompetencia } from "@/lib/formatters";
 import { calculateMonthlyBenefitValue, getBenefitCalculationDescription, DayAbbrev } from "@/lib/workingDays";
+import { PositionChangeDialog } from "@/components/exames/PositionChangeDialog";
+import { ArrowRightLeft } from "lucide-react";
 
 interface PendingEntry {
   id: string;
@@ -118,6 +120,7 @@ const CollaboratorModal = ({
   const [createTeamOpen, setCreateTeamOpen] = useState(false);
   const [newStoreName, setNewStoreName] = useState("");
   const [newTeamName, setNewTeamName] = useState("");
+  const [positionChangeOpen, setPositionChangeOpen] = useState(false);
 
   // Entry form state - extended with month/year/installment
   const [entryForm, setEntryForm] = useState({
@@ -384,85 +387,122 @@ const CollaboratorModal = ({
         
         return filtered;
       });
-    } else if (collaboratorId && formData.position_id && formData.position_id !== previousPositionId) {
-      setPreviousPositionId(formData.position_id);
-      
-      if (position && position.salary > 0) {
-        const createTaxEntries = async () => {
-          await supabase
-            .from("payroll_entries")
-            .delete()
-            .eq("collaborator_id", collaboratorId)
-            .eq("month", currentMonth)
-            .eq("year", currentYear)
-            .in("type", ["salario", "inss", "fgts", "irpf"]);
-  
-          const entriesToCreate: any[] = [
-            {
-              collaborator_id: collaboratorId,
-              company_id: currentCompany!.id,
-              type: "salario",
-              description: `Salário Base - ${position.name}`,
-              value: position.salary,
-              month: currentMonth,
-              year: currentYear,
-              is_fixed: true,
-            },
-          ];
-  
-          if (position.inss_percent && position.inss_percent > 0) {
-            const inssValue = position.salary * (position.inss_percent / 100);
-            entriesToCreate.push({
-              collaborator_id: collaboratorId,
-              company_id: currentCompany!.id,
-              type: "inss",
-              description: `INSS ${position.inss_percent}%`,
-              value: inssValue,
-              month: currentMonth,
-              year: currentYear,
-              is_fixed: true,
-            });
-          }
-  
-          if (position.fgts_percent && position.fgts_percent > 0) {
-            const fgtsValue = position.salary * (position.fgts_percent / 100);
-            entriesToCreate.push({
-              collaborator_id: collaboratorId,
-              company_id: currentCompany!.id,
-              type: "fgts",
-              description: `FGTS ${position.fgts_percent}%`,
-              value: fgtsValue,
-              month: currentMonth,
-              year: currentYear,
-              is_fixed: true,
-            });
-          }
-  
-          if (position.irpf_percent && position.irpf_percent > 0) {
-            const irpfValue = position.salary * (position.irpf_percent / 100);
-            entriesToCreate.push({
-              collaborator_id: collaboratorId,
-              company_id: currentCompany!.id,
-              type: "irpf",
-              description: `IRPF ${position.irpf_percent}%`,
-              value: irpfValue,
-              month: currentMonth,
-              year: currentYear,
-              is_fixed: true,
-            });
-          }
-  
-          const { error } = await supabase.from("payroll_entries").insert(entriesToCreate);
-          if (!error) {
-            refetchEntries();
-            toast.success("Salário e impostos atualizados!");
-          }
-        };
-        
-        createTaxEntries();
-      }
     }
+    // For existing collaborators, position changes are handled exclusively via PositionChangeDialog
   }, [formData.position_id, positions.length, isNew, open, collaboratorId, currentCompany, currentMonth, currentYear, previousPositionId]);
+
+  // Handle position change via dialog (existing collaborators only)
+  const handlePositionChange = async (newPositionId: string, riskGroupChanged: boolean) => {
+    if (!collaboratorId || !currentCompany) return;
+    const newPosition = positions.find((p) => p.id === newPositionId);
+    if (!newPosition) return;
+
+    try {
+      // 1. Update collaborator position
+      await supabase
+        .from("collaborators")
+        .update({ position_id: newPositionId, position: newPosition.name })
+        .eq("id", collaboratorId);
+
+      // 2. Delete ONLY current month salary/tax entries (preserve history)
+      await supabase
+        .from("payroll_entries")
+        .delete()
+        .eq("collaborator_id", collaboratorId)
+        .eq("month", currentMonth)
+        .eq("year", currentYear)
+        .in("type", ["salario", "inss", "fgts", "irpf"]);
+
+      // 3. Create new entries with new position values
+      if (newPosition.salary > 0) {
+        const entriesToCreate: any[] = [
+          {
+            collaborator_id: collaboratorId,
+            company_id: currentCompany.id,
+            type: "salario",
+            description: `Salário Base - ${newPosition.name}`,
+            value: newPosition.salary,
+            month: currentMonth,
+            year: currentYear,
+            is_fixed: true,
+          },
+        ];
+
+        if (newPosition.inss_percent && newPosition.inss_percent > 0) {
+          entriesToCreate.push({
+            collaborator_id: collaboratorId,
+            company_id: currentCompany.id,
+            type: "inss",
+            description: `INSS ${newPosition.inss_percent}%`,
+            value: newPosition.salary * (newPosition.inss_percent / 100),
+            month: currentMonth,
+            year: currentYear,
+            is_fixed: true,
+          });
+        }
+
+        if (newPosition.fgts_percent && newPosition.fgts_percent > 0) {
+          entriesToCreate.push({
+            collaborator_id: collaboratorId,
+            company_id: currentCompany.id,
+            type: "fgts",
+            description: `FGTS ${newPosition.fgts_percent}%`,
+            value: newPosition.salary * (newPosition.fgts_percent / 100),
+            month: currentMonth,
+            year: currentYear,
+            is_fixed: true,
+          });
+        }
+
+        if (newPosition.irpf_percent && newPosition.irpf_percent > 0) {
+          entriesToCreate.push({
+            collaborator_id: collaboratorId,
+            company_id: currentCompany.id,
+            type: "irpf",
+            description: `IRPF ${newPosition.irpf_percent}%`,
+            value: newPosition.salary * (newPosition.irpf_percent / 100),
+            month: currentMonth,
+            year: currentYear,
+            is_fixed: true,
+          });
+        }
+
+        await supabase.from("payroll_entries").insert(entriesToCreate);
+      }
+
+      // 4. If risk group changed, create mudanca_funcao exam
+      if (riskGroupChanged) {
+        const dueDate = new Date();
+        dueDate.setDate(dueDate.getDate() + 30);
+        await supabase.from("occupational_exams").insert({
+          collaborator_id: collaboratorId,
+          company_id: currentCompany.id,
+          exam_type: "mudanca_funcao",
+          due_date: dueDate.toISOString().slice(0, 10),
+          position_id: newPositionId,
+          previous_position_id: collaborator?.position_id || null,
+          risk_group_at_time: newPosition.risk_group || null,
+          auto_generated: true,
+          notes: "Gerado automaticamente por troca de função",
+        });
+      }
+
+      // Update local state
+      setFormData((prev) => ({ ...prev, position_id: newPositionId }));
+      setPreviousPositionId(newPositionId);
+      setPositionChangeOpen(false);
+      refetchEntries();
+      queryClient.invalidateQueries({ queryKey: ["collaborators"] });
+      queryClient.invalidateQueries({ queryKey: ["collaborator", collaboratorId] });
+
+      const msg = riskGroupChanged
+        ? "Cargo atualizado! Valores de salário aplicados a partir deste mês. Um exame de Mudança de Função foi criado."
+        : "Cargo atualizado! Valores de salário e impostos aplicados a partir deste mês.";
+      toast.success(msg);
+    } catch (error: any) {
+      toast.error("Erro ao trocar cargo: " + error.message);
+    }
+  };
 
   // Initialize previousPositionId when modal opens for existing collaborator
   useEffect(() => {
@@ -1160,21 +1200,49 @@ const CollaboratorModal = ({
                   {/* Position */}
                   <div className="space-y-2">
                     <Label>Cargo</Label>
-                    <Select
-                      value={formData.position_id}
-                      onValueChange={(v) => setFormData((prev) => ({ ...prev, position_id: v }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione um cargo" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {positions.map((pos) => (
-                          <SelectItem key={pos.id} value={pos.id}>
-                            {pos.name} {pos.salary > 0 && `(${formatCurrency(pos.salary)})`}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    {!isNew && formData.position_id ? (
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 flex items-center gap-2 h-10 px-3 rounded-md border bg-muted/50">
+                          <span className="text-sm font-medium">
+                            {positions.find((p) => p.id === formData.position_id)?.name || "—"}
+                          </span>
+                          {(() => {
+                            const pos = positions.find((p) => p.id === formData.position_id);
+                            return pos && pos.salary > 0 ? (
+                              <Badge variant="secondary" className="text-xs">{formatCurrency(pos.salary)}</Badge>
+                            ) : null;
+                          })()}
+                        </div>
+                        {canManage && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setPositionChangeOpen(true)}
+                            className="shrink-0"
+                          >
+                            <ArrowRightLeft className="w-4 h-4 mr-1" />
+                            Trocar Função
+                          </Button>
+                        )}
+                      </div>
+                    ) : (
+                      <Select
+                        value={formData.position_id}
+                        onValueChange={(v) => setFormData((prev) => ({ ...prev, position_id: v }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione um cargo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {positions.map((pos) => (
+                            <SelectItem key={pos.id} value={pos.id}>
+                              {pos.name} {pos.salary > 0 && `(${formatCurrency(pos.salary)})`}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                   </div>
 
                   {/* Admission Date */}
@@ -1808,6 +1876,15 @@ const CollaboratorModal = ({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Position Change Dialog */}
+      <PositionChangeDialog
+        open={positionChangeOpen}
+        onOpenChange={setPositionChangeOpen}
+        currentPosition={positions.find((p) => p.id === formData.position_id) || null}
+        positions={positions}
+        onConfirm={handlePositionChange}
+      />
     </>
   );
 };

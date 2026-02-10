@@ -10,6 +10,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useExams } from "@/hooks/useExams";
+import { EXAM_TYPE_LABELS } from "@/lib/riskGroupDefaults";
+
+const EXAM_TYPES = [
+  { value: "admissional", label: "Admissional" },
+  { value: "periodico", label: "Periódico" },
+  { value: "mudanca_funcao", label: "Mudança de Função" },
+  { value: "retorno_trabalho", label: "Retorno ao Trabalho" },
+  { value: "demissional", label: "Demissional" },
+  { value: "avulso", label: "Avulso" },
+];
 
 interface ExamRequestModalProps {
   open: boolean;
@@ -21,6 +31,8 @@ export const ExamRequestModal = ({ open, onOpenChange }: ExamRequestModalProps) 
   const { createExam, isCreating } = useExams();
   const [form, setForm] = useState({
     collaborator_id: "",
+    exam_type: "avulso",
+    custom_name: "",
     due_date: "",
     notes: "",
   });
@@ -43,17 +55,20 @@ export const ExamRequestModal = ({ open, onOpenChange }: ExamRequestModalProps) 
 
   const handleSubmit = () => {
     if (!form.collaborator_id || !form.due_date) return;
+    const notes = form.exam_type === "avulso" && form.custom_name
+      ? `[${form.custom_name}] ${form.notes || ""}`.trim()
+      : form.notes || undefined;
     createExam(
       {
         collaborator_id: form.collaborator_id,
-        exam_type: "avulso",
+        exam_type: form.exam_type,
         due_date: form.due_date,
-        notes: form.notes || undefined,
+        notes,
       },
       {
         onSuccess: () => {
           onOpenChange(false);
-          setForm({ collaborator_id: "", due_date: "", notes: "" });
+          setForm({ collaborator_id: "", exam_type: "avulso", custom_name: "", due_date: "", notes: "" });
         },
       }
     );
@@ -64,11 +79,32 @@ export const ExamRequestModal = ({ open, onOpenChange }: ExamRequestModalProps) 
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            Novo Exame Avulso
-            <Badge variant="secondary">Avulso</Badge>
+            Novo Exame
+            <Badge variant="secondary">{EXAM_TYPE_LABELS[form.exam_type] || form.exam_type}</Badge>
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>Tipo de Exame *</Label>
+            <Select value={form.exam_type} onValueChange={(v) => setForm((p) => ({ ...p, exam_type: v }))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {EXAM_TYPES.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {form.exam_type === "avulso" && (
+            <div className="space-y-2">
+              <Label>Nome do Exame</Label>
+              <Input
+                value={form.custom_name}
+                onChange={(e) => setForm((p) => ({ ...p, custom_name: e.target.value }))}
+                placeholder="Ex: Audiometria, Espirometria..."
+              />
+            </div>
+          )}
           <div className="space-y-2">
             <Label>Colaborador *</Label>
             <Select value={form.collaborator_id} onValueChange={(v) => setForm((p) => ({ ...p, collaborator_id: v }))}>
