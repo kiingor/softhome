@@ -42,6 +42,7 @@ import {
   Loader2,
   X,
   Wallet,
+  Palmtree,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatCPFInput, cleanCPF, validateCPF, formatPhoneInput } from "@/lib/validators";
@@ -246,6 +247,39 @@ const CollaboratorModal = ({
       return data;
     },
     enabled: !!currentCompany?.id && open,
+  });
+
+  // Fetch vacation periods for existing collaborator
+  const { data: vacationPeriods = [] } = useQuery({
+    queryKey: ["vacation-periods-collaborator", collaboratorId],
+    queryFn: async () => {
+      if (!collaboratorId) return [];
+      const { data, error } = await supabase
+        .from("vacation_periods")
+        .select("*")
+        .eq("collaborator_id", collaboratorId)
+        .order("start_date", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!collaboratorId && open,
+  });
+
+  // Fetch vacation requests for existing collaborator
+  const { data: vacationRequests = [] } = useQuery({
+    queryKey: ["vacation-requests-collaborator", collaboratorId],
+    queryFn: async () => {
+      if (!collaboratorId) return [];
+      const { data, error } = await supabase
+        .from("vacation_requests")
+        .select("*, vacation_period:vacation_periods(*)")
+        .eq("collaborator_id", collaboratorId)
+        .in("status", ["approved", "in_progress", "completed"])
+        .order("start_date", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!collaboratorId && open,
   });
 
   // Reset form when modal opens
@@ -1367,7 +1401,82 @@ const CollaboratorModal = ({
                                           <span className="font-mono text-sm font-semibold shrink-0">
                                             {formatCurrency(monthlyValue)}
                                           </span>
-                                        </div>
+                    </div>
+
+                    {/* Vacation History - only for existing collaborators */}
+                    {!isNew && (
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="font-medium text-sm flex items-center gap-2">
+                            <Palmtree className="w-4 h-4 text-muted-foreground" />
+                            Férias
+                          </h4>
+                        </div>
+
+                        {/* Vacation Balance */}
+                        {vacationPeriods.length > 0 && (
+                          <div className="mb-3 p-3 rounded-lg bg-background border">
+                            <p className="text-xs text-muted-foreground mb-2">Saldo de Períodos Aquisitivos</p>
+                            <div className="space-y-1.5">
+                              {vacationPeriods.slice(0, 3).map((period: any) => (
+                                <div key={period.id} className="flex items-center justify-between text-sm">
+                                  <span className="text-muted-foreground">
+                                    {new Date(period.start_date).toLocaleDateString("pt-BR")} - {new Date(period.end_date).toLocaleDateString("pt-BR")}
+                                  </span>
+                                  <Badge variant={
+                                    period.status === "available" ? "default" :
+                                    period.status === "partially_used" ? "secondary" :
+                                    period.status === "used" ? "outline" : "destructive"
+                                  } className="text-xs h-5 px-1.5">
+                                    {period.days_remaining}d restantes
+                                  </Badge>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Vacation Requests History */}
+                        {vacationRequests.length === 0 ? (
+                          <div className="text-sm text-muted-foreground text-center py-6 bg-background rounded-lg border border-dashed">
+                            Nenhum registro de férias
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {vacationRequests.map((request: any) => {
+                              const statusLabels: Record<string, string> = {
+                                approved: "Aprovada",
+                                in_progress: "Em Gozo",
+                                completed: "Concluída",
+                              };
+                              const statusColors: Record<string, "default" | "secondary" | "outline"> = {
+                                approved: "default",
+                                in_progress: "secondary",
+                                completed: "outline",
+                              };
+                              return (
+                                <div key={request.id} className="p-3 rounded-lg bg-background border hover:border-primary/30 transition-colors">
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="text-sm font-medium">
+                                      {new Date(request.start_date).toLocaleDateString("pt-BR")} - {new Date(request.end_date).toLocaleDateString("pt-BR")}
+                                    </span>
+                                    <Badge variant={statusColors[request.status] || "outline"} className="text-xs h-5 px-1.5">
+                                      {statusLabels[request.status] || request.status}
+                                    </Badge>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                    <span>{request.days_count} dias</span>
+                                    {request.sell_days > 0 && (
+                                      <span>• {request.sell_days} dias abono</span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
                                         <p className="text-xs text-muted-foreground">{description}</p>
                                       </div>
                                       {canManage && (
