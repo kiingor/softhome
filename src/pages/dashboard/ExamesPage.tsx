@@ -40,12 +40,16 @@ export default function ExamesPage() {
   const [newExamOpen, setNewExamOpen] = useState(false);
   const [uploadExam, setUploadExam] = useState<OccupationalExam | null>(null);
 
-  // Filters
+  // Filters - default 30-day window
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [dateFrom, setDateFrom] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().slice(0, 10);
+  });
+  const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10));
 
   // Check if exam has documents
   const { data: examDocCounts = {} } = useQuery({
@@ -130,7 +134,7 @@ export default function ExamesPage() {
           </div>
           <Button onClick={() => setNewExamOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
-            Novo Exame Avulso
+            Novo Exame
           </Button>
         </div>
 
