@@ -1467,6 +1467,25 @@ const CollaboratorModal = ({
                                           <span className="font-mono text-sm font-semibold shrink-0">
                                             {formatCurrency(monthlyValue)}
                                           </span>
+                                        </div>
+                                        <p className="text-xs text-muted-foreground">{description}</p>
+                                      </div>
+                                      {canManage && (
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
+                                          onClick={() => setDeletingAssignment(assignment)}
+                                        >
+                                          <X className="w-3 h-3" />
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                        </div>
+                      )}
                     </div>
 
                     {/* Vacation History - only for existing collaborators */}
@@ -1543,25 +1562,6 @@ const CollaboratorModal = ({
                         )}
                       </div>
                     )}
-                                        <p className="text-xs text-muted-foreground">{description}</p>
-                                      </div>
-                                      {canManage && (
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
-                                          onClick={() => setDeletingAssignment(assignment)}
-                                        >
-                                          <X className="w-3 h-3" />
-                                        </Button>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                        </div>
-                      )}
-                    </div>
                   </div>
                 </ScrollArea>
 
