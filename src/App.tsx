@@ -29,6 +29,7 @@ import { PortalProvider } from "./contexts/PortalContext";
 import PortalLayout from "./components/portal/PortalLayout";
 import PortalGuard from "./components/portal/PortalGuard";
 import PortalLogin from "./pages/colaborador/PortalLogin";
+import PrimeiroAcesso from "./pages/colaborador/PrimeiroAcesso";
 import PortalHome from "./pages/colaborador/PortalHome";
 import MeuExtratoPage from "./pages/colaborador/MeuExtratoPage";
 import MeusBeneficiosPage from "./pages/colaborador/MeusBeneficiosPage";
@@ -89,6 +90,7 @@ const App = () => {
 
           {/* Portal do Colaborador - Login */}
           <Route path="/portal/login" element={<PortalLogin />} />
+          <Route path="/portal/primeiro-acesso" element={<PrimeiroAcesso />} />
           
           {/* Portal do Colaborador - Layout isolado */}
           <Route

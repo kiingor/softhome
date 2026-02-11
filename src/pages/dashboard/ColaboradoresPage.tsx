@@ -51,7 +51,7 @@ interface Collaborator {
   email: string | null;
   phone: string | null;
   position: string | null;
-  status: "ativo" | "inativo";
+  status: "ativo" | "inativo" | "aguardando_documentacao" | "validacao_pendente" | "reprovado";
   is_temp: boolean;
   store_id: string | null;
   team_id: string | null;
@@ -140,7 +140,7 @@ const ColaboradoresPage = () => {
         query = query.or(`name.ilike.%${searchTerm}%,cpf.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%`);
       }
       if (statusFilter !== "all") {
-        query = query.eq("status", statusFilter as "ativo" | "inativo");
+        query = query.eq("status", statusFilter as "ativo" | "inativo" | "aguardando_documentacao" | "validacao_pendente" | "reprovado");
       }
       if (storeFilter !== "all") {
         query = query.eq("store_id", storeFilter);

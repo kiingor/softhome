@@ -143,6 +143,77 @@ export type Database = {
           },
         ]
       }
+      collaborator_documents: {
+        Row: {
+          collaborator_id: string
+          company_id: string
+          created_at: string
+          file_name: string
+          file_url: string
+          id: string
+          position_document_id: string
+          rejection_reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+        }
+        Insert: {
+          collaborator_id: string
+          company_id: string
+          created_at?: string
+          file_name: string
+          file_url: string
+          id?: string
+          position_document_id: string
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+        }
+        Update: {
+          collaborator_id?: string
+          company_id?: string
+          created_at?: string
+          file_name?: string
+          file_url?: string
+          id?: string
+          position_document_id?: string
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collaborator_documents_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collaborator_documents_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collaborator_documents_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collaborator_documents_position_document_id_fkey"
+            columns: ["position_document_id"]
+            isOneToOne: false
+            referencedRelation: "position_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       collaborators: {
         Row: {
           admission_date: string | null
@@ -525,6 +596,96 @@ export type Database = {
           },
         ]
       }
+      onboarding_errors: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          onboarding_session_id: string
+          step: number
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          id?: string
+          onboarding_session_id: string
+          step: number
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          onboarding_session_id?: string
+          step?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_errors_onboarding_session_id_fkey"
+            columns: ["onboarding_session_id"]
+            isOneToOne: false
+            referencedRelation: "onboarding_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      onboarding_sessions: {
+        Row: {
+          collaborator_id: string
+          company_id: string
+          completed_at: string | null
+          created_at: string
+          current_step: number
+          data_validated: boolean
+          documents_completed: boolean
+          financial_validated: boolean
+          id: string
+        }
+        Insert: {
+          collaborator_id: string
+          company_id: string
+          completed_at?: string | null
+          created_at?: string
+          current_step?: number
+          data_validated?: boolean
+          documents_completed?: boolean
+          financial_validated?: boolean
+          id?: string
+        }
+        Update: {
+          collaborator_id?: string
+          company_id?: string
+          completed_at?: string | null
+          created_at?: string
+          current_step?: number
+          data_validated?: boolean
+          documents_completed?: boolean
+          financial_validated?: boolean
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_sessions_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "onboarding_sessions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "onboarding_sessions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_overview"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payroll_entries: {
         Row: {
           collaborator_id: string
@@ -665,6 +826,58 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies_overview"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      position_documents: {
+        Row: {
+          company_id: string
+          created_at: string
+          file_type: string
+          id: string
+          name: string
+          observation: string | null
+          position_id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          file_type?: string
+          id?: string
+          name: string
+          observation?: string | null
+          position_id: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          file_type?: string
+          id?: string
+          name?: string
+          observation?: string | null
+          position_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "position_documents_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "position_documents_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "position_documents_position_id_fkey"
+            columns: ["position_id"]
+            isOneToOne: false
+            referencedRelation: "positions"
             referencedColumns: ["id"]
           },
         ]
@@ -1319,7 +1532,12 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "rh" | "gestor" | "contador" | "colaborador"
-      collaborator_status: "ativo" | "inativo"
+      collaborator_status:
+        | "ativo"
+        | "inativo"
+        | "aguardando_documentacao"
+        | "validacao_pendente"
+        | "reprovado"
       payroll_entry_type:
         | "salario"
         | "vale"
@@ -1458,7 +1676,13 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "rh", "gestor", "contador", "colaborador"],
-      collaborator_status: ["ativo", "inativo"],
+      collaborator_status: [
+        "ativo",
+        "inativo",
+        "aguardando_documentacao",
+        "validacao_pendente",
+        "reprovado",
+      ],
       payroll_entry_type: [
         "salario",
         "vale",
