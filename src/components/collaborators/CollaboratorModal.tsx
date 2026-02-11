@@ -48,6 +48,7 @@ import { toast } from "sonner";
 import { formatCPFInput, cleanCPF, validateCPF, formatPhoneInput } from "@/lib/validators";
 import { formatCurrency, formatCurrencyForInput, parseCurrencyInput, getCurrentCompetencia } from "@/lib/formatters";
 import { calculateMonthlyBenefitValue, getBenefitCalculationDescription, DayAbbrev } from "@/lib/workingDays";
+import CollaboratorValidationTab from "./CollaboratorValidationTab";
 import { PositionChangeDialog } from "@/components/exames/PositionChangeDialog";
 import { ArrowRightLeft } from "lucide-react";
 
@@ -98,7 +99,7 @@ const CollaboratorModal = ({
     store_id: "",
     team_id: "",
     admission_date: "",
-    status: "ativo" as "ativo" | "inativo",
+    status: "ativo" as "ativo" | "inativo" | "aguardando_documentacao" | "validacao_pendente" | "reprovado",
     is_temp: false,
     password: "",
   });
@@ -1042,8 +1043,20 @@ const CollaboratorModal = ({
               <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            /* Content - Two Columns */
-            <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 divide-x min-h-0 overflow-hidden">
+            /* Content - Two or Three Columns */
+            <div className={`flex-1 grid grid-cols-1 ${["validacao_pendente", "reprovado"].includes(formData.status) ? "lg:grid-cols-3" : "lg:grid-cols-2"} divide-x min-h-0 overflow-hidden`}>
+              {/* Validation Column - shown for pending/rejected */}
+              {["validacao_pendente", "reprovado"].includes(formData.status) && collaboratorId && (
+                <CollaboratorValidationTab
+                  collaboratorId={collaboratorId}
+                  companyId={currentCompany?.id || ""}
+                  collaboratorStatus={formData.status}
+                  onStatusChange={() => {
+                    queryClient.invalidateQueries({ queryKey: ["collaborators"] });
+                    onOpenChange(false);
+                  }}
+                />
+              )}
               {/* Left Column - Dados Cadastrais */}
               <ScrollArea className="h-full">
                 <div className="p-6 space-y-4">
@@ -1262,7 +1275,7 @@ const CollaboratorModal = ({
                       <Label>Status</Label>
                       <Select
                         value={formData.status}
-                        onValueChange={(v) => setFormData((prev) => ({ ...prev, status: v as "ativo" | "inativo" }))}
+                        onValueChange={(v) => setFormData((prev) => ({ ...prev, status: v as any }))}
                       >
                         <SelectTrigger>
                           <SelectValue />

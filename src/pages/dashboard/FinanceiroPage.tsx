@@ -75,7 +75,7 @@ interface PayrollEntry {
 interface Collaborator {
   id: string;
   name: string;
-  status: "ativo" | "inativo";
+  status: "ativo" | "inativo" | "aguardando_documentacao" | "validacao_pendente" | "reprovado";
 }
 
 interface BenefitAssignment {
