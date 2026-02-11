@@ -47,7 +47,7 @@ const collaboratorSchema = z.object({
   admission_date: z.string().optional(),
   store_id: z.string().optional(),
   team_id: z.string().optional(),
-  status: z.enum(["ativo", "inativo"]),
+  
   is_temp: z.boolean(),
 });
 
@@ -95,7 +95,7 @@ const CollaboratorForm = ({
       admission_date: editingCollaborator?.admission_date || "",
       store_id: editingCollaborator?.store_id || "",
       team_id: editingCollaborator?.team_id || "",
-      status: editingCollaborator?.status || "ativo",
+      
       is_temp: editingCollaborator?.is_temp || false,
     },
   });
@@ -113,7 +113,7 @@ const CollaboratorForm = ({
     setIsLoading(true);
 
     try {
-      const collaboratorData = {
+      const baseData = {
         name: data.name,
         cpf: cleanCPF(data.cpf),
         email: data.email || null,
@@ -122,10 +122,13 @@ const CollaboratorForm = ({
         admission_date: data.admission_date || null,
         store_id: data.store_id || null,
         team_id: data.team_id || null,
-        status: data.status as "ativo" | "inativo",
         is_temp: data.is_temp,
         company_id: currentCompany.id,
       };
+
+      const collaboratorData = editingCollaborator
+        ? baseData
+        : { ...baseData, status: "aguardando_documentacao" as const };
 
       if (editingCollaborator) {
         const { error } = await supabase
@@ -344,30 +347,8 @@ const CollaboratorForm = ({
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Status</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="ativo">Ativo</SelectItem>
-                        <SelectItem value="inativo">Inativo</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+
+
 
               <FormField
                 control={form.control}
