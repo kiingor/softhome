@@ -1,21 +1,83 @@
 
-# Remover campo Status do formulario e definir status automatico
 
-## Problema
-O campo "Status" no formulario de cadastro do colaborador permite escolher manualmente entre "Ativo" e "Inativo". Ao cadastrar um novo colaborador, o status fica como "ativo" ao inves de "aguardando_documentacao", quebrando o fluxo de onboarding definido.
+# Correcoes no Cadastro do Colaborador
+
+## Problemas Identificados
+
+1. **Campo Status ainda visivel** no `CollaboratorModal.tsx` (linhas 1272-1288) - permite selecionar Ativo/Inativo manualmente
+2. **Default status "ativo"** nas linhas 302 e 317 do `CollaboratorModal.tsx` - novos colaboradores ficam ativos em vez de aguardando documentacao
+3. **Status enviado na atualizacao** (linha 651) - permite sobrescrever o status do fluxo
+4. **Layout da validacao** - atualmente aparece como coluna lateral, deveria ser uma aba separada (Geral + Validacao)
+5. **Sinais +/- na tela de Primeiro Acesso** - lancamentos financeiros nao mostram se sao credito ou debito
+
+---
 
 ## Mudancas
 
-### Arquivo: `src/components/collaborators/CollaboratorForm.tsx`
+### Arquivo: `src/components/collaborators/CollaboratorModal.tsx`
 
-1. **Remover o campo `status` do schema Zod** - nao sera mais um campo editavel
-2. **Remover o campo `status` dos defaultValues do formulario**
-3. **Na funcao `onSubmit`**: 
-   - Para **novo colaborador**: definir `status: "aguardando_documentacao"` automaticamente
-   - Para **edicao**: nao enviar o campo `status` (manter o valor atual no banco, pois o status e controlado pelo fluxo de onboarding/validacao)
-4. **Remover o bloco JSX do `<FormField name="status">`** (o Select de Ativo/Inativo) - linhas 347 a 370
+**1. Remover campo Status do formulario (linhas 1272-1288)**
+- Deletar o bloco do Select de Status
+- Manter apenas o campo "Colaborador Avulso" ocupando a largura toda
 
-### Resultado
-- Novo colaborador sempre comeca com `aguardando_documentacao`
-- Status so muda via fluxo: primeiro acesso -> validacao_pendente -> ativo/reprovado
-- Nenhum usuario consegue alterar o status manualmente pelo formulario
+**2. Corrigir default status para novo colaborador (linha 317)**
+- Mudar `status: "ativo"` para `status: "aguardando_documentacao"`
+
+**3. Nao enviar status no handleSave (linha 651)**
+- Para novos colaboradores: forcar `status: "aguardando_documentacao"` no saveData
+- Para edicao: remover `status` do payload de update (preservar o valor atual no banco)
+
+**4. Reorganizar layout com abas (Geral + Validacao)**
+- Substituir o layout de 3 colunas por um sistema de abas
+- **Aba "Geral"**: conteudo atual (dados cadastrais na esquerda + financeiro na direita) em 2 colunas
+- **Aba "Validacao"**: o componente `CollaboratorValidationTab` ocupando a largura toda
+- A aba "Validacao" so aparece quando o status e `validacao_pendente` ou `reprovado`
+- Importar `Tabs, TabsList, TabsTrigger, TabsContent` do componente de UI
+
+### Arquivo: `src/pages/colaborador/PrimeiroAcesso.tsx`
+
+**5. Adicionar sinais +/- nos lancamentos financeiros (Step 2)**
+- Lancamentos de tipo salario/adicional: prefixo `+` em verde
+- Lancamentos de tipo inss/irpf/fgts/custo/despesa/vale: prefixo `-` em vermelho
+
+---
+
+## Detalhes Tecnicos
+
+### Logica do status no handleSave
+
+```text
+// Novo colaborador
+const saveData = {
+  ...campos,
+  status: "aguardando_documentacao",
+};
+
+// Edicao - omitir status do payload
+const { status, ...saveDataWithoutStatus } = saveData;
+// usar saveDataWithoutStatus no update
+```
+
+### Estrutura de abas no modal
+
+```text
+DialogContent
+  DialogHeader (titulo)
+  Tabs
+    TabsList
+      TabsTrigger "Geral"
+      TabsTrigger "Validacao" (condicional)
+    TabsContent "geral"
+      grid 2 colunas (dados cadastrais | financeiro)
+    TabsContent "validacao"
+      CollaboratorValidationTab (largura total)
+  Footer (Cancelar | Salvar)
+```
+
+### Arquivos impactados
+
+| Arquivo | Mudanca |
+|---------|---------|
+| `src/components/collaborators/CollaboratorModal.tsx` | Remover status, corrigir default, adicionar abas |
+| `src/pages/colaborador/PrimeiroAcesso.tsx` | Sinais +/- nos lancamentos |
+
