@@ -46,8 +46,9 @@ export const useExams = () => {
       if (!companyId) return [];
       const { data, error } = await supabase
         .from("occupational_exams")
-        .select("*, collaborator:collaborators(id, name, cpf, position), position:positions!occupational_exams_position_id_fkey(id, name, risk_group)")
+        .select("*, collaborator:collaborators!inner(id, name, cpf, position, status), position:positions!occupational_exams_position_id_fkey(id, name, risk_group)")
         .eq("company_id", companyId)
+        .eq("collaborator.status", "ativo")
         .order("due_date", { ascending: true });
       if (error) throw error;
       return data as unknown as OccupationalExam[];

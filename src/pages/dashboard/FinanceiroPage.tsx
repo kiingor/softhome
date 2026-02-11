@@ -232,6 +232,7 @@ const FinanceiroPage = () => {
         .from("collaborators")
         .select("id, name, status")
         .eq("company_id", currentCompany.id)
+        .eq("status", "ativo")
         .eq("is_temp", false)
         .order("name");
 

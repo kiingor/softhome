@@ -36,7 +36,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { UserPlus, Search, Filter, MoreHorizontal, Edit, Trash2, Users } from "lucide-react";
+import { UserPlus, Search, Filter, MoreHorizontal, Edit, Trash2, Users, RefreshCw } from "lucide-react";
 import { useDashboard } from "@/contexts/DashboardContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -264,6 +264,30 @@ const ColaboradoresPage = () => {
     return teams.find((t) => t.id === teamId)?.name || "-";
   };
 
+  const handleReenviarDocumentacao = async (collaborator: Collaborator) => {
+    if (!confirm(`Reenviar documentação de ${collaborator.name}? Isso vai resetar o processo de onboarding.`)) return;
+    try {
+      // Delete onboarding session and documents
+      const { data: session } = await supabase
+        .from("onboarding_sessions")
+        .select("id")
+        .eq("collaborator_id", collaborator.id)
+        .maybeSingle();
+
+      if (session) {
+        await supabase.from("onboarding_errors").delete().eq("onboarding_session_id", session.id);
+        await supabase.from("onboarding_sessions").delete().eq("id", session.id);
+      }
+      await supabase.from("collaborator_documents").delete().eq("collaborator_id", collaborator.id);
+      await supabase.from("collaborators").update({ status: "aguardando_documentacao" }).eq("id", collaborator.id);
+      
+      toast({ title: "Documentação reenviada", description: `${collaborator.name} pode iniciar o primeiro acesso novamente.` });
+      loadCollaborators();
+    } catch (error: any) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    }
+  };
+
   const totalPages = Math.ceil(totalCount / pageSize);
 
   return (
@@ -318,6 +342,9 @@ const ColaboradoresPage = () => {
                       <SelectItem value="all">Todos</SelectItem>
                       <SelectItem value="ativo">Ativo</SelectItem>
                       <SelectItem value="inativo">Inativo</SelectItem>
+                      <SelectItem value="aguardando_documentacao">Aguardando Documentação</SelectItem>
+                      <SelectItem value="validacao_pendente">Validação Pendente</SelectItem>
+                      <SelectItem value="reprovado">Reprovado</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -411,71 +438,79 @@ const ColaboradoresPage = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody className="stagger-animation">
-                  {collaborators.map((collaborator) => (
-                    <TableRow key={collaborator.id} className="table-row-animate">
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{collaborator.name}</span>
-                          {collaborator.is_temp && (
-                            <Badge variant="secondary" className="text-xs">
-                              Avulso
-                            </Badge>
-                          )}
-                        </div>
-                        {collaborator.email && (
-                          <div className="text-sm text-muted-foreground">
-                            {collaborator.email}
+                  {collaborators.map((collaborator) => {
+                    const statusConfig: Record<string, { label: string; className: string }> = {
+                      ativo: { label: "Ativo", className: "bg-green-100 text-green-700 hover:bg-green-100" },
+                      inativo: { label: "Inativo", className: "bg-muted text-muted-foreground" },
+                      aguardando_documentacao: { label: "Aguardando Docs", className: "bg-yellow-100 text-yellow-700 hover:bg-yellow-100" },
+                      validacao_pendente: { label: "Validação Pendente", className: "bg-blue-100 text-blue-700 hover:bg-blue-100" },
+                      reprovado: { label: "Reprovado", className: "bg-red-100 text-red-700 hover:bg-red-100" },
+                    };
+                    const sc = statusConfig[collaborator.status] || statusConfig.inativo;
+
+                    return (
+                      <TableRow
+                        key={collaborator.id}
+                        className="table-row-animate cursor-pointer hover:bg-muted/50"
+                        onClick={() => handleEdit(collaborator)}
+                      >
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{collaborator.name}</span>
+                            {collaborator.is_temp && (
+                              <Badge variant="secondary" className="text-xs">Avulso</Badge>
+                            )}
                           </div>
-                        )}
-                      </TableCell>
-                      <TableCell className="font-mono text-sm">
-                        {formatCPF(collaborator.cpf)}
-                      </TableCell>
-                      <TableCell>{collaborator.position || "-"}</TableCell>
-                      <TableCell>{getStoreName(collaborator.store_id)}</TableCell>
-                      <TableCell>{getTeamName(collaborator.team_id)}</TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={collaborator.status === "ativo" ? "default" : "secondary"}
-                          className={
-                            collaborator.status === "ativo"
-                              ? "bg-green-100 text-green-700 hover:bg-green-100"
-                              : ""
-                          }
-                        >
-                          {collaborator.status === "ativo" ? "Ativo" : "Inativo"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {(canEdit || canDelete || isAdmin) && (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                <MoreHorizontal className="w-4 h-4" />
+                          {collaborator.email && (
+                            <div className="text-sm text-muted-foreground">{collaborator.email}</div>
+                          )}
+                        </TableCell>
+                        <TableCell className="font-mono text-sm">{formatCPF(collaborator.cpf)}</TableCell>
+                        <TableCell>{collaborator.position || "-"}</TableCell>
+                        <TableCell>{getStoreName(collaborator.store_id)}</TableCell>
+                        <TableCell>{getTeamName(collaborator.team_id)}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className={sc.className}>{sc.label}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                            {collaborator.status === "reprovado" && (canEdit || isAdmin) && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleReenviarDocumentacao(collaborator);
+                                }}
+                              >
+                                <RefreshCw className="w-3 h-3 mr-1" />
+                                Reenviar
                               </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              {(canEdit || isAdmin) && (
-                                <DropdownMenuItem onClick={() => handleEdit(collaborator)}>
-                                  <Edit className="w-4 h-4 mr-2" />
-                                  Editar
-                                </DropdownMenuItem>
-                              )}
-                              {(canDelete || isAdmin) && (
-                                <DropdownMenuItem
-                                  onClick={() => handleDelete(collaborator)}
-                                  className="text-destructive focus:text-destructive"
-                                >
-                                  <Trash2 className="w-4 h-4 mr-2" />
-                                  Excluir
-                                </DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                            )}
+                            {(canDelete || isAdmin) && (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                                    <MoreHorizontal className="w-4 h-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    onClick={() => handleDelete(collaborator)}
+                                    className="text-destructive focus:text-destructive"
+                                  >
+                                    <Trash2 className="w-4 h-4 mr-2" />
+                                    Excluir
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
