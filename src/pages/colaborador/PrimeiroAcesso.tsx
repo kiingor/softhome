@@ -294,12 +294,17 @@ export default function PrimeiroAcesso() {
                 <div>
                   <h3 className="font-medium mb-2">Lançamentos</h3>
                   <div className="space-y-2">
-                    {data.financialEntries.map((entry) => (
+                    {data.financialEntries.map((entry) => {
+                      const isCredit = entry.type === "salario" || entry.type === "adicional";
+                      const sign = isCredit ? "+" : "-";
+                      const colorClass = isCredit ? "text-green-600" : "text-red-600";
+                      return (
                       <div key={entry.id} className="flex justify-between items-center p-3 rounded-lg bg-muted/50">
                         <span className="text-sm">{ENTRY_TYPE_LABELS[entry.type] || entry.type}{entry.description ? ` - ${entry.description}` : ""}</span>
-                        <span className="font-medium">{formatCurrency(entry.value)}</span>
+                        <span className={`font-medium ${colorClass}`}>{sign} {formatCurrency(entry.value)}</span>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ) : (
