@@ -51,6 +51,7 @@ import { calculateMonthlyBenefitValue, getBenefitCalculationDescription, DayAbbr
 import CollaboratorValidationTab from "./CollaboratorValidationTab";
 import { PositionChangeDialog } from "@/components/exames/PositionChangeDialog";
 import { ArrowRightLeft } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 interface PendingEntry {
   id: string;
@@ -314,7 +315,7 @@ const CollaboratorModal = ({
           store_id: "",
           team_id: "",
           admission_date: "",
-          status: "ativo",
+          status: "aguardando_documentacao",
           is_temp: false,
           password: "",
         });
@@ -639,7 +640,7 @@ const CollaboratorModal = ({
         setIsCreatingUser(false);
       }
 
-      const saveData = {
+      const baseData = {
         name: formData.name.trim(),
         cpf: cleanedCPF,
         email: formData.email.trim().toLowerCase() || null,
@@ -648,12 +649,16 @@ const CollaboratorModal = ({
         store_id: formData.store_id || null,
         team_id: formData.team_id || null,
         admission_date: formData.admission_date || null,
-        status: formData.status,
         is_temp: formData.is_temp,
         company_id: currentCompany!.id,
         position: positions.find((p) => p.id === formData.position_id)?.name || null,
         ...(userId && { user_id: userId }),
       };
+
+      // New collaborators: force "aguardando_documentacao"; Editing: don't send status
+      const saveData = isNew
+        ? { ...baseData, status: "aguardando_documentacao" as const }
+        : baseData;
 
       if (isNew) {
         const { data: newCollab, error } = await supabase
@@ -1043,20 +1048,19 @@ const CollaboratorModal = ({
               <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            /* Content - Two or Three Columns */
-            <div className={`flex-1 grid grid-cols-1 ${["validacao_pendente", "reprovado"].includes(formData.status) ? "lg:grid-cols-3" : "lg:grid-cols-2"} divide-x min-h-0 overflow-hidden`}>
-              {/* Validation Column - shown for pending/rejected */}
+            /* Content with Tabs */
+            <Tabs defaultValue="geral" className="flex-1 flex flex-col min-h-0 overflow-hidden">
               {["validacao_pendente", "reprovado"].includes(formData.status) && collaboratorId && (
-                <CollaboratorValidationTab
-                  collaboratorId={collaboratorId}
-                  companyId={currentCompany?.id || ""}
-                  collaboratorStatus={formData.status}
-                  onStatusChange={() => {
-                    queryClient.invalidateQueries({ queryKey: ["collaborators"] });
-                    onOpenChange(false);
-                  }}
-                />
+                <div className="shrink-0 px-6 pt-2">
+                  <TabsList>
+                    <TabsTrigger value="geral">Geral</TabsTrigger>
+                    <TabsTrigger value="validacao">Validação</TabsTrigger>
+                  </TabsList>
+                </div>
               )}
+
+              <TabsContent value="geral" className="flex-1 min-h-0 overflow-hidden m-0">
+                <div className="h-full grid grid-cols-1 lg:grid-cols-2 divide-x min-h-0 overflow-hidden">
               {/* Left Column - Dados Cadastrais */}
               <ScrollArea className="h-full">
                 <div className="p-6 space-y-4">
@@ -1269,34 +1273,17 @@ const CollaboratorModal = ({
 
                   <Separator />
 
-                  {/* Status & Is Temp */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Status</Label>
-                      <Select
-                        value={formData.status}
-                        onValueChange={(v) => setFormData((prev) => ({ ...prev, status: v as any }))}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="ativo">Ativo</SelectItem>
-                          <SelectItem value="inativo">Inativo</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Colaborador Avulso</Label>
-                      <div className="flex items-center space-x-2 pt-2">
-                        <Switch
-                          checked={formData.is_temp}
-                          onCheckedChange={(v) => setFormData((prev) => ({ ...prev, is_temp: v }))}
-                        />
-                        <span className="text-sm text-muted-foreground">
-                          {formData.is_temp ? "Sim" : "Não"}
-                        </span>
-                      </div>
+                  {/* Colaborador Avulso */}
+                  <div className="space-y-2">
+                    <Label>Colaborador Avulso</Label>
+                    <div className="flex items-center space-x-2 pt-2">
+                      <Switch
+                        checked={formData.is_temp}
+                        onCheckedChange={(v) => setFormData((prev) => ({ ...prev, is_temp: v }))}
+                      />
+                      <span className="text-sm text-muted-foreground">
+                        {formData.is_temp ? "Sim" : "Não"}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -1596,7 +1583,23 @@ const CollaboratorModal = ({
                   </div>
                 </div>
               </div>
-            </div>
+                </div>
+              </TabsContent>
+
+              {["validacao_pendente", "reprovado"].includes(formData.status) && collaboratorId && (
+                <TabsContent value="validacao" className="flex-1 min-h-0 overflow-auto m-0 p-4">
+                  <CollaboratorValidationTab
+                    collaboratorId={collaboratorId}
+                    companyId={currentCompany?.id || ""}
+                    collaboratorStatus={formData.status}
+                    onStatusChange={() => {
+                      queryClient.invalidateQueries({ queryKey: ["collaborators"] });
+                      onOpenChange(false);
+                    }}
+                  />
+                </TabsContent>
+              )}
+            </Tabs>
           )}
 
           {/* Footer - Always Visible */}
