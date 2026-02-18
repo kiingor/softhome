@@ -495,6 +495,12 @@ const CollaboratorModal = ({
         throw new Error("Falha ao criar exame de mudança de função: " + examError.message);
       }
 
+      // Send WhatsApp notification for the new exam
+      sendWhatsAppNotification(currentCompany.id, collaboratorId, "exam_created", {
+        tipo_exame: "Mudança de Função",
+        data_exame: dueDate.toISOString().slice(0, 10),
+      });
+
       // Update local state
       setFormData((prev) => ({ ...prev, position_id: newPositionId }));
       setPreviousPositionId(newPositionId);
