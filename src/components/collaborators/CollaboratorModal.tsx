@@ -476,10 +476,11 @@ const CollaboratorModal = ({
       // 4. Always create mudanca_funcao exam on position change
       const dueDate = new Date();
       dueDate.setDate(dueDate.getDate() + 30);
-      await supabase.from("occupational_exams").insert({
+      const { error: examError } = await supabase.from("occupational_exams").insert({
         collaborator_id: collaboratorId,
         company_id: currentCompany.id,
         exam_type: "mudanca_funcao",
+        status: "pendente",
         due_date: dueDate.toISOString().slice(0, 10),
         position_id: newPositionId,
         previous_position_id: collaborator?.position_id || null,
@@ -489,6 +490,10 @@ const CollaboratorModal = ({
           ? "Gerado automaticamente por troca de função (grupo de risco alterado)"
           : "Gerado automaticamente por troca de função",
       });
+      if (examError) {
+        console.error("Erro ao criar exame de mudança de função:", examError);
+        throw new Error("Falha ao criar exame de mudança de função: " + examError.message);
+      }
 
       // Update local state
       setFormData((prev) => ({ ...prev, position_id: newPositionId }));
