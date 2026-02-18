@@ -43,6 +43,8 @@ import { UsersAccessTab } from "@/components/dashboard/UsersAccessTab";
 import { useIsCompanyAdmin, usePermissions } from "@/hooks/usePermissions";
 import { PaymentModal } from "@/components/subscription/PaymentModal";
 import { differenceInDays } from "date-fns";
+import WhatsAppConfigTab from "@/components/whatsapp/WhatsAppConfigTab";
+import { MessageSquare } from "lucide-react";
 
 const ConfiguracoesPage = () => {
   const { currentCompany } = useDashboard();
@@ -61,7 +63,7 @@ const ConfiguracoesPage = () => {
   // Handle tab from URL params
   useEffect(() => {
     const tab = searchParams.get("tab");
-    if (tab && ["conta", "usuarios", "plano"].includes(tab)) {
+    if (tab && ["conta", "usuarios", "plano", "whatsapp"].includes(tab)) {
       setActiveTab(tab);
     }
   }, [searchParams]);
@@ -340,6 +342,10 @@ const ConfiguracoesPage = () => {
                   Trial
                 </Badge>
               )}
+            </TabsTrigger>
+            <TabsTrigger value="whatsapp" className="gap-2">
+              <MessageSquare className="w-4 h-4" />
+              Notificações WhatsApp
             </TabsTrigger>
           </TabsList>
 
@@ -743,6 +749,11 @@ const ConfiguracoesPage = () => {
                 </AlertDialog>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Tab: WhatsApp Notifications */}
+          <TabsContent value="whatsapp">
+            <WhatsAppConfigTab />
           </TabsContent>
 
         </Tabs>

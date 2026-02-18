@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useExams } from "@/hooks/useExams";
 import { EXAM_TYPE_LABELS } from "@/lib/riskGroupDefaults";
+import { sendWhatsAppNotification } from "@/lib/whatsappNotifications";
 
 const EXAM_TYPES = [
   { value: "admissional", label: "Admissional" },
@@ -54,7 +55,7 @@ export const ExamRequestModal = ({ open, onOpenChange }: ExamRequestModalProps) 
   });
 
   const handleSubmit = () => {
-    if (!form.collaborator_id || !form.due_date) return;
+    if (!form.collaborator_id || !form.due_date || !currentCompany) return;
     const notes = form.exam_type === "avulso" && form.custom_name
       ? `[${form.custom_name}] ${form.notes || ""}`.trim()
       : form.notes || undefined;
@@ -67,6 +68,11 @@ export const ExamRequestModal = ({ open, onOpenChange }: ExamRequestModalProps) 
       },
       {
         onSuccess: () => {
+          // Send WhatsApp notification
+          sendWhatsAppNotification(currentCompany.id, form.collaborator_id, "exam_created", {
+            tipo_exame: EXAM_TYPE_LABELS[form.exam_type] || form.exam_type,
+            data_exame: form.due_date,
+          });
           onOpenChange(false);
           setForm({ collaborator_id: "", exam_type: "avulso", custom_name: "", due_date: "", notes: "" });
         },

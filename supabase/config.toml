@@ -20,3 +20,9 @@ verify_jwt = false
 
 [functions.onboarding-upload]
 verify_jwt = false
+
+[functions.whatsapp-api]
+verify_jwt = false
+
+[functions.whatsapp-webhook]
+verify_jwt = false
