@@ -26,6 +26,7 @@ const WhatsAppConfigTab = () => {
   const { currentCompany } = useDashboard();
   const queryClient = useQueryClient();
   const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [activeInstanceName, setActiveInstanceName] = useState<string | null>(null);
   const [savingTemplates, setSavingTemplates] = useState<Record<string, boolean>>({});
   const [editedTemplates, setEditedTemplates] = useState<Record<string, { message: string; enabled: boolean }>>({});
 
@@ -79,9 +80,13 @@ const WhatsAppConfigTab = () => {
       if (data?.error) throw new Error(data.error);
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      const newInstanceName = data?.instanceName;
       queryClient.invalidateQueries({ queryKey: ["whatsapp-instance"] });
-      setQrModalOpen(true);
+      if (newInstanceName) {
+        setActiveInstanceName(newInstanceName);
+        setQrModalOpen(true);
+      }
     },
     onError: (err: any) => {
       toast.error("Erro ao conectar: " + err.message);
@@ -155,6 +160,8 @@ const WhatsAppConfigTab = () => {
     } else if (!instance) {
       connectMutation.mutate();
     } else {
+      // Already connected - just open modal to show status
+      setActiveInstanceName(instance.instance_name);
       setQrModalOpen(true);
     }
   };
@@ -306,7 +313,7 @@ const WhatsAppConfigTab = () => {
       <QRCodeModal
         open={qrModalOpen}
         onOpenChange={setQrModalOpen}
-        instanceName={instance?.instance_name || null}
+        instanceName={activeInstanceName}
       />
     </div>
   );

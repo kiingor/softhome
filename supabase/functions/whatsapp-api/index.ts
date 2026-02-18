@@ -6,6 +6,34 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Default templates used when no custom template exists in DB
+const DEFAULT_TEMPLATES: Record<string, { message: string; enabled: boolean }> = {
+  collaborator_registered: {
+    message: "Olá {nome}! 👋\n\nBem-vindo(a) à *{empresa}*! 🎉\n\nEstamos muito felizes em te ter no time! 🚀\n\nPara completar seu cadastro, acesse o link abaixo e preencha seus dados:\n👉 {link_primeiro_acesso}\n\nQualquer dúvida, estamos aqui! 💬",
+    enabled: true,
+  },
+  documents_approved: {
+    message: "Parabéns {nome}! 🎊\n\nSeu cadastro foi *aprovado com sucesso*! ✅\n\nAgora você já faz parte oficialmente da equipe *{empresa}*! 🏆\n\nAcesse o Portal do Colaborador para ver seus dados:\n👉 {link_portal}\n\nSeja muito bem-vindo(a)! 🤗",
+    enabled: true,
+  },
+  documents_rejected: {
+    message: "Olá {nome}! 👋\n\nPrecisamos da sua atenção! ⚠️\n\nAlguns documentos do seu cadastro na *{empresa}* precisam de ajustes.\n\nAcesse o link abaixo para verificar e reenviar:\n👉 {link_primeiro_acesso}\n\nEstamos torcendo por você! 💪",
+    enabled: true,
+  },
+  exam_created: {
+    message: "Olá {nome}! 👋\n\nUm novo exame ocupacional foi agendado pra você na *{empresa}*! 🏥\n\n📋 Tipo: *{tipo_exame}*\n📅 Data limite: *{data_exame}*\n\nFique atento(a) ao prazo! ⏰\nQualquer dúvida, fale com o RH. 💬",
+    enabled: true,
+  },
+  vacation_starting: {
+    message: "Olá {nome}! 👋\n\nSuas férias foram aprovadas! 🏖️\n\n📅 Período: *{data_inicio}* a *{data_fim}*\n\nAproveite bastante esse descanso merecido! 😎☀️\n\nA equipe *{empresa}* deseja ótimas férias! 🌴",
+    enabled: true,
+  },
+  payslip_available: {
+    message: "Olá {nome}! 👋\n\nSeu contracheque de *{mes}/{ano}* já está disponível no Portal do Colaborador! 💰\n\nAcesse para conferir:\n👉 {link_portal}\n\nBom trabalho! 👏",
+    enabled: true,
+  },
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -32,7 +60,7 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { action, company_id, ...params } = body;
 
-    // Verify user belongs to company
+    // Verify user belongs to company (skip for send_notification which can be called internally)
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -202,22 +230,30 @@ Deno.serve(async (req) => {
           .maybeSingle();
 
         if (!instance) {
+          console.log("No active WhatsApp instance for company:", company_id);
           return new Response(
             JSON.stringify({ success: false, reason: "no_instance" }),
             { headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
 
-        // Get template
-        const { data: template } = await serviceClient
+        // Get template from DB first, fall back to defaults
+        const { data: dbTemplate } = await serviceClient
           .from("notification_templates")
           .select("*")
           .eq("company_id", company_id)
           .eq("event_type", event_type)
-          .eq("is_enabled", true)
           .maybeSingle();
 
-        if (!template) {
+        // Use DB template if exists, otherwise use default
+        const template = dbTemplate
+          ? { message_template: dbTemplate.message_template, is_enabled: dbTemplate.is_enabled }
+          : DEFAULT_TEMPLATES[event_type]
+            ? { message_template: DEFAULT_TEMPLATES[event_type].message, is_enabled: DEFAULT_TEMPLATES[event_type].enabled }
+            : null;
+
+        if (!template || !template.is_enabled) {
+          console.log("Template disabled or not found for event:", event_type);
           return new Response(
             JSON.stringify({ success: false, reason: "template_disabled" }),
             { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -232,6 +268,7 @@ Deno.serve(async (req) => {
           .single();
 
         if (!collaborator?.phone) {
+          console.log("Collaborator has no phone:", collaborator_id);
           await serviceClient.from("notification_logs").insert({
             company_id,
             collaborator_id,
@@ -274,6 +311,8 @@ Deno.serve(async (req) => {
           phone = "55" + phone;
         }
 
+        console.log(`Sending WhatsApp to ${phone} for event ${event_type}`);
+
         // Send message via EvolutionAPI
         const res = await fetch(`${baseUrl}/message/sendText/${instance.instance_name}`, {
           method: "POST",
@@ -286,6 +325,8 @@ Deno.serve(async (req) => {
 
         const sendResult = await res.json();
         const status = res.ok ? "sent" : "failed";
+
+        console.log(`WhatsApp send result: ${status}`, sendResult);
 
         // Log the notification
         await serviceClient.from("notification_logs").insert({
@@ -318,4 +359,3 @@ Deno.serve(async (req) => {
     );
   }
 });
-
