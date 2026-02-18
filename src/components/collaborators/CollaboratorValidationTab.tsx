@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Download, CheckCircle2, XCircle, AlertTriangle, Loader2, FileText } from "lucide-react";
 import { toast } from "sonner";
+import { sendWhatsAppNotification } from "@/lib/whatsappNotifications";
 
 interface ValidationTabProps {
   collaboratorId: string;
@@ -107,12 +108,13 @@ export default function CollaboratorValidationTab({ collaboratorId, companyId, c
   const handleApproveAll = async () => {
     setIsProcessing(true);
     try {
-      // Update collaborator status to ativo
       const { error } = await supabase.from("collaborators").update({ status: "ativo" }).eq("id", collaboratorId);
       if (error) throw error;
       toast.success("Cadastro aprovado! Colaborador ativado.");
       onStatusChange();
       setApproveDialogOpen(false);
+      // Send WhatsApp notification
+      sendWhatsAppNotification(companyId, collaboratorId, "documents_approved");
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -130,6 +132,8 @@ export default function CollaboratorValidationTab({ collaboratorId, companyId, c
       onStatusChange();
       setRejectDialogOpen(false);
       setGlobalRejectReason("");
+      // Send WhatsApp notification
+      sendWhatsAppNotification(companyId, collaboratorId, "documents_rejected");
     } catch (err: any) {
       toast.error(err.message);
     } finally {

@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, Calendar, AlertTriangle } from "lucide-react";
 import { differenceInCalendarDays, format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { sendWhatsAppNotification } from "@/lib/whatsappNotifications";
 
 interface VacationRequestModalProps {
   open: boolean;
@@ -124,6 +125,12 @@ const VacationRequestModal = ({ open, onOpenChange, preSelectedCollaboratorId }:
       sell_days: hasSellDays ? sellDays : 0,
       requested_by: user.id,
       notes: notes || undefined,
+    });
+
+    // Send WhatsApp notification
+    sendWhatsAppNotification(currentCompany.id, collaboratorId, "vacation_starting", {
+      data_inicio: startDate,
+      data_fim: endDate,
     });
 
     onOpenChange(false);

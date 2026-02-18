@@ -38,6 +38,7 @@ import { getMonthName } from "@/lib/formatters";
 import { processFilesForMatching } from "@/lib/payslipMatcher";
 import PayslipUploadZone from "@/components/contabilidade/PayslipUploadZone";
 import PayslipAssociationTable from "@/components/contabilidade/PayslipAssociationTable";
+import { sendWhatsAppNotification } from "@/lib/whatsappNotifications";
 
 type Step = "upload" | "associate" | "complete";
 
@@ -194,6 +195,12 @@ const ContabilidadePage = () => {
           });
 
           if (insertError) throw insertError;
+
+          // Send WhatsApp notification
+          sendWhatsAppNotification(currentCompany.id, collaboratorId, "payslip_available", {
+            mes: String(selectedMonth).padStart(2, "0"),
+            ano: String(selectedYear),
+          });
 
           successCount++;
         } catch (error) {

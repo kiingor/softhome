@@ -503,6 +503,109 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_logs: {
+        Row: {
+          collaborator_id: string | null
+          company_id: string
+          created_at: string
+          error_message: string | null
+          event_type: string
+          id: string
+          message_sent: string
+          phone_number: string | null
+          status: string
+        }
+        Insert: {
+          collaborator_id?: string | null
+          company_id: string
+          created_at?: string
+          error_message?: string | null
+          event_type: string
+          id?: string
+          message_sent: string
+          phone_number?: string | null
+          status?: string
+        }
+        Update: {
+          collaborator_id?: string | null
+          company_id?: string
+          created_at?: string
+          error_message?: string | null
+          event_type?: string
+          id?: string
+          message_sent?: string
+          phone_number?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_logs_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_logs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_logs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_overview"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_templates: {
+        Row: {
+          company_id: string
+          created_at: string
+          event_type: string
+          id: string
+          is_enabled: boolean
+          message_template: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          event_type: string
+          id?: string
+          is_enabled?: boolean
+          message_template: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          event_type?: string
+          id?: string
+          is_enabled?: boolean
+          message_template?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_templates_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_templates_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_overview"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       occupational_exams: {
         Row: {
           auto_generated: boolean
@@ -1426,6 +1529,54 @@ export type Database = {
             columns: ["vacation_period_id"]
             isOneToOne: false
             referencedRelation: "vacation_periods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      whatsapp_instances: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          instance_id: string | null
+          instance_name: string
+          phone_number: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          instance_id?: string | null
+          instance_name: string
+          phone_number?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          instance_id?: string | null
+          instance_name?: string
+          phone_number?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_instances_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_instances_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies_overview"
             referencedColumns: ["id"]
           },
         ]

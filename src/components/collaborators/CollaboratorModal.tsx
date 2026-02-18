@@ -46,6 +46,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatCPFInput, cleanCPF, validateCPF, formatPhoneInput } from "@/lib/validators";
+import { sendWhatsAppNotification } from "@/lib/whatsappNotifications";
 import { formatCurrency, formatCurrencyForInput, parseCurrencyInput, getCurrentCompetencia } from "@/lib/formatters";
 import { calculateMonthlyBenefitValue, getBenefitCalculationDescription, DayAbbrev } from "@/lib/workingDays";
 import CollaboratorValidationTab from "./CollaboratorValidationTab";
@@ -701,6 +702,9 @@ const CollaboratorModal = ({
           ? `${formData.name} foi cadastrado com acesso ao Portal!`
           : "Colaborador criado com sucesso!";
         toast.success(message);
+
+        // Send WhatsApp notification
+        sendWhatsAppNotification(currentCompany!.id, newCollab.id, "collaborator_registered");
       } else {
         const updateData = {
           ...saveData,
