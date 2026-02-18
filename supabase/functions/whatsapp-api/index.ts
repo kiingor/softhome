@@ -157,6 +157,34 @@ Deno.serve(async (req) => {
         });
       }
 
+      case "delete_instance": {
+        const { instance_name } = params;
+        
+        // Try to delete from EvolutionAPI (ignore errors if instance doesn't exist)
+        try {
+          await fetch(`${baseUrl}/instance/delete/${instance_name}`, {
+            method: "DELETE",
+            headers,
+          });
+        } catch (_e) {
+          // Ignore - instance may not exist on Evolution side
+        }
+
+        // Delete from DB
+        const serviceClient = createClient(
+          SUPABASE_URL,
+          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+        );
+        await serviceClient
+          .from("whatsapp_instances")
+          .delete()
+          .eq("company_id", company_id);
+
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       case "send_notification": {
         const { collaborator_id, event_type } = params;
 

@@ -136,12 +136,26 @@ const WhatsAppConfigTab = () => {
     }
   };
 
-  const handleConnect = () => {
-    if (instance?.instance_name) {
-      // Instance exists, just open QR modal
-      setQrModalOpen(true);
-    } else {
+  const handleConnect = async () => {
+    if (instance?.instance_name && instance?.status !== "open") {
+      // Instance exists but not connected - delete old and create new
+      try {
+        await supabase.functions.invoke("whatsapp-api", {
+          body: {
+            action: "delete_instance",
+            company_id: currentCompany!.id,
+            instance_name: instance.instance_name,
+          },
+        });
+        queryClient.invalidateQueries({ queryKey: ["whatsapp-instance"] });
+      } catch (_e) {
+        // Continue even if delete fails
+      }
       connectMutation.mutate();
+    } else if (!instance) {
+      connectMutation.mutate();
+    } else {
+      setQrModalOpen(true);
     }
   };
 
