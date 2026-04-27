@@ -2,10 +2,9 @@ import { Outlet, Navigate } from "react-router-dom";
 import { DashboardProvider, useDashboard } from "@/contexts/DashboardContext";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
-import { TrialExpiredDialog } from "@/components/dashboard/TrialExpiredDialog";
 
 const DashboardLayoutContent = () => {
-  const { user, isLoading, isTrialExpired } = useDashboard();
+  const { user, isLoading } = useDashboard();
 
   if (isLoading) {
     return (
@@ -25,18 +24,15 @@ const DashboardLayoutContent = () => {
   }
 
   return (
-    <>
-      {isTrialExpired && <TrialExpiredDialog />}
-      <div className="h-screen flex w-full bg-background overflow-hidden">
-        <DashboardSidebar />
-        <div className="flex-1 flex flex-col min-w-0 h-full">
-          <DashboardHeader />
-          <main className="flex-1 p-6 overflow-auto">
-            <Outlet />
-          </main>
-        </div>
+    <div className="h-screen flex w-full bg-background overflow-hidden">
+      <DashboardSidebar />
+      <div className="flex-1 flex flex-col min-w-0 h-full">
+        <DashboardHeader />
+        <main className="flex-1 p-6 overflow-auto">
+          <Outlet />
+        </main>
       </div>
-    </>
+    </div>
   );
 };
 

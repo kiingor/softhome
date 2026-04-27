@@ -8,43 +8,21 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import {
   Building2,
-  CreditCard,
-  Crown,
-  AlertTriangle,
-  Check,
   Loader2,
   Save,
   Users,
-  Clock,
   Upload,
   Trash2,
   Image as ImageIcon,
+  MessageSquare,
 } from "lucide-react";
 import { toast } from "sonner";
-import { PLANS, getPlanById, PlanId } from "@/lib/planUtils";
 import { UsersAccessTab } from "@/components/dashboard/UsersAccessTab";
 import { useIsCompanyAdmin, usePermissions } from "@/hooks/usePermissions";
-import { PaymentModal } from "@/components/subscription/PaymentModal";
-import { differenceInDays } from "date-fns";
 import WhatsAppConfigTab from "@/components/whatsapp/WhatsAppConfigTab";
-import { MessageSquare } from "lucide-react";
 
 const ConfiguracoesPage = () => {
   const { currentCompany } = useDashboard();
@@ -54,8 +32,6 @@ const ConfiguracoesPage = () => {
   const canAccessUsersTab = isAdmin || canViewPermissoes;
   const [searchParams] = useSearchParams();
   const [isEditing, setIsEditing] = useState(false);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [selectedPlanForPayment, setSelectedPlanForPayment] = useState<PlanId>("essencial");
   const [activeTab, setActiveTab] = useState("conta");
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
@@ -63,7 +39,7 @@ const ConfiguracoesPage = () => {
   // Handle tab from URL params
   useEffect(() => {
     const tab = searchParams.get("tab");
-    if (tab && ["conta", "usuarios", "plano", "whatsapp"].includes(tab)) {
+    if (tab && ["conta", "usuarios", "whatsapp"].includes(tab)) {
       setActiveTab(tab);
     }
   }, [searchParams]);
@@ -102,22 +78,6 @@ const ConfiguracoesPage = () => {
     enabled: !!currentCompany?.id,
   });
 
-  // Count active collaborators
-  const { data: collaboratorCount = 0 } = useQuery({
-    queryKey: ["collaborator-count", currentCompany?.id],
-    queryFn: async () => {
-      if (!currentCompany?.id) return 0;
-      const { count, error } = await supabase
-        .from("collaborators")
-        .select("*", { count: "exact", head: true })
-        .eq("company_id", currentCompany.id)
-        .eq("status", "ativo");
-      if (error) throw error;
-      return count || 0;
-    },
-    enabled: !!currentCompany?.id,
-  });
-
   // Update company mutation
   const updateCompanyMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
@@ -141,38 +101,6 @@ const ConfiguracoesPage = () => {
     },
     onError: () => {
       toast.error("Erro ao atualizar dados");
-    },
-  });
-
-  // Cancel subscription mutation
-  const cancelSubscriptionMutation = useMutation({
-    mutationFn: async () => {
-      if (!currentCompany?.id) throw new Error("Empresa não encontrada");
-      
-      if (company?.asaas_subscription_id) {
-        const { error } = await supabase.functions.invoke("asaas", {
-          body: {
-            action: "cancelSubscription",
-            subscriptionId: company.asaas_subscription_id,
-          },
-        });
-        if (error) throw error;
-      }
-
-      const { error: updateError } = await supabase
-        .from("companies")
-        .update({
-          subscription_status: "canceled",
-        })
-        .eq("id", currentCompany.id);
-      if (updateError) throw updateError;
-    },
-    onSuccess: () => {
-      toast.success("Assinatura cancelada");
-      queryClient.invalidateQueries({ queryKey: ["company-settings"] });
-    },
-    onError: () => {
-      toast.error("Erro ao cancelar assinatura");
     },
   });
 
@@ -254,27 +182,6 @@ const ConfiguracoesPage = () => {
     }
   };
 
-  // Calculate trial info
-  const trialDaysRemaining = company?.trial_ends_at 
-    ? Math.max(0, differenceInDays(new Date(company.trial_ends_at), new Date()))
-    : 0;
-  const isTrial = company?.subscription_status !== 'active' && company?.trial_ends_at && trialDaysRemaining >= 0;
-
-  const currentPlanData = company?.plan_type ? getPlanById(company.plan_type) : PLANS.essencial;
-  const planLimit = currentPlanData.collaboratorLimit;
-  const usagePercent = Math.min((collaboratorCount / planLimit) * 100, 100);
-
-  const handleSubscribe = (planId: PlanId) => {
-    setSelectedPlanForPayment(planId);
-    setShowPaymentModal(true);
-  };
-
-  const handlePaymentSuccess = () => {
-    setShowPaymentModal(false);
-    queryClient.invalidateQueries({ queryKey: ["company-settings"] });
-    window.location.reload();
-  };
-
   const handleSave = () => {
     updateCompanyMutation.mutate(formData);
   };
@@ -318,7 +225,7 @@ const ConfiguracoesPage = () => {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Configurações</h1>
           <p className="text-muted-foreground">
-            Gerencie os dados da sua conta e assinatura
+            Gerencie os dados da sua conta
           </p>
         </div>
 
@@ -334,15 +241,6 @@ const ConfiguracoesPage = () => {
                 Usuários e Acessos
               </TabsTrigger>
             )}
-            <TabsTrigger value="plano" className="gap-2">
-              <CreditCard className="w-4 h-4" />
-              Plano e Assinatura
-              {isTrial && (
-                <Badge variant="outline" className="ml-1 text-xs border-primary/50 text-primary">
-                  Trial
-                </Badge>
-              )}
-            </TabsTrigger>
             <TabsTrigger value="whatsapp" className="gap-2">
               <MessageSquare className="w-4 h-4" />
               Notificações WhatsApp
@@ -545,226 +443,12 @@ const ConfiguracoesPage = () => {
             </TabsContent>
           )}
 
-          {/* Tab: Plano e Assinatura */}
-          <TabsContent value="plano" className="space-y-6">
-            {/* Current Plan Card */}
-            <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
-              <CardHeader>
-                <div className="flex items-center justify-between flex-wrap gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center">
-                      <Crown className="w-6 h-6 text-primary" />
-                    </div>
-                    <div>
-                      <CardTitle className="flex items-center gap-2">
-                        Plano {currentPlanData.name}
-                        <Badge
-                          variant={
-                            company?.subscription_status === "active"
-                              ? "default"
-                              : "secondary"
-                          }
-                        >
-                          {company?.subscription_status === "active"
-                            ? "Ativo"
-                            : isTrial
-                            ? "Trial"
-                            : "Inativo"}
-                        </Badge>
-                      </CardTitle>
-                      <CardDescription>
-                        R$ {currentPlanData.price.toFixed(2).replace(".", ",")}/mês
-                      </CardDescription>
-                    </div>
-                  </div>
-                  
-                  {isTrial && (
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Clock className="w-4 h-4" />
-                        <span>{trialDaysRemaining} dia{trialDaysRemaining !== 1 ? 's' : ''} restantes</span>
-                      </div>
-                      <Button onClick={() => handleSubscribe(company?.plan_type as PlanId || "essencial")}>
-                        <CreditCard className="w-4 h-4 mr-2" />
-                        Assinar Plano
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <div className="flex items-center justify-between text-sm mb-2">
-                    <span className="text-muted-foreground">
-                      Colaboradores ativos
-                    </span>
-                    <span className="font-medium">
-                      {collaboratorCount} / {planLimit}
-                    </span>
-                  </div>
-                  <div className="h-2 bg-muted rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all ${
-                        usagePercent >= 90
-                          ? "bg-destructive"
-                          : usagePercent >= 70
-                          ? "bg-yellow-500"
-                          : "bg-primary"
-                      }`}
-                      style={{ width: `${usagePercent}%` }}
-                    />
-                  </div>
-                  {usagePercent >= 90 && (
-                    <p className="text-xs text-destructive mt-1 flex items-center gap-1">
-                      <AlertTriangle className="w-3 h-3" />
-                      Próximo do limite. Considere fazer upgrade.
-                    </p>
-                  )}
-                </div>
-
-                <Separator />
-
-                <div>
-                  <p className="text-sm font-medium mb-2">
-                    Recursos do seu plano:
-                  </p>
-                  <ul className="space-y-1">
-                    {currentPlanData.features.map((feature, i) => (
-                      <li
-                        key={i}
-                        className="text-sm text-muted-foreground flex items-center gap-2"
-                      >
-                        <Check className="w-4 h-4 text-green-500" />
-                        {feature}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Available Plans */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Planos Disponíveis</CardTitle>
-                <CardDescription>
-                  Escolha o melhor plano para sua empresa
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {Object.values(PLANS).map((plan) => {
-                    const isCurrentPlan =
-                      plan.id === (company?.plan_type || "essencial");
-                    return (
-                      <div
-                        key={plan.id}
-                        className={`p-4 rounded-lg border-2 transition-all ${
-                          isCurrentPlan
-                            ? "border-primary bg-primary/5"
-                            : "border-border hover:border-primary/50"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-semibold">{plan.name}</h4>
-                          {isCurrentPlan && (
-                            <Badge variant="secondary" className="text-xs">
-                              Atual
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-2xl font-bold text-primary">
-                          R$ {plan.price.toFixed(0)}
-                          <span className="text-sm font-normal text-muted-foreground">
-                            /mês
-                          </span>
-                        </p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Até {plan.collaboratorLimit} colaboradores
-                        </p>
-                        {!isCurrentPlan && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="w-full mt-3"
-                            onClick={() => handleSubscribe(plan.id as PlanId)}
-                          >
-                            {isTrial
-                              ? "Assinar"
-                              : plan.price > currentPlanData.price
-                              ? "Fazer Upgrade"
-                              : "Alterar Plano"}
-                          </Button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Cancel Subscription */}
-            <Card className="border-destructive/20">
-              <CardHeader>
-                <CardTitle className="text-destructive flex items-center gap-2">
-                  <AlertTriangle className="w-5 h-5" />
-                  Zona de Perigo
-                </CardTitle>
-                <CardDescription>
-                  Ações irreversíveis para sua assinatura
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button
-                      variant="destructive"
-                      disabled={company?.subscription_status === "canceled"}
-                    >
-                      Cancelar Assinatura
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Cancelar Assinatura?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Você perderá acesso aos recursos premium ao final do
-                        período atual. Seus dados serão mantidos por 30 dias
-                        após o cancelamento.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Voltar</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={() => cancelSubscriptionMutation.mutate()}
-                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                      >
-                        {cancelSubscriptionMutation.isPending ? (
-                          <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                        ) : null}
-                        Confirmar Cancelamento
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
           {/* Tab: WhatsApp Notifications */}
           <TabsContent value="whatsapp">
             <WhatsAppConfigTab />
           </TabsContent>
 
         </Tabs>
-
-        {/* Payment Modal */}
-        <PaymentModal
-          open={showPaymentModal}
-          onClose={() => setShowPaymentModal(false)}
-          planId={selectedPlanForPayment}
-          onSuccess={handlePaymentSuccess}
-        />
       </div>
     </PermissionGuard>
   );

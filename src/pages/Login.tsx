@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { z } from "zod";
-import { Eye, EyeOff, ArrowLeft } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 
 const loginSchema = z.object({
   email: z.string().email("Email inválido"),
@@ -93,21 +93,13 @@ const Login = () => {
   return (
     <div className="min-h-screen gradient-warm flex items-center justify-center p-6">
       <div className="w-full max-w-md">
-        <Link 
-          to="/" 
-          className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-8"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Voltar ao início
-        </Link>
-
         <div className="bg-card rounded-2xl shadow-card p-8 border border-border">
           <div className="text-center mb-8">
-            <Link to="/" className="inline-flex items-center gap-2 mb-4">
+            <div className="inline-flex items-center gap-2 mb-4">
               <div className="w-12 h-12 rounded-xl gradient-hero flex items-center justify-center shadow-soft">
                 <span className="text-primary-foreground font-bold text-xl">M</span>
               </div>
-            </Link>
+            </div>
             <h1 className="text-2xl font-bold text-foreground">Bem-vindo de volta</h1>
             <p className="text-muted-foreground mt-2">
               Entre na sua conta Meu RH
@@ -166,12 +158,6 @@ const Login = () => {
             </Button>
           </form>
 
-          <p className="text-center text-sm text-muted-foreground mt-6">
-            Não tem uma conta?{" "}
-            <Link to="/signup" className="text-primary font-semibold hover:underline">
-              Crie agora
-            </Link>
-          </p>
         </div>
       </div>
     </div>

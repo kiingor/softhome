@@ -2,12 +2,10 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { useDynamicFavicon } from "@/hooks/useDynamicFavicon";
-import Index from "./pages/Index";
 import Login from "./pages/Login";
-import Signup from "./pages/Signup";
 
 import NotFound from "./pages/NotFound";
 import DashboardLayout from "./components/dashboard/DashboardLayout";
@@ -37,16 +35,6 @@ import MeusContracheques from "./pages/colaborador/MeusContracheques";
 import MinhasFeriasPage from "./pages/colaborador/MinhasFeriasPage";
 import MeusExamesPage from "./pages/colaborador/MeusExamesPage";
 
-import { MasterProvider } from "./contexts/MasterContext";
-import { MasterGuard } from "./components/master/MasterGuard";
-import { MasterLayout } from "./components/master/MasterLayout";
-import MasterDashboard from "./pages/master/MasterDashboard";
-import MasterEmpresasPage from "./pages/master/MasterEmpresasPage";
-import MasterCompanyDetailsPage from "./pages/master/MasterCompanyDetailsPage";
-import MasterMensagensPage from "./pages/master/MasterMensagensPage";
-import MasterConfiguracoesPage from "./pages/master/MasterConfiguracoesPage";
-import MasterLoginPage from "./pages/master/MasterLoginPage";
-
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -67,11 +55,9 @@ const App = () => {
         <Sonner />
         <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
+          <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
-          
-          
+
           {/* Dashboard routes with persistent layout */}
           <Route path="/dashboard" element={<DashboardLayout />}>
             <Route index element={<DashboardHome />} />
@@ -166,25 +152,6 @@ const App = () => {
             }
           />
 
-          {/* Portal Master - Administração RH360 */}
-          <Route path="/master/login" element={<MasterLoginPage />} />
-          <Route
-            path="/master"
-            element={
-              <MasterProvider>
-                <MasterGuard>
-                  <MasterLayout />
-                </MasterGuard>
-              </MasterProvider>
-            }
-          >
-            <Route index element={<MasterDashboard />} />
-            <Route path="empresas" element={<MasterEmpresasPage />} />
-            <Route path="empresas/:id" element={<MasterCompanyDetailsPage />} />
-            <Route path="mensagens" element={<MasterMensagensPage />} />
-            <Route path="configuracoes" element={<MasterConfiguracoesPage />} />
-          </Route>
-          
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
