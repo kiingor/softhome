@@ -11,7 +11,7 @@ const DashboardLayoutContent = () => {
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <div className="w-12 h-12 rounded-xl gradient-hero flex items-center justify-center shadow-soft mx-auto mb-4 animate-pulse">
-            <span className="text-primary-foreground font-bold text-xl">M</span>
+            <span className="text-primary-foreground font-extrabold text-xl">S</span>
           </div>
           <p className="text-muted-foreground">Carregando...</p>
         </div>

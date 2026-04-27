@@ -75,7 +75,7 @@ const Login = () => {
 
       toast({
         title: "Login realizado! 🎉",
-        description: "Bem-vindo de volta ao Meu RH!",
+        description: "Bem-vindo de volta ao SoftHome!",
       });
 
       navigate("/dashboard");
@@ -97,12 +97,12 @@ const Login = () => {
           <div className="text-center mb-8">
             <div className="inline-flex items-center gap-2 mb-4">
               <div className="w-12 h-12 rounded-xl gradient-hero flex items-center justify-center shadow-soft">
-                <span className="text-primary-foreground font-bold text-xl">M</span>
+                <span className="text-primary-foreground font-extrabold text-xl">S</span>
               </div>
             </div>
             <h1 className="text-2xl font-bold text-foreground">Bem-vindo de volta</h1>
             <p className="text-muted-foreground mt-2">
-              Entre na sua conta Meu RH
+              Entre na sua conta SoftHome
             </p>
           </div>
 

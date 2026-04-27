@@ -135,7 +135,7 @@ const PortalLogin = () => {
           <div className="text-center mb-8">
             <div className="inline-flex items-center gap-2 mb-4">
               <div className="w-12 h-12 rounded-xl gradient-hero flex items-center justify-center shadow-soft">
-                <span className="text-primary-foreground font-bold text-xl">M</span>
+                <span className="text-primary-foreground font-extrabold text-xl">S</span>
               </div>
             </div>
             <h1 className="text-2xl font-bold text-foreground">
