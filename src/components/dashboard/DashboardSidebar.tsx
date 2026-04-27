@@ -17,6 +17,7 @@ import {
   Loader2,
   Calendar,
   ClipboardCheck,
+  Trophy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -55,6 +56,7 @@ const menuCategories: MenuCategory[] = [
   {
     label: "Gestão",
     items: [
+      { icon: Trophy, label: "Jornada", href: "/dashboard/jornada", module: "jornada" },
       { icon: DollarSign, label: "Lançamentos", href: "/dashboard/financeiro", module: "financeiro" },
       { icon: Calendar, label: "Férias", href: "/dashboard/ferias", module: "ferias" },
       { icon: ClipboardCheck, label: "Exames", href: "/dashboard/exames", module: "exames" },

@@ -22,6 +22,10 @@ import ConfiguracoesPage from "./pages/dashboard/ConfiguracoesPage";
 import ContabilidadePage from "./pages/dashboard/ContabilidadePage";
 import ExamesPage from "./pages/dashboard/ExamesPage";
 
+// Modules (novo layout per CLAUDE.md)
+import JornadaPage from "./modules/journey/pages/JornadaPage";
+import BadgesPage from "./modules/journey/pages/BadgesPage";
+
 // Portal do Colaborador
 import { PortalProvider } from "./contexts/PortalContext";
 import PortalLayout from "./components/portal/PortalLayout";
@@ -72,6 +76,8 @@ const App = () => {
             <Route path="configuracoes" element={<ConfiguracoesPage />} />
             <Route path="contabilidade" element={<ContabilidadePage />} />
             <Route path="exames" element={<ExamesPage />} />
+            <Route path="jornada" element={<JornadaPage />} />
+            <Route path="jornada/badges" element={<BadgesPage />} />
           </Route>
 
           {/* Portal do Colaborador - Login */}

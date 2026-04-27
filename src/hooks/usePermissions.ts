@@ -2,19 +2,20 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useDashboard } from "@/contexts/DashboardContext";
 
-export type ModuleType = 
-  | "colaboradores" 
-  | "setores" 
-  | "cargos" 
-  | "empresas" 
-  | "beneficios" 
-  | "ferias" 
-  | "financeiro" 
-  | "relatorios" 
+export type ModuleType =
+  | "colaboradores"
+  | "setores"
+  | "cargos"
+  | "empresas"
+  | "beneficios"
+  | "ferias"
+  | "financeiro"
+  | "relatorios"
   | "contabilidade"
   | "configuracoes"
   | "permissoes"
-  | "exames";
+  | "exames"
+  | "jornada";
 
 export interface ModulePermissions {
   canView: boolean;
