@@ -97,11 +97,11 @@ export default function DashboardSidebar() {
       <div className="h-16 px-6 border-b border-border flex items-center">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl gradient-hero flex items-center justify-center shadow-soft">
-            <span className="text-primary-foreground font-bold text-xl">M</span>
+            <span className="text-primary-foreground font-extrabold text-xl">S</span>
           </div>
           <div>
-            <h1 className="font-bold text-foreground">Meu RH</h1>
-            <p className="text-xs text-muted-foreground">Gestão de Pessoas</p>
+            <h1 className="font-extrabold text-foreground tracking-tight">SoftHome</h1>
+            <p className="text-xs text-muted-foreground">Gente & Cultura</p>
           </div>
         </div>
       </div>

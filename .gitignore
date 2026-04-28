@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Supabase CLI cache (project ref, link metadata)
+supabase/.temp/
+supabase/.branches/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

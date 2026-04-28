@@ -9,11 +9,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { LogOut, User, Settings, Clock } from "lucide-react";
-import { useNavigate, Link } from "react-router-dom";
+import { LogOut, User, Settings } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { NotificationBell } from "./NotificationBell";
-import { differenceInDays } from "date-fns";
 
 const roleLabels: Record<string, string> = {
   admin: "Administrador",
@@ -24,12 +23,12 @@ const roleLabels: Record<string, string> = {
 };
 
 const DashboardHeader = () => {
-  const { user, profile, roles, currentCompany, signOut } = useDashboard();
+  const { user, profile, roles, signOut } = useDashboard();
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
     await signOut();
-    navigate("/");
+    navigate("/login");
   };
 
   const getInitials = () => {
@@ -46,15 +45,6 @@ const DashboardHeader = () => {
 
   const primaryRole = roles[0];
 
-  // Calculate trial days remaining
-  const trialDaysRemaining = currentCompany?.trial_ends_at 
-    ? Math.max(0, differenceInDays(new Date(currentCompany.trial_ends_at), new Date()))
-    : 0;
-
-  const isTrial = currentCompany?.subscription_status !== 'active' && 
-                  currentCompany?.trial_ends_at && 
-                  trialDaysRemaining > 0;
-
   return (
     <header className="h-16 border-b border-border bg-card flex items-center justify-between px-6 sticky top-0 z-40">
       <div className="flex items-center gap-4">
@@ -62,19 +52,6 @@ const DashboardHeader = () => {
       </div>
 
       <div className="flex items-center gap-3">
-        {/* Trial Badge */}
-        {isTrial && (
-          <Link to="/dashboard/configuracoes?tab=plano">
-            <Badge 
-              variant="outline" 
-              className="cursor-pointer hover:bg-primary/10 gap-1.5 border-primary/50 text-primary"
-            >
-              <Clock className="w-3 h-3" />
-              Trial: {trialDaysRemaining} dia{trialDaysRemaining !== 1 ? 's' : ''}
-            </Badge>
-          </Link>
-        )}
-
         {/* Notifications */}
         <NotificationBell />
 

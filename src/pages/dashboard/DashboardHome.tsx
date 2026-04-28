@@ -450,7 +450,7 @@ const DashboardHome = () => {
               <Users className="w-8 h-8 text-primary" />
             </div>
             <h2 className="text-xl font-bold text-foreground mb-2">
-              Comece a usar o Meu RH
+              Comece a usar o SoftHome
             </h2>
             <p className="text-muted-foreground mb-6 max-w-md mx-auto">
               Cadastre seus colaboradores para desbloquear todos os recursos do sistema.
