@@ -23,7 +23,7 @@ import { toast } from "sonner";
 
 const FeriasPage = () => {
   const { hasAnyRole, user, currentCompany } = useDashboard();
-  const canManage = hasAnyRole(["admin", "rh", "gestor"]);
+  const canManage = hasAnyRole(["admin_gc", "gestor_gc", "gestor"]);
 
   const { data: requests = [], isLoading: loadingRequests } = useVacationRequests();
   const { data: periods = [], isLoading: loadingPeriods } = useVacationPeriods();

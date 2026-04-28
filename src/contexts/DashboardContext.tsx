@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
 
-export type AppRole = "admin" | "rh" | "gestor" | "contador" | "colaborador";
+export type AppRole = "admin_gc" | "gestor_gc" | "gestor" | "contador" | "colaborador";
 
 interface Company {
   id: string;
@@ -177,7 +177,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({ children }
 
         // If owner, implicitly has admin role even if not in user_roles table yet
         if (!rolesData || rolesData.length === 0) {
-          setRoles(["admin"]);
+          setRoles(["admin_gc"]);
         }
       }
     } catch (error) {

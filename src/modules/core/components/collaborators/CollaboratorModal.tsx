@@ -128,7 +128,7 @@ const CollaboratorModal = ({
   // Benefit assignment state
   const [selectedBenefitId, setSelectedBenefitId] = useState("");
 
-  const canManage = hasAnyRole(["admin", "rh"]);
+  const canManage = hasAnyRole(["admin_gc", "gestor_gc"]);
 
   // Fetch collaborator data
   const { data: collaborator, isLoading: loadingCollaborator } = useQuery({

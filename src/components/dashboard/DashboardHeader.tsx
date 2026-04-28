@@ -15,8 +15,8 @@ import { Badge } from "@/components/ui/badge";
 import { NotificationBell } from "./NotificationBell";
 
 const roleLabels: Record<string, string> = {
-  admin: "Administrador",
-  rh: "RH",
+  admin_gc: "Administrador G&C",
+  gestor_gc: "Gestor G&C",
   gestor: "Gestor",
   contador: "Contador",
   colaborador: "Colaborador",

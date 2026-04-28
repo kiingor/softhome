@@ -72,7 +72,7 @@ const RelatoriosPage = () => {
 
   const { isPeriodClosed, closePeriod, reopenPeriod } = useClosedPeriods(currentCompany?.id);
   const periodClosed = isPeriodClosed(selectedMonth, selectedYear);
-  const canManage = hasAnyRole(["admin", "rh"]);
+  const canManage = hasAnyRole(["admin_gc", "gestor_gc"]);
  
    // Fetch company details for CNPJ
    const { data: companyDetails } = useQuery({

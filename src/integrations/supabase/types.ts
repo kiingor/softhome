@@ -2727,7 +2727,13 @@ export type Database = {
         | "contract_signed"
         | "admitted"
         | "cancelled"
-      app_role: "admin" | "rh" | "gestor" | "contador" | "colaborador"
+      app_role:
+        | "admin_gc"
+        | "rh"
+        | "gestor"
+        | "contador"
+        | "colaborador"
+        | "gestor_gc"
       application_stage:
         | "new"
         | "screening"
@@ -2937,7 +2943,14 @@ export const Constants = {
         "admitted",
         "cancelled",
       ],
-      app_role: ["admin", "rh", "gestor", "contador", "colaborador"],
+      app_role: [
+        "admin_gc",
+        "rh",
+        "gestor",
+        "contador",
+        "colaborador",
+        "gestor_gc",
+      ],
       application_stage: [
         "new",
         "screening",
