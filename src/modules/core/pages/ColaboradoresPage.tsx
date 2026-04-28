@@ -41,7 +41,7 @@ import { useDashboard } from "@/contexts/DashboardContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { formatCPF } from "@/lib/validators";
-import CollaboratorModal from "@/components/collaborators/CollaboratorModal";
+import CollaboratorModal from "@/modules/core/components/collaborators/CollaboratorModal";
 import { TableSkeleton } from "@/components/ui/table-skeleton";
 
 interface Collaborator {
