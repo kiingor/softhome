@@ -156,8 +156,8 @@ CREATE POLICY "gestor_gc reads own journeys" ON public.admission_journeys
   FOR SELECT USING (
     EXISTS (SELECT 1 FROM public.user_roles ur
             WHERE ur.user_id = auth.uid()
-              AND ur.role::text IN ('gestor_gc', 'rh')
-              AND ur.company_id = admission_journeys.company_id)
+              AND ur.role::text IN ('gestor_gc', 'rh'))
+    AND public.user_belongs_to_company(admission_journeys.company_id, auth.uid())
   );
 CREATE POLICY "admin_gc writes journeys" ON public.admission_journeys
   FOR ALL USING (
@@ -169,8 +169,8 @@ CREATE POLICY "gestor_gc writes own journeys" ON public.admission_journeys
   FOR ALL USING (
     EXISTS (SELECT 1 FROM public.user_roles ur
             WHERE ur.user_id = auth.uid()
-              AND ur.role::text IN ('gestor_gc', 'rh')
-              AND ur.company_id = admission_journeys.company_id)
+              AND ur.role::text IN ('gestor_gc', 'rh'))
+    AND public.user_belongs_to_company(admission_journeys.company_id, auth.uid())
   );
 
 -- admission_documents — segue mesmo padrão; candidato sem login NÃO usa RLS
@@ -185,8 +185,8 @@ CREATE POLICY "gestor_gc reads own admission_docs" ON public.admission_documents
   FOR SELECT USING (
     EXISTS (SELECT 1 FROM public.user_roles ur
             WHERE ur.user_id = auth.uid()
-              AND ur.role::text IN ('gestor_gc', 'rh')
-              AND ur.company_id = admission_documents.company_id)
+              AND ur.role::text IN ('gestor_gc', 'rh'))
+    AND public.user_belongs_to_company(admission_documents.company_id, auth.uid())
   );
 CREATE POLICY "admin_gc writes admission_docs" ON public.admission_documents
   FOR ALL USING (
@@ -198,8 +198,8 @@ CREATE POLICY "gestor_gc writes own admission_docs" ON public.admission_document
   FOR ALL USING (
     EXISTS (SELECT 1 FROM public.user_roles ur
             WHERE ur.user_id = auth.uid()
-              AND ur.role::text IN ('gestor_gc', 'rh')
-              AND ur.company_id = admission_documents.company_id)
+              AND ur.role::text IN ('gestor_gc', 'rh'))
+    AND public.user_belongs_to_company(admission_documents.company_id, auth.uid())
   );
 
 -- admission_events — read-only pra G&C; nunca escreve direto (só via app/Edge Function)
@@ -213,8 +213,8 @@ CREATE POLICY "gestor_gc reads own events" ON public.admission_events
   FOR SELECT USING (
     EXISTS (SELECT 1 FROM public.user_roles ur
             WHERE ur.user_id = auth.uid()
-              AND ur.role::text IN ('gestor_gc', 'rh')
-              AND ur.company_id = admission_events.company_id)
+              AND ur.role::text IN ('gestor_gc', 'rh'))
+    AND public.user_belongs_to_company(admission_events.company_id, auth.uid())
   );
 CREATE POLICY "admin_gc inserts events" ON public.admission_events
   FOR INSERT WITH CHECK (

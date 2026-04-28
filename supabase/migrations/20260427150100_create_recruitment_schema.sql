@@ -184,13 +184,15 @@ BEGIN
               AND ur.role::text IN (''admin_gc'', ''admin'')))', t, t);
     EXECUTE format('CREATE POLICY "gestor_gc reads own %I" ON public.%I FOR SELECT USING (
       EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = auth.uid()
-              AND ur.role::text IN (''gestor_gc'', ''rh'') AND ur.company_id = %I.company_id))', t, t, t);
+              AND ur.role::text IN (''gestor_gc'', ''rh''))
+      AND public.user_belongs_to_company(%I.company_id, auth.uid()))', t, t, t);
     EXECUTE format('CREATE POLICY "admin_gc writes %I" ON public.%I FOR ALL USING (
       EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = auth.uid()
               AND ur.role::text IN (''admin_gc'', ''admin'')))', t, t);
     EXECUTE format('CREATE POLICY "gestor_gc writes own %I" ON public.%I FOR ALL USING (
       EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = auth.uid()
-              AND ur.role::text IN (''gestor_gc'', ''rh'') AND ur.company_id = %I.company_id))', t, t, t);
+              AND ur.role::text IN (''gestor_gc'', ''rh''))
+      AND public.user_belongs_to_company(%I.company_id, auth.uid()))', t, t, t);
   END LOOP;
 END $$;
 

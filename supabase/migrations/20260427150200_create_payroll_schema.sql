@@ -106,8 +106,8 @@ CREATE POLICY "admin_gc reads all periods" ON public.payroll_periods
 CREATE POLICY "gestor_gc reads own periods" ON public.payroll_periods
   FOR SELECT USING (
     EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = auth.uid()
-            AND ur.role::text IN ('gestor_gc', 'rh', 'contador')
-            AND ur.company_id = payroll_periods.company_id)
+            AND ur.role::text IN ('gestor_gc', 'rh', 'contador'))
+    AND public.user_belongs_to_company(payroll_periods.company_id, auth.uid())
   );
 CREATE POLICY "admin_gc writes periods" ON public.payroll_periods
   FOR ALL USING (
@@ -117,8 +117,8 @@ CREATE POLICY "admin_gc writes periods" ON public.payroll_periods
 CREATE POLICY "gestor_gc writes own periods" ON public.payroll_periods
   FOR ALL USING (
     EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = auth.uid()
-            AND ur.role::text IN ('gestor_gc', 'rh')
-            AND ur.company_id = payroll_periods.company_id)
+            AND ur.role::text IN ('gestor_gc', 'rh'))
+    AND public.user_belongs_to_company(payroll_periods.company_id, auth.uid())
   );
 -- contador NÃO escreve em periods (só lê pra exportação)
 
@@ -131,8 +131,8 @@ CREATE POLICY "admin_gc reads all alerts" ON public.payroll_alerts
 CREATE POLICY "gestor_gc reads own alerts" ON public.payroll_alerts
   FOR SELECT USING (
     EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = auth.uid()
-            AND ur.role::text IN ('gestor_gc', 'rh')
-            AND ur.company_id = payroll_alerts.company_id)
+            AND ur.role::text IN ('gestor_gc', 'rh'))
+    AND public.user_belongs_to_company(payroll_alerts.company_id, auth.uid())
   );
 CREATE POLICY "admin_gc writes alerts" ON public.payroll_alerts
   FOR ALL USING (
@@ -142,8 +142,8 @@ CREATE POLICY "admin_gc writes alerts" ON public.payroll_alerts
 CREATE POLICY "gestor_gc writes own alerts" ON public.payroll_alerts
   FOR ALL USING (
     EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = auth.uid()
-            AND ur.role::text IN ('gestor_gc', 'rh')
-            AND ur.company_id = payroll_alerts.company_id)
+            AND ur.role::text IN ('gestor_gc', 'rh'))
+    AND public.user_belongs_to_company(payroll_alerts.company_id, auth.uid())
   );
 
 COMMIT;

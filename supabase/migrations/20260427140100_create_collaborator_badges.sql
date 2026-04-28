@@ -63,8 +63,8 @@ CREATE POLICY "gestor_gc reads own company collab_badges"
       SELECT 1 FROM public.user_roles ur
       WHERE ur.user_id = auth.uid()
         AND ur.role::text IN ('gestor_gc', 'gestor', 'rh')
-        AND ur.company_id = collaborator_badges.company_id
     )
+    AND public.user_belongs_to_company(collaborator_badges.company_id, auth.uid())
   );
 
 CREATE POLICY "colaborador reads own badges"
@@ -95,8 +95,8 @@ CREATE POLICY "gestor_gc writes own company collab_badges"
       SELECT 1 FROM public.user_roles ur
       WHERE ur.user_id = auth.uid()
         AND ur.role::text IN ('gestor_gc', 'gestor', 'rh')
-        AND ur.company_id = collaborator_badges.company_id
     )
+    AND public.user_belongs_to_company(collaborator_badges.company_id, auth.uid())
   );
 
 COMMIT;

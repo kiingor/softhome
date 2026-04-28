@@ -107,8 +107,8 @@ CREATE POLICY "gestor_gc reads own company audit"
       SELECT 1 FROM public.user_roles ur
       WHERE ur.user_id = auth.uid()
         AND ur.role::text IN ('gestor_gc', 'rh')
-        AND ur.company_id = audit_log.company_id
     )
+    AND public.user_belongs_to_company(audit_log.company_id, auth.uid())
   );
 
 -- Write: ninguém. Apenas a trigger function (SECURITY DEFINER) escreve.

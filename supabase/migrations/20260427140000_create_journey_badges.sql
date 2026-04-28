@@ -70,11 +70,7 @@ CREATE POLICY "admin_gc reads all badges"
 CREATE POLICY "company members read own badges"
   ON public.badges FOR SELECT
   USING (
-    EXISTS (
-      SELECT 1 FROM public.user_roles ur
-      WHERE ur.user_id = auth.uid()
-        AND ur.company_id = badges.company_id
-    )
+    public.user_belongs_to_company(badges.company_id, auth.uid())
   );
 
 -- INSERT/UPDATE/DELETE: admin_gc + gestor_gc/rh da própria empresa
@@ -95,8 +91,8 @@ CREATE POLICY "gestor_gc writes own company badges"
       SELECT 1 FROM public.user_roles ur
       WHERE ur.user_id = auth.uid()
         AND ur.role::text IN ('gestor_gc', 'rh')
-        AND ur.company_id = badges.company_id
     )
+    AND public.user_belongs_to_company(badges.company_id, auth.uid())
   );
 
 COMMIT;
