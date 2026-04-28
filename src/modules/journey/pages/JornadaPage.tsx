@@ -4,14 +4,27 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge as BadgeUI } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Loader2, Plus, Search, Settings, Trophy } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Download, Loader2, Plus, Search, Settings, Trophy } from "lucide-react";
+import { toast } from "sonner";
 import { useBadges } from "../hooks/use-badges";
 import { useCollaboratorBadges } from "../hooks/use-collaborator-badges";
 import { BadgeAssignmentForm } from "../components/BadgeAssignmentForm";
 import { BADGE_CATEGORY_LABELS } from "../types";
 import type { BadgeAssignmentValues } from "../schemas/badge.schema";
+import {
+  exportJourneyExcel,
+  exportJourneyPDF,
+} from "../services/journey-export.service";
+import { useDashboard } from "@/contexts/DashboardContext";
 
 export default function JornadaPage() {
+  const { currentCompany } = useDashboard();
   const { badges, isLoading: badgesLoading } = useBadges();
   const { assignments, isLoading: assignmentsLoading, assignBadge } =
     useCollaboratorBadges();
@@ -48,6 +61,42 @@ export default function JornadaPage() {
     setIsAssignOpen(false);
   };
 
+  // Lista de colaboradores derivada das próprias atribuições (já vêm
+  // com join de collaborators no useCollaboratorBadges).
+  const collaboratorsForExport = useMemo(() => {
+    const seen = new Map<string, { id: string; name: string }>();
+    for (const a of assignments) {
+      if (!seen.has(a.collaborator_id)) {
+        seen.set(a.collaborator_id, {
+          id: a.collaborator_id,
+          name: a.collaborator?.name ?? "(sem nome)",
+        });
+      }
+    }
+    return Array.from(seen.values());
+  }, [assignments]);
+
+  const companyName = currentCompany?.company_name ?? "SoftHome";
+  const canExport = assignments.length > 0;
+
+  const handleExportExcel = () => {
+    try {
+      exportJourneyExcel(assignments, badges, collaboratorsForExport, companyName);
+      toast.success("Pronto ✓");
+    } catch {
+      toast.error("Não rolou. Tenta de novo?");
+    }
+  };
+
+  const handleExportPDF = () => {
+    try {
+      exportJourneyPDF(assignments, badges, collaboratorsForExport, companyName);
+      toast.success("Pronto ✓");
+    } catch {
+      toast.error("Não rolou. Tenta de novo?");
+    }
+  };
+
   // Estatísticas leves
   const totalBadges = badges.length;
   const activeBadges = badges.filter((b) => b.is_active).length;
@@ -66,6 +115,28 @@ export default function JornadaPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" disabled={!canExport}>
+                <Download className="w-4 h-4 mr-2" />
+                Exportar
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={handleExportExcel}
+                disabled={!canExport}
+              >
+                Excel (.xlsx)
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={handleExportPDF}
+                disabled={!canExport}
+              >
+                PDF (.pdf)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button asChild variant="outline">
             <Link to="/dashboard/jornada/badges">
               <Settings className="w-4 h-4 mr-2" />
