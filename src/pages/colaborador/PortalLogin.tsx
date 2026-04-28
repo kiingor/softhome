@@ -6,8 +6,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { z } from "zod";
-import { Eye, EyeOff, ArrowLeft, Loader2 } from "lucide-react";
-
+import { Eye, EyeSlash as EyeOff, ArrowLeft, CircleNotch as Loader2 } from "@phosphor-icons/react";
 const loginSchema = z.object({
   email: z.string().email("Email inválido"),
   password: z.string().min(1, "Senha é obrigatória"),

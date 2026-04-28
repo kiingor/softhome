@@ -1,7 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge as BadgeUI } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Pencil, Trash2, Trophy } from "lucide-react";
+import { Pencil, Trash as Trash2, Trophy } from "@phosphor-icons/react";
 import type { Badge } from "../types";
 import { BADGE_CATEGORY_LABELS } from "../types";
 

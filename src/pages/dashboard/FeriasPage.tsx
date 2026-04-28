@@ -17,7 +17,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Plus, Clock, Users, CalendarCheck, AlertTriangle, Search, Check, X, Loader2, Calendar, Trash2, Eye, UserCheck } from "lucide-react";
+import { Plus, Clock, Users, CalendarCheck, Warning as AlertTriangle, MagnifyingGlass as Search, Check, X, CircleNotch as Loader2, Calendar, Trash as Trash2, Eye, UserCheck } from "@phosphor-icons/react";
 import { format, parseISO, isAfter, addDays } from "date-fns";
 import { toast } from "sonner";
 

@@ -38,17 +38,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import {
-  BarChart3,
-  FileText,
-  FileSpreadsheet,
-  Lock,
-  LockOpen,
-  ChevronLeft,
-  ChevronRight,
-  Users,
-   Receipt,
-} from "lucide-react";
+import { ChartBar as BarChart3, FileText, FileXls as FileSpreadsheet, Lock, LockOpen, CaretLeft as ChevronLeft, CaretRight as ChevronRight, Users, Receipt } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import PermissionGuard from "@/components/dashboard/PermissionGuard";
 import { exportToPDF, exportToExcel, groupEntriesByCollaborator } from "@/lib/exportUtils";

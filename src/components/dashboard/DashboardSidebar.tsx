@@ -2,23 +2,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useDashboard } from "@/contexts/DashboardContext";
 import { useSidebarPermissions } from "@/hooks/useSidebarPermissions";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  LayoutDashboard,
-  Users,
-  Building2,
-  Briefcase,
-  Gift,
-  FileText,
-  BarChart3,
-  Settings,
-  LogOut,
-  FolderTree,
-  DollarSign,
-  Loader2,
-  Calendar,
-  ClipboardCheck,
-  Trophy,
-} from "lucide-react";
+import { SquaresFour as LayoutDashboard, Users, Buildings as Building2, Briefcase, Gift, FileText, ChartBar as BarChart3, Gear as Settings, SignOut as LogOut, TreeStructure as FolderTree, CurrencyDollar as DollarSign, CircleNotch as Loader2, Calendar, ClipboardText as ClipboardCheck, Trophy } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";

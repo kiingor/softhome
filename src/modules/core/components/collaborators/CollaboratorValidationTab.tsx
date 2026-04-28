@@ -12,7 +12,7 @@ import {
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { Download, CheckCircle2, XCircle, AlertTriangle, Loader2, FileText } from "lucide-react";
+import { Download, CheckCircle as CheckCircle2, XCircle, Warning as AlertTriangle, CircleNotch as Loader2, FileText } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { sendWhatsAppNotification } from "@/lib/whatsappNotifications";
 

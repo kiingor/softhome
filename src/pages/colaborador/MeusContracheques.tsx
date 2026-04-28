@@ -13,13 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Download,
-  FileText,
-  ChevronLeft,
-  ChevronRight,
-  File,
-} from "lucide-react";
+import { Download, FileText, CaretLeft as ChevronLeft, CaretRight as ChevronRight, File } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { getMonthName } from "@/lib/formatters";
 

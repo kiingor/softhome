@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Plus, Trash2, Loader2, UserPlus, Mail, Eye, EyeOff, ShieldCheck } from "lucide-react";
+import { Plus, Trash as Trash2, CircleNotch as Loader2, UserPlus, Envelope as Mail, Eye, EyeSlash as EyeOff, ShieldCheck } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { MODULE_LABELS, type ModuleType, usePermissions } from "@/hooks/usePermissions";
 import { Switch } from "@/components/ui/switch";

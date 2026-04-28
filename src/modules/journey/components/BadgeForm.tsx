@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
+import { CircleNotch as Loader2 } from "@phosphor-icons/react";
 import { badgeFormSchema, type BadgeFormValues } from "../schemas/badge.schema";
 import { BADGE_CATEGORY_LABELS, type Badge, type BadgeCategory } from "../types";
 

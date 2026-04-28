@@ -23,16 +23,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Calculator,
-  Upload,
-  FileCheck,
-  AlertCircle,
-  CheckCircle,
-  Loader2,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react";
+import { Calculator, Upload, WarningCircle as AlertCircle, CheckCircle, CircleNotch as Loader2, CaretLeft as ChevronLeft, CaretRight as ChevronRight } from "@phosphor-icons/react";
+import { FileCheck } from "lucide-react";
 import { toast } from "sonner";
 import { getMonthName } from "@/lib/formatters";
 import { processFilesForMatching } from "@/lib/payslipMatcher";

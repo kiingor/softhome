@@ -17,16 +17,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import {
-  Home,
-  FileText,
-  Gift,
-  Download,
-  LogOut,
-  Menu,
-  Palmtree,
-  ClipboardCheck,
-} from "lucide-react";
+import { House as Home, FileText, Gift, Download, SignOut as LogOut, List as Menu, TreePalm as Palmtree, ClipboardText as ClipboardCheck } from "@phosphor-icons/react";
 import { useState } from "react";
 
 interface PortalLayoutProps {

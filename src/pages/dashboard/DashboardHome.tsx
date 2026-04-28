@@ -1,17 +1,7 @@
 import { useDashboard } from "@/contexts/DashboardContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  Users,
-  FileText,
-  DollarSign,
-  TrendingUp,
-  UserPlus,
-  Building2,
-  Briefcase,
-  Gift,
-  Cake,
-} from "lucide-react";
+import { Users, FileText, CurrencyDollar as DollarSign, TrendUp as TrendingUp, UserPlus, Buildings as Building2, Briefcase, Gift, Cake } from "@phosphor-icons/react";
 import { useNavigate } from "react-router-dom";
 
 import { useQuery } from "@tanstack/react-query";

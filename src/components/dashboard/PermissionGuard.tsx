@@ -1,8 +1,7 @@
 import { ReactNode } from "react";
 import { usePermissions, ModuleType } from "@/hooks/usePermissions";
 import { Card, CardContent } from "@/components/ui/card";
-import { ShieldX, Loader2 } from "lucide-react";
-
+import { ShieldWarning as ShieldX, CircleNotch as Loader2 } from "@phosphor-icons/react";
 interface PermissionGuardProps {
   module: ModuleType;
   children: ReactNode;

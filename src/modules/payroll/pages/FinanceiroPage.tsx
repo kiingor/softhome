@@ -35,17 +35,7 @@ import {
   AlertDialogTitle,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
-import {
-  DollarSign,
-  Plus,
-  MoreHorizontal,
-  Edit,
-  Trash2,
-  ChevronLeft,
-  ChevronRight,
-  Lock,
-  Gift,
-} from "lucide-react";
+import { CurrencyDollar as DollarSign, Plus, DotsThree as MoreHorizontal, Pencil as Edit, Trash as Trash2, CaretLeft as ChevronLeft, CaretRight as ChevronRight, Lock, Gift } from "@phosphor-icons/react";
 import { useDashboard } from "@/contexts/DashboardContext";
 import { useClosedPeriods } from "@/hooks/useClosedPeriods";
 import { supabase } from "@/integrations/supabase/client";

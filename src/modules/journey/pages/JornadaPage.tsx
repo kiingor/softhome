@@ -10,7 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Download, Loader2, Plus, Search, Settings, Trophy } from "lucide-react";
+import { Download, CircleNotch as Loader2, Plus, MagnifyingGlass as Search, Gear as Settings, Trophy } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { useBadges } from "../hooks/use-badges";
 import { useCollaboratorBadges } from "../hooks/use-collaborator-badges";

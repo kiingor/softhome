@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { FileText, AlertCircle, CheckCircle, HelpCircle } from "lucide-react";
+import { FileText, WarningCircle as AlertCircle, CheckCircle, Question as HelpCircle } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 
 interface Collaborator {

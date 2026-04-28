@@ -17,20 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { TableSkeleton } from "@/components/ui/table-skeleton";
-import {
-  ClipboardCheck,
-  Plus,
-  FileDown,
-  Printer,
-  Search,
-  Calendar,
-  AlertTriangle,
-  CheckCircle,
-  Clock,
-  Upload,
-  MoreHorizontal,
-  XCircle,
-} from "lucide-react";
+import { ClipboardText as ClipboardCheck, Plus, FileArrowDown as FileDown, Printer, MagnifyingGlass as Search, Calendar, Warning as AlertTriangle, CheckCircle, Clock, Upload, DotsThree as MoreHorizontal, XCircle } from "@phosphor-icons/react";
 import { format, isWithinInterval, parseISO, addDays, isBefore } from "date-fns";
 
 export default function ExamesPage() {

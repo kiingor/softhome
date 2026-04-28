@@ -10,7 +10,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Plus, Trophy } from "lucide-react";
+import { CircleNotch as Loader2, Plus, Trophy } from "@phosphor-icons/react";
 import { useBadges } from "../hooks/use-badges";
 import { BadgeCard } from "../components/BadgeCard";
 import { BadgeForm } from "../components/BadgeForm";

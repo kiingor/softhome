@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar, Plus, Loader2, AlertTriangle, Palmtree } from "lucide-react";
+import { Calendar, Plus, CircleNotch as Loader2, Warning as AlertTriangle, TreePalm as Palmtree } from "@phosphor-icons/react";
 import { format, parseISO, differenceInCalendarDays } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 

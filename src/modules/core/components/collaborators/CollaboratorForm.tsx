@@ -31,7 +31,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useDashboard } from "@/contexts/DashboardContext";
 import { validateCPF, cleanCPF } from "@/lib/validators";
-import { Loader2, HelpCircle } from "lucide-react";
+import { CircleNotch as Loader2, Question as HelpCircle } from "@phosphor-icons/react";
 import {
   Tooltip,
   TooltipContent,

@@ -3,7 +3,7 @@ import { useDropzone } from "react-dropzone";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Upload, FileText, Download } from "lucide-react";
+import { Upload, FileText, Download } from "@phosphor-icons/react";
 import { useExamDocuments, type OccupationalExam } from "@/hooks/useExams";
 import { EXAM_TYPE_LABELS } from "@/lib/riskGroupDefaults";
 import { supabase } from "@/integrations/supabase/client";
