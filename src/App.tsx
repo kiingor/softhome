@@ -25,6 +25,8 @@ import ExamesPage from "./pages/dashboard/ExamesPage";
 // Modules (novo layout per CLAUDE.md)
 import JornadaPage from "./modules/journey/pages/JornadaPage";
 import BadgesPage from "./modules/journey/pages/BadgesPage";
+import AdmissoesPage from "./modules/admission/pages/AdmissoesPage";
+import AdmissionDetailPage from "./modules/admission/pages/AdmissionDetailPage";
 
 // Portal do Colaborador
 import { PortalProvider } from "./contexts/PortalContext";
@@ -78,6 +80,8 @@ const App = () => {
             <Route path="exames" element={<ExamesPage />} />
             <Route path="jornada" element={<JornadaPage />} />
             <Route path="jornada/badges" element={<BadgesPage />} />
+            <Route path="admissoes" element={<AdmissoesPage />} />
+            <Route path="admissoes/:id" element={<AdmissionDetailPage />} />
           </Route>
 
           {/* Portal do Colaborador - Login */}
