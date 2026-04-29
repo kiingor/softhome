@@ -15,7 +15,6 @@ import EmpresasPage from "./modules/core/pages/EmpresasPage";
 import SetoresPage from "./modules/core/pages/SetoresPage";
 import CargosPage from "./modules/core/pages/CargosPage";
 import FeriasPage from "./pages/dashboard/FeriasPage";
-import FinanceiroPage from "./modules/payroll/pages/FinanceiroPage";
 import RelatoriosPage from "./pages/dashboard/RelatoriosPage";
 import BeneficiosPage from "./pages/dashboard/BeneficiosPage";
 import ConfiguracoesPage from "./pages/dashboard/ConfiguracoesPage";
@@ -32,6 +31,7 @@ import VagaDetailPage from "./modules/recruitment/pages/VagaDetailPage";
 import CandidatosPage from "./modules/recruitment/pages/CandidatosPage";
 import PeriodosPage from "./modules/payroll/pages/PeriodosPage";
 import PeriodDetailPage from "./modules/payroll/pages/PeriodDetailPage";
+import RecrutadorPage from "./modules/agents/pages/RecrutadorPage";
 
 // Portal do Colaborador
 import { PortalProvider } from "./contexts/PortalContext";
@@ -77,7 +77,6 @@ const App = () => {
             <Route path="empresas" element={<EmpresasPage />} />
             <Route path="cargos" element={<CargosPage />} />
             <Route path="ferias" element={<FeriasPage />} />
-            <Route path="financeiro" element={<FinanceiroPage />} />
             <Route path="beneficios" element={<BeneficiosPage />} />
             <Route path="relatorios" element={<RelatoriosPage />} />
             <Route path="configuracoes" element={<ConfiguracoesPage />} />
@@ -92,6 +91,7 @@ const App = () => {
             <Route path="candidatos" element={<CandidatosPage />} />
             <Route path="folha" element={<PeriodosPage />} />
             <Route path="folha/:id" element={<PeriodDetailPage />} />
+            <Route path="recrutador" element={<RecrutadorPage />} />
           </Route>
 
           {/* Portal do Colaborador - Login */}

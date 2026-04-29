@@ -74,7 +74,10 @@ export function getClaudeClient(): Anthropic {
     );
   }
 
-  _client = new Anthropic({ apiKey });
+  // Optional custom router endpoint (ex: omnirouter via softcom).
+  const baseURL = import.meta.env?.VITE_ANTHROPIC_BASE_URL || undefined;
+
+  _client = new Anthropic({ apiKey, baseURL });
   return _client;
 }
 

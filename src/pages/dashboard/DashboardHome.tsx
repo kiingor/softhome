@@ -179,7 +179,7 @@ const DashboardHome = () => {
       ]
     : [
         { label: "Novo Colaborador", icon: UserPlus, action: () => navigate("/dashboard/colaboradores"), module: "colaboradores" as ModuleType },
-        { label: "Lançamentos", icon: DollarSign, action: () => navigate("/dashboard/financeiro"), module: "financeiro" as ModuleType },
+        { label: "Folha", icon: DollarSign, action: () => navigate("/dashboard/folha"), module: "folha" as ModuleType },
         { label: "Relatórios", icon: TrendingUp, action: () => navigate("/dashboard/relatorios"), module: "relatorios" as ModuleType },
         { label: "Benefícios", icon: Gift, action: () => navigate("/dashboard/beneficios"), module: "beneficios" as ModuleType },
       ];

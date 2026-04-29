@@ -57,7 +57,10 @@ export function getClaudeClient(): Anthropic {
     );
   }
 
-  _client = new Anthropic({ apiKey });
+  // Optional custom router endpoint (e.g. omnirouter via softcom).
+  const baseURL = Deno.env.get("ANTHROPIC_BASE_URL") || undefined;
+
+  _client = new Anthropic({ apiKey, baseURL });
   return _client;
 }
 
