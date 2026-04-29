@@ -27,6 +27,9 @@ import JornadaPage from "./modules/journey/pages/JornadaPage";
 import BadgesPage from "./modules/journey/pages/BadgesPage";
 import AdmissoesPage from "./modules/admission/pages/AdmissoesPage";
 import AdmissionDetailPage from "./modules/admission/pages/AdmissionDetailPage";
+import VagasPage from "./modules/recruitment/pages/VagasPage";
+import VagaDetailPage from "./modules/recruitment/pages/VagaDetailPage";
+import CandidatosPage from "./modules/recruitment/pages/CandidatosPage";
 
 // Portal do Colaborador
 import { PortalProvider } from "./contexts/PortalContext";
@@ -82,6 +85,9 @@ const App = () => {
             <Route path="jornada/badges" element={<BadgesPage />} />
             <Route path="admissoes" element={<AdmissoesPage />} />
             <Route path="admissoes/:id" element={<AdmissionDetailPage />} />
+            <Route path="vagas" element={<VagasPage />} />
+            <Route path="vagas/:id" element={<VagaDetailPage />} />
+            <Route path="candidatos" element={<CandidatosPage />} />
           </Route>
 
           {/* Portal do Colaborador - Login */}

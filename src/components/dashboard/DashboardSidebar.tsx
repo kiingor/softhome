@@ -2,7 +2,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useDashboard } from "@/contexts/DashboardContext";
 import { useSidebarPermissions } from "@/hooks/useSidebarPermissions";
 import { supabase } from "@/integrations/supabase/client";
-import { SquaresFour as LayoutDashboard, Users, Buildings as Building2, Briefcase, Gift, FileText, ChartBar as BarChart3, Gear as Settings, SignOut as LogOut, TreeStructure as FolderTree, CurrencyDollar as DollarSign, CircleNotch as Loader2, Calendar, ClipboardText as ClipboardCheck, Trophy, UserPlus } from "@phosphor-icons/react";
+import { SquaresFour as LayoutDashboard, Users, Buildings as Building2, Briefcase, Gift, FileText, ChartBar as BarChart3, Gear as Settings, SignOut as LogOut, TreeStructure as FolderTree, CurrencyDollar as DollarSign, CircleNotch as Loader2, Calendar, ClipboardText as ClipboardCheck, Trophy, UserPlus, IdentificationCard } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -35,6 +35,13 @@ const menuCategories: MenuCategory[] = [
       { icon: Briefcase, label: "Cargos", href: "/dashboard/cargos", module: "cargos" },
       { icon: Building2, label: "Empresas", href: "/dashboard/empresas", module: "empresas" },
       { icon: Gift, label: "Benefícios", href: "/dashboard/beneficios", module: "beneficios" },
+    ],
+  },
+  {
+    label: "Recrutamento",
+    items: [
+      { icon: Briefcase, label: "Vagas", href: "/dashboard/vagas", module: "vagas" },
+      { icon: IdentificationCard, label: "Banco de Talentos", href: "/dashboard/candidatos", module: "candidatos" },
     ],
   },
   {
