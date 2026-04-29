@@ -8,16 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
-import {
-  MessageSquare,
-  Wifi,
-  WifiOff,
-  Loader2,
-  QrCode,
-  Save,
-  Phone,
-  Bell,
-} from "lucide-react";
+import { ChatCircle as MessageSquare, WifiHigh as Wifi, WifiSlash as WifiOff, CircleNotch as Loader2, QrCode, FloppyDisk as Save, Phone, Bell } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { DEFAULT_TEMPLATES } from "@/lib/whatsappNotifications";
 import QRCodeModal from "./QRCodeModal";

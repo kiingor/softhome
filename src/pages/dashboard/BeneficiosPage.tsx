@@ -24,7 +24,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Gift, Plus, Pencil, Trash2 } from "lucide-react";
+import { Gift, Plus, Pencil, Trash as Trash2 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import PermissionGuard from "@/components/dashboard/PermissionGuard";
 import BenefitForm from "@/components/benefits/BenefitForm";

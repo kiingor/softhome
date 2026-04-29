@@ -9,14 +9,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { LogOut, User, Settings } from "lucide-react";
+import { SignOut as LogOut, User, Gear as Settings } from "@phosphor-icons/react";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { NotificationBell } from "./NotificationBell";
 
 const roleLabels: Record<string, string> = {
-  admin: "Administrador",
-  rh: "RH",
+  admin_gc: "Administrador G&C",
+  gestor_gc: "Gestor G&C",
   gestor: "Gestor",
   contador: "Contador",
   colaborador: "Colaborador",

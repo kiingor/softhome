@@ -17,7 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bell, Info, AlertTriangle, AlertCircle, Check, X } from "lucide-react";
+import { Bell, Info, Warning as AlertTriangle, WarningCircle as AlertCircle, Check, X } from "@phosphor-icons/react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 

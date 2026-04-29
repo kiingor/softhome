@@ -1,6 +1,6 @@
 import { usePortal } from "@/contexts/PortalContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileText, Gift, Download, User, Palmtree, ClipboardCheck } from "lucide-react";
+import { FileText, Gift, Download, User, TreePalm as Palmtree, ClipboardText as ClipboardCheck } from "@phosphor-icons/react";
 import { Link } from "react-router-dom";
 
 const PortalHome = () => {

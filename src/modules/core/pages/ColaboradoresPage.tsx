@@ -36,12 +36,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { UserPlus, Search, Filter, MoreHorizontal, Edit, Trash2, Users, RefreshCw } from "lucide-react";
+import { UserPlus, MagnifyingGlass as Search, Funnel as Filter, DotsThree as MoreHorizontal, Pencil as Edit, Trash as Trash2, Users, ArrowsClockwise as RefreshCw } from "@phosphor-icons/react";
 import { useDashboard } from "@/contexts/DashboardContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { formatCPF } from "@/lib/validators";
-import CollaboratorModal from "@/components/collaborators/CollaboratorModal";
+import CollaboratorModal from "@/modules/core/components/collaborators/CollaboratorModal";
 import { TableSkeleton } from "@/components/ui/table-skeleton";
 
 interface Collaborator {

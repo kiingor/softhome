@@ -31,7 +31,7 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useDashboard } from "@/contexts/DashboardContext";
-import { Loader2, Gift, Calculator } from "lucide-react";
+import { CircleNotch as Loader2, Gift, Calculator } from "@phosphor-icons/react";
 import { getCurrentCompetencia, monthNames, formatCurrency } from "@/lib/formatters";
 
 const entrySchema = z.object({

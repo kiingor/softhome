@@ -3,8 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useDashboard } from "@/contexts/DashboardContext";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { X, Info, AlertTriangle, AlertCircle } from "lucide-react";
-
+import { X, Info, Warning as AlertTriangle, WarningCircle as AlertCircle } from "@phosphor-icons/react";
 interface SystemMessage {
   id: string;
   title: string;

@@ -12,7 +12,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { ArrowRight, AlertTriangle } from "lucide-react";
+import { ArrowRight, Warning as AlertTriangle } from "@phosphor-icons/react";
 import { formatCurrency } from "@/lib/formatters";
 
 interface Position {

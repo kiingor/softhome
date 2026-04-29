@@ -32,18 +32,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Save,
-  Plus,
-  DollarSign,
-  Gift,
-  Building2,
-  Users,
-  Loader2,
-  X,
-  Wallet,
-  Palmtree,
-} from "lucide-react";
+import { FloppyDisk as Save, Plus, CurrencyDollar as DollarSign, Gift, Buildings as Building2, Users, CircleNotch as Loader2, X, Wallet, TreePalm as Palmtree, ArrowsLeftRight as ArrowRightLeft } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { formatCPFInput, cleanCPF, validateCPF, formatPhoneInput } from "@/lib/validators";
 import { sendWhatsAppNotification } from "@/lib/whatsappNotifications";
@@ -51,7 +40,6 @@ import { formatCurrency, formatCurrencyForInput, parseCurrencyInput, getCurrentC
 import { calculateMonthlyBenefitValue, getBenefitCalculationDescription, DayAbbrev } from "@/lib/workingDays";
 import CollaboratorValidationTab from "./CollaboratorValidationTab";
 import { PositionChangeDialog } from "@/components/exames/PositionChangeDialog";
-import { ArrowRightLeft } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 interface PendingEntry {
@@ -140,7 +128,7 @@ const CollaboratorModal = ({
   // Benefit assignment state
   const [selectedBenefitId, setSelectedBenefitId] = useState("");
 
-  const canManage = hasAnyRole(["admin", "rh"]);
+  const canManage = hasAnyRole(["admin_gc", "gestor_gc"]);
 
   // Fetch collaborator data
   const { data: collaborator, isLoading: loadingCollaborator } = useQuery({

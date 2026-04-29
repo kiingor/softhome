@@ -8,7 +8,14 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
-    include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    include: [
+      "src/**/*.{test,spec}.{ts,tsx}",
+      "__tests__/**/*.{test,spec}.ts",
+    ],
+    // RLS tests hit a real Supabase project and create/destroy auth users —
+    // give them headroom over the default 5s.
+    testTimeout: 30_000,
+    hookTimeout: 60_000,
   },
   resolve: {
     alias: { "@": path.resolve(__dirname, "./src") },

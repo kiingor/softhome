@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useDashboard } from "@/contexts/DashboardContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Loader2, CheckCircle, Smartphone } from "lucide-react";
+import { CircleNotch as Loader2, CheckCircle, DeviceMobile as Smartphone } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
 interface QRCodeModalProps {

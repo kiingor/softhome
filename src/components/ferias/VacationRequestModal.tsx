@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Calendar, AlertTriangle } from "lucide-react";
+import { CircleNotch as Loader2, Calendar, Warning as AlertTriangle } from "@phosphor-icons/react";
 import { differenceInCalendarDays, format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { sendWhatsAppNotification } from "@/lib/whatsappNotifications";

@@ -18,15 +18,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import {
-  FileText,
-  ChevronLeft,
-  ChevronRight,
-  TrendingUp,
-  DollarSign,
-  Gift,
-  Info,
-} from "lucide-react";
+import { FileText, CaretLeft as ChevronLeft, CaretRight as ChevronRight, TrendUp as TrendingUp, CurrencyDollar as DollarSign, Gift, Info } from "@phosphor-icons/react";
 import { formatCurrency, getMonthName } from "@/lib/formatters";
 import { calculateMonthlyBenefitValue, getBenefitCalculationDescription, DayAbbrev } from "@/lib/workingDays";
 

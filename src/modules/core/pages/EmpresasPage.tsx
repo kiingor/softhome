@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Users, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Buildings as Building2, Pencil, Trash as Trash2 } from "@phosphor-icons/react";
 import { supabase } from '@/integrations/supabase/client';
 import { useDashboard } from '@/contexts/DashboardContext';
 import PermissionGuard from '@/components/dashboard/PermissionGuard';
@@ -8,7 +8,6 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import {
   Card,
   CardContent,
@@ -44,151 +43,162 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { toast } from 'sonner';
 import { TableSkeleton } from '@/components/ui/table-skeleton';
 
-interface Team {
+interface Store {
   id: string;
-  name: string;
-  description: string | null;
-  store_id: string | null;
+  store_name: string;
+  store_code: string | null;
+  cnpj: string | null;
+  address: string | null;
   created_at: string;
-  stores?: { store_name: string } | null;
 }
 
-export default function SetoresPage() {
-  const { currentCompany, stores } = useDashboard();
+export default function EmpresasPage() {
+  const { currentCompany } = useDashboard();
   const selectedCompanyId = currentCompany?.id;
   const queryClient = useQueryClient();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingTeam, setEditingTeam] = useState<Team | null>(null);
+  const [editingStore, setEditingStore] = useState<Store | null>(null);
   const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    store_id: '',
+    store_name: '',
+    store_code: '',
+    cnpj: '',
+    address: '',
   });
 
-  const { data: teams = [], isLoading } = useQuery({
-    queryKey: ['teams', selectedCompanyId],
+  const { data: stores = [], isLoading } = useQuery({
+    queryKey: ['stores', selectedCompanyId],
     queryFn: async () => {
       if (!selectedCompanyId) return [];
       const { data, error } = await supabase
-        .from('teams')
-        .select('*, stores(store_name)')
+        .from('stores')
+        .select('*')
         .eq('company_id', selectedCompanyId)
-        .order('name');
+        .order('store_name');
       if (error) throw error;
-      return data as Team[];
+      return data as Store[];
     },
     enabled: !!selectedCompanyId,
   });
 
   const createMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
-      const { error } = await supabase.from('teams').insert({
+      const { error } = await supabase.from('stores').insert({
         company_id: selectedCompanyId,
-        name: data.name,
-        description: data.description || null,
-        store_id: data.store_id || null,
+        store_name: data.store_name,
+        store_code: data.store_code || null,
+        cnpj: data.cnpj || null,
+        address: data.address || null,
       });
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['teams'] });
-      toast.success('Setor criado com sucesso!');
+      queryClient.invalidateQueries({ queryKey: ['stores'] });
+      toast.success('Empresa criada com sucesso!');
       handleCloseDialog();
     },
     onError: (error) => {
-      toast.error('Erro ao criar setor: ' + error.message);
+      toast.error('Erro ao criar empresa: ' + error.message);
     },
   });
 
   const updateMutation = useMutation({
     mutationFn: async (data: { id: string } & typeof formData) => {
       const { error } = await supabase
-        .from('teams')
+        .from('stores')
         .update({
-          name: data.name,
-          description: data.description || null,
-          store_id: data.store_id || null,
+          store_name: data.store_name,
+          store_code: data.store_code || null,
+          cnpj: data.cnpj || null,
+          address: data.address || null,
         })
         .eq('id', data.id);
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['teams'] });
-      toast.success('Setor atualizado com sucesso!');
+      queryClient.invalidateQueries({ queryKey: ['stores'] });
+      toast.success('Empresa atualizada com sucesso!');
       handleCloseDialog();
     },
     onError: (error) => {
-      toast.error('Erro ao atualizar setor: ' + error.message);
+      toast.error('Erro ao atualizar empresa: ' + error.message);
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('teams').delete().eq('id', id);
+      const { error } = await supabase.from('stores').delete().eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['teams'] });
-      toast.success('Setor excluído com sucesso!');
+      queryClient.invalidateQueries({ queryKey: ['stores'] });
+      toast.success('Empresa excluída com sucesso!');
     },
     onError: (error) => {
-      toast.error('Erro ao excluir setor: ' + error.message);
+      toast.error('Erro ao excluir empresa: ' + error.message);
     },
   });
 
-  const handleOpenDialog = (team?: Team) => {
-    if (team) {
-      setEditingTeam(team);
+  const handleOpenDialog = (store?: Store) => {
+    if (store) {
+      setEditingStore(store);
       setFormData({
-        name: team.name,
-        description: team.description || '',
-        store_id: team.store_id || '',
+        store_name: store.store_name,
+        store_code: store.store_code || '',
+        cnpj: store.cnpj || '',
+        address: store.address || '',
       });
     } else {
-      setEditingTeam(null);
-      setFormData({ name: '', description: '', store_id: '' });
+      setEditingStore(null);
+      setFormData({ store_name: '', store_code: '', cnpj: '', address: '' });
     }
     setIsDialogOpen(true);
   };
 
   const handleCloseDialog = () => {
     setIsDialogOpen(false);
-    setEditingTeam(null);
-    setFormData({ name: '', description: '', store_id: '' });
+    setEditingStore(null);
+    setFormData({ store_name: '', store_code: '', cnpj: '', address: '' });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim()) {
-      toast.error('Informe o nome do setor');
+    if (!formData.store_name.trim()) {
+      toast.error('Informe o nome da empresa');
+      return;
+    }
+    if (!formData.cnpj.trim()) {
+      toast.error('Informe o CNPJ da empresa');
       return;
     }
 
-    if (editingTeam) {
-      updateMutation.mutate({ id: editingTeam.id, ...formData });
+    if (editingStore) {
+      updateMutation.mutate({ id: editingStore.id, ...formData });
     } else {
       createMutation.mutate(formData);
     }
   };
 
+  const formatCNPJ = (value: string) => {
+    const numbers = value.replace(/\D/g, '');
+    return numbers
+      .replace(/^(\d{2})(\d)/, '$1.$2')
+      .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+      .replace(/\.(\d{3})(\d)/, '.$1/$2')
+      .replace(/(\d{4})(\d)/, '$1-$2')
+      .slice(0, 18);
+  };
+
   return (
-    <PermissionGuard module="setores">
+    <PermissionGuard module="empresas">
       <div className="space-y-6 page-content">
         <div className="flex items-center justify-between animate-fade-in">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Setores</h1>
+            <h1 className="text-3xl font-bold tracking-tight">Empresas</h1>
             <p className="text-muted-foreground">
-              Gerencie os setores/departamentos da empresa
+              Gerencie as empresas/filiais do grupo
             </p>
           </div>
 
@@ -196,75 +206,71 @@ export default function SetoresPage() {
             <DialogTrigger asChild>
               <Button onClick={() => handleOpenDialog()}>
                 <Plus className="mr-2 h-4 w-4" />
-                Novo Setor
+                Nova Empresa
               </Button>
             </DialogTrigger>
             <DialogContent>
               <form onSubmit={handleSubmit}>
                 <DialogHeader>
                   <DialogTitle>
-                    {editingTeam ? 'Editar Setor' : 'Novo Setor'}
+                    {editingStore ? 'Editar Empresa' : 'Nova Empresa'}
                   </DialogTitle>
                   <DialogDescription>
-                    {editingTeam
-                      ? 'Atualize as informações do setor.'
-                      : 'Preencha as informações do novo setor.'}
+                    {editingStore
+                      ? 'Atualize as informações da empresa.'
+                      : 'Preencha as informações da nova empresa.'}
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                   <div className="space-y-2">
-                    <Label htmlFor="name">Nome do Setor *</Label>
+                    <Label htmlFor="store_name">Nome da Empresa *</Label>
                     <Input
-                      id="name"
-                      value={formData.name}
+                      id="store_name"
+                      value={formData.store_name}
                       onChange={(e) =>
-                        setFormData({ ...formData, name: e.target.value })
+                        setFormData({ ...formData, store_name: e.target.value })
                       }
-                      placeholder="Ex: Administrativo"
+                      placeholder="Ex: Filial Centro"
                       required
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="description">Descrição (opcional)</Label>
-                    <Textarea
-                      id="description"
-                      value={formData.description}
+                    <Label htmlFor="cnpj">CNPJ *</Label>
+                    <Input
+                      id="cnpj"
+                      value={formData.cnpj}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          description: e.target.value,
+                          cnpj: formatCNPJ(e.target.value),
                         })
                       }
-                      placeholder="Descrição do setor..."
-                      rows={3}
+                      placeholder="00.000.000/0000-00"
+                      required
                     />
                   </div>
-                  {stores.length > 0 && (
-                    <div className="space-y-2">
-                      <Label htmlFor="store_id">Empresa (opcional)</Label>
-                      <Select
-                        value={formData.store_id}
-                        onValueChange={(value) =>
-                          setFormData({
-                            ...formData,
-                            store_id: value === 'none' ? '' : value,
-                          })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione uma empresa" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">Nenhuma</SelectItem>
-                          {stores.map((store) => (
-                            <SelectItem key={store.id} value={store.id}>
-                              {store.store_name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
+                  <div className="space-y-2">
+                    <Label htmlFor="store_code">Código (opcional)</Label>
+                    <Input
+                      id="store_code"
+                      value={formData.store_code}
+                      onChange={(e) =>
+                        setFormData({ ...formData, store_code: e.target.value })
+                      }
+                      placeholder="Ex: 001"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="address">Endereço (opcional)</Label>
+                    <Input
+                      id="address"
+                      value={formData.address}
+                      onChange={(e) =>
+                        setFormData({ ...formData, address: e.target.value })
+                      }
+                      placeholder="Ex: Rua das Flores, 123"
+                    />
+                  </div>
                 </div>
                 <DialogFooter>
                   <Button
@@ -280,7 +286,7 @@ export default function SetoresPage() {
                       createMutation.isPending || updateMutation.isPending
                     }
                   >
-                    {editingTeam ? 'Salvar' : 'Criar'}
+                    {editingStore ? 'Salvar' : 'Criar'}
                   </Button>
                 </DialogFooter>
               </form>
@@ -291,44 +297,50 @@ export default function SetoresPage() {
         <Card className="animate-scale-in">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              Lista de Setores
+              <Building2 className="h-5 w-5" />
+              Lista de Empresas
             </CardTitle>
             <CardDescription>
-              {teams.length} setor(es) cadastrado(s)
+              {stores.length} empresa(s) cadastrada(s)
             </CardDescription>
           </CardHeader>
           <CardContent>
             {isLoading ? (
-              <TableSkeleton columns={4} rows={4} />
-            ) : teams.length === 0 ? (
+              <TableSkeleton columns={5} rows={4} />
+            ) : stores.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>Nenhum setor cadastrado</p>
-                <p className="text-sm">Clique em "Novo Setor" para começar</p>
+                <Building2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>Nenhuma empresa cadastrada</p>
+                <p className="text-sm">
+                  Clique em "Nova Empresa" para começar
+                </p>
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nome</TableHead>
-                    <TableHead>Descrição</TableHead>
-                    <TableHead>Empresa</TableHead>
+                    <TableHead>CNPJ</TableHead>
+                    <TableHead>Código</TableHead>
+                    <TableHead>Endereço</TableHead>
                     <TableHead className="w-[100px]">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody className="stagger-animation">
-                  {teams.map((team) => (
-                    <TableRow key={team.id} className="table-row-animate">
-                      <TableCell className="font-medium">{team.name}</TableCell>
-                      <TableCell>{team.description || '-'}</TableCell>
-                      <TableCell>{team.stores?.store_name || '-'}</TableCell>
+                <TableBody>
+                  {stores.map((store) => (
+                    <TableRow key={store.id}>
+                      <TableCell className="font-medium">
+                        {store.store_name}
+                      </TableCell>
+                      <TableCell>{store.cnpj || '-'}</TableCell>
+                      <TableCell>{store.store_code || '-'}</TableCell>
+                      <TableCell>{store.address || '-'}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleOpenDialog(team)}
+                            onClick={() => handleOpenDialog(store)}
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
@@ -341,17 +353,20 @@ export default function SetoresPage() {
                             <AlertDialogContent>
                               <AlertDialogHeader>
                                 <AlertDialogTitle>
-                                  Excluir Setor
+                                  Excluir Empresa
                                 </AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  Tem certeza que deseja excluir o setor "
-                                  {team.name}"? Esta ação não pode ser desfeita.
+                                  Tem certeza que deseja excluir a empresa "
+                                  {store.store_name}"? Esta ação não pode ser
+                                  desfeita.
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
                                 <AlertDialogCancel>Cancelar</AlertDialogCancel>
                                 <AlertDialogAction
-                                  onClick={() => deleteMutation.mutate(team.id)}
+                                  onClick={() =>
+                                    deleteMutation.mutate(store.id)
+                                  }
                                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                                 >
                                   Excluir

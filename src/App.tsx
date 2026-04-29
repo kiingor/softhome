@@ -10,17 +10,21 @@ import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import DashboardLayout from "./components/dashboard/DashboardLayout";
 import DashboardHome from "./pages/dashboard/DashboardHome";
-import ColaboradoresPage from "./pages/dashboard/ColaboradoresPage";
-import EmpresasPage from "./pages/dashboard/EmpresasPage";
-import SetoresPage from "./pages/dashboard/SetoresPage";
-import CargosPage from "./pages/dashboard/CargosPage";
+import ColaboradoresPage from "./modules/core/pages/ColaboradoresPage";
+import EmpresasPage from "./modules/core/pages/EmpresasPage";
+import SetoresPage from "./modules/core/pages/SetoresPage";
+import CargosPage from "./modules/core/pages/CargosPage";
 import FeriasPage from "./pages/dashboard/FeriasPage";
-import FinanceiroPage from "./pages/dashboard/FinanceiroPage";
+import FinanceiroPage from "./modules/payroll/pages/FinanceiroPage";
 import RelatoriosPage from "./pages/dashboard/RelatoriosPage";
 import BeneficiosPage from "./pages/dashboard/BeneficiosPage";
 import ConfiguracoesPage from "./pages/dashboard/ConfiguracoesPage";
 import ContabilidadePage from "./pages/dashboard/ContabilidadePage";
 import ExamesPage from "./pages/dashboard/ExamesPage";
+
+// Modules (novo layout per CLAUDE.md)
+import JornadaPage from "./modules/journey/pages/JornadaPage";
+import BadgesPage from "./modules/journey/pages/BadgesPage";
 
 // Portal do Colaborador
 import { PortalProvider } from "./contexts/PortalContext";
@@ -72,6 +76,8 @@ const App = () => {
             <Route path="configuracoes" element={<ConfiguracoesPage />} />
             <Route path="contabilidade" element={<ContabilidadePage />} />
             <Route path="exames" element={<ExamesPage />} />
+            <Route path="jornada" element={<JornadaPage />} />
+            <Route path="jornada/badges" element={<BadgesPage />} />
           </Route>
 
           {/* Portal do Colaborador - Login */}

@@ -10,9 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  ArrowLeft, ArrowRight, Loader2, CheckCircle2, AlertTriangle, Upload, FileText, User, DollarSign,
-} from "lucide-react";
+import { ArrowLeft, ArrowRight, CircleNotch as Loader2, CheckCircle as CheckCircle2, Warning as AlertTriangle, Upload, FileText, User, CurrencyDollar as DollarSign } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { formatCPFInput, cleanCPF } from "@/lib/validators";

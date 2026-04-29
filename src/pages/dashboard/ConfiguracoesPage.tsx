@@ -9,16 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Building2,
-  Loader2,
-  Save,
-  Users,
-  Upload,
-  Trash2,
-  Image as ImageIcon,
-  MessageSquare,
-} from "lucide-react";
+import { Buildings as Building2, CircleNotch as Loader2, FloppyDisk as Save, Users, Upload, Trash as Trash2, Image as ImageIcon, ChatCircle as MessageSquare } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { UsersAccessTab } from "@/components/dashboard/UsersAccessTab";
 import { useIsCompanyAdmin, usePermissions } from "@/hooks/usePermissions";
