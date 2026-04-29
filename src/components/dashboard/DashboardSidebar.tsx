@@ -51,7 +51,6 @@ const menuCategories: MenuCategory[] = [
       { icon: UserPlus, label: "Admissões", href: "/dashboard/admissoes", module: "admissoes" },
       { icon: Trophy, label: "Jornada", href: "/dashboard/jornada", module: "jornada" },
       { icon: DollarSign, label: "Folha", href: "/dashboard/folha", module: "folha" },
-      { icon: DollarSign, label: "Lançamentos (legacy)", href: "/dashboard/financeiro", module: "financeiro" },
       { icon: Calendar, label: "Férias", href: "/dashboard/ferias", module: "ferias" },
       { icon: ClipboardCheck, label: "Exames", href: "/dashboard/exames", module: "exames" },
       { icon: BarChart3, label: "Relatórios", href: "/dashboard/relatorios", module: "relatorios" },

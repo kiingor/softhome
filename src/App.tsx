@@ -15,7 +15,6 @@ import EmpresasPage from "./modules/core/pages/EmpresasPage";
 import SetoresPage from "./modules/core/pages/SetoresPage";
 import CargosPage from "./modules/core/pages/CargosPage";
 import FeriasPage from "./pages/dashboard/FeriasPage";
-import FinanceiroPage from "./modules/payroll/pages/FinanceiroPage";
 import RelatoriosPage from "./pages/dashboard/RelatoriosPage";
 import BeneficiosPage from "./pages/dashboard/BeneficiosPage";
 import ConfiguracoesPage from "./pages/dashboard/ConfiguracoesPage";
@@ -78,7 +77,6 @@ const App = () => {
             <Route path="empresas" element={<EmpresasPage />} />
             <Route path="cargos" element={<CargosPage />} />
             <Route path="ferias" element={<FeriasPage />} />
-            <Route path="financeiro" element={<FinanceiroPage />} />
             <Route path="beneficios" element={<BeneficiosPage />} />
             <Route path="relatorios" element={<RelatoriosPage />} />
             <Route path="configuracoes" element={<ConfiguracoesPage />} />
