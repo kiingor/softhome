@@ -2,7 +2,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useDashboard } from "@/contexts/DashboardContext";
 import { useSidebarPermissions } from "@/hooks/useSidebarPermissions";
 import { supabase } from "@/integrations/supabase/client";
-import { SquaresFour as LayoutDashboard, Users, Buildings as Building2, Briefcase, Gift, FileText, ChartBar as BarChart3, Gear as Settings, SignOut as LogOut, TreeStructure as FolderTree, CurrencyDollar as DollarSign, CircleNotch as Loader2, Calendar, ClipboardText as ClipboardCheck, Trophy } from "@phosphor-icons/react";
+import { SquaresFour as LayoutDashboard, Users, Buildings as Building2, Briefcase, Gift, FileText, ChartBar as BarChart3, Gear as Settings, SignOut as LogOut, TreeStructure as FolderTree, CurrencyDollar as DollarSign, CircleNotch as Loader2, Calendar, ClipboardText as ClipboardCheck, Trophy, UserPlus } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -40,6 +40,7 @@ const menuCategories: MenuCategory[] = [
   {
     label: "Gestão",
     items: [
+      { icon: UserPlus, label: "Admissões", href: "/dashboard/admissoes", module: "admissoes" },
       { icon: Trophy, label: "Jornada", href: "/dashboard/jornada", module: "jornada" },
       { icon: DollarSign, label: "Lançamentos", href: "/dashboard/financeiro", module: "financeiro" },
       { icon: Calendar, label: "Férias", href: "/dashboard/ferias", module: "ferias" },

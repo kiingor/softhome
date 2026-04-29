@@ -75,3 +75,32 @@ export const formatPhoneInput = (value: string): string => {
   }
   return digits.replace(/(\d{2})(\d{5})(\d{0,4})/, "($1) $2-$3");
 };
+
+// Validate Brazilian CNPJ (full checksum, 14 digits)
+export const validateCNPJ = (cnpj: string): boolean => {
+  const clean = cnpj.replace(/\D/g, "");
+  if (clean.length !== 14) return false;
+  if (/^(\d)\1{13}$/.test(clean)) return false;
+
+  const calcDigit = (base: string, weights: number[]): number => {
+    const sum = base
+      .split("")
+      .reduce((acc, d, i) => acc + parseInt(d) * weights[i], 0);
+    const remainder = sum % 11;
+    return remainder < 2 ? 0 : 11 - remainder;
+  };
+
+  const w1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  const w2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  const d1 = calcDigit(clean.slice(0, 12), w1);
+  if (d1 !== parseInt(clean.charAt(12))) return false;
+  const d2 = calcDigit(clean.slice(0, 13), w2);
+  return d2 === parseInt(clean.charAt(13));
+};
+
+// Format CNPJ for display (XX.XXX.XXX/XXXX-XX)
+export const formatCNPJ = (cnpj: string): string => {
+  const clean = cnpj.replace(/\D/g, "");
+  if (clean.length !== 14) return cnpj;
+  return clean.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
+};

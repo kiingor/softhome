@@ -15,7 +15,8 @@ export type ModuleType =
   | "configuracoes"
   | "permissoes"
   | "exames"
-  | "jornada";
+  | "jornada"
+  | "admissoes";
 
 export interface ModulePermissions {
   canView: boolean;
