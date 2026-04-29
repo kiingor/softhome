@@ -53,10 +53,14 @@
  
  // Entry type to code mapping
  const typeCodes: Record<string, string> = {
-   salario: "011",
-   adicional: "020",
-   vale: "100",
+   salario_base: "011",
+   hora_extra: "020",
    beneficio: "030",
+   bonificacao: "040",
+   atestado: "050",
+   adiantamento: "100",
+   desconto: "200",
+   falta: "210",
    inss: "310",
    irpf: "320",
    fgts: "400",
@@ -66,22 +70,26 @@
  
  // Entry type to description mapping
  const typeDescriptions: Record<string, string> = {
-   salario: "Salário-Base",
-   adicional: "Adicional",
-   vale: "Vale",
+   salario_base: "Salário-Base",
+   hora_extra: "Hora extra",
    beneficio: "Benefício",
+   falta: "Falta",
+   atestado: "Atestado",
+   adiantamento: "Adiantamento",
+   bonificacao: "Bonificação",
+   desconto: "Desconto",
    inss: "INSS",
    irpf: "IRPF",
    fgts: "FGTS",
    custo: "Custo",
    despesa: "Despesa",
  };
- 
+
  // Types that are earnings (proventos)
-  const earningsTypes = ["salario", "adicional", "beneficio"];
-  
+  const earningsTypes = ["salario_base", "hora_extra", "beneficio", "bonificacao", "atestado"];
+
   // Types that are deductions (descontos)
-  const deductionTypes = ["inss", "irpf", "despesa", "vale", "custo"];
+  const deductionTypes = ["desconto", "falta", "adiantamento", "inss", "irpf", "despesa", "custo"];
 
  // Helper to load image as base64
  const loadImageAsBase64 = async (url: string): Promise<string | null> => {
@@ -365,7 +373,7 @@
      const description = entry.description || typeDescriptions[type] || type;
      const value = Number(entry.value);
  
-     if (type === "salario") {
+     if (type === "salario_base") {
        baseSalary += value;
      }
  
@@ -382,7 +390,7 @@
        payslipEntries.push({
          code,
          description,
-         reference: type === "salario" ? "30 dia(s)" : entry.description?.match(/\d+%/) ? entry.description.match(/\d+%/)[0] : "-",
+         reference: type === "salario_base" ? "30 dia(s)" : entry.description?.match(/\d+%/) ? entry.description.match(/\d+%/)[0] : "-",
          earnings: value,
          deductions: null,
        });

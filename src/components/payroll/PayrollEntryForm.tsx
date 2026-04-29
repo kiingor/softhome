@@ -35,7 +35,7 @@ import { CircleNotch as Loader2, Gift, Calculator } from "@phosphor-icons/react"
 import { getCurrentCompetencia, monthNames, formatCurrency } from "@/lib/formatters";
 
 const entrySchema = z.object({
-   type: z.enum(["salario", "vale", "custo", "despesa", "adicional", "inss", "fgts", "irpf"]),
+   type: z.enum(["salario_base", "beneficio", "custo", "despesa", "hora_extra", "inss", "fgts", "irpf"]),
   description: z.string().optional(),
   value: z.string().refine(
     (val) => {
@@ -108,7 +108,7 @@ const PayrollEntryForm = ({
   const form = useForm<EntryFormData>({
     resolver: zodResolver(entrySchema),
     defaultValues: {
-      type: editingEntry?.type || "salario",
+      type: editingEntry?.type || "salario_base",
       description: editingEntry?.description || "",
       value: editingEntry?.value?.toString().replace(".", ",") || "",
       month: editingEntry?.month || defaultMonth || currentComp.month,
@@ -208,7 +208,7 @@ const PayrollEntryForm = ({
       setSelectedBenefitId("");
     } else {
       form.reset({
-        type: "salario",
+        type: "salario_base",
         description: "",
         value: "",
         month: defaultMonth || currentComp.month,
@@ -276,7 +276,7 @@ const PayrollEntryForm = ({
 
         for (let i = 1; i <= data.installment_count; i++) {
           entries.push({
-            type: data.type as "salario" | "vale" | "custo" | "despesa" | "adicional",
+            type: data.type as "salario_base" | "beneficio" | "custo" | "despesa" | "hora_extra",
             description: data.description ? `${data.description} (${i}/${data.installment_count})` : `Parcela ${i}/${data.installment_count}`,
             value: perInstallmentValue,
             month: currentMonth,
@@ -310,7 +310,7 @@ const PayrollEntryForm = ({
       } else {
         // Standard single entry
         const entryData = {
-           type: data.type as "salario" | "vale" | "custo" | "despesa" | "adicional" | "inss" | "fgts" | "irpf",
+           type: data.type as "salario_base" | "beneficio" | "custo" | "despesa" | "hora_extra" | "inss" | "fgts" | "irpf",
           description: data.description || null,
           value,
           month: data.month,
@@ -341,7 +341,7 @@ const PayrollEntryForm = ({
           if (error) throw error;
 
            // Auto-create tax entries when creating a salary entry
-           if (data.type === "salario" && collaboratorWithPosition?.position) {
+           if (data.type === "salario_base" && collaboratorWithPosition?.position) {
              const position = collaboratorWithPosition.position as any;
              const taxEntries: any[] = [];
  
@@ -403,7 +403,7 @@ const PayrollEntryForm = ({
  
           toast({
             title: "Lançamento criado!",
-             description: data.type === "salario" && collaboratorWithPosition?.position
+             description: data.type === "salario_base" && collaboratorWithPosition?.position
                ? "O lançamento e impostos foram calculados automaticamente."
                : "O lançamento foi registrado com sucesso.",
           });

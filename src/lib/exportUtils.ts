@@ -20,18 +20,24 @@ interface ExportData {
 }
 
 const typeLabels: Record<string, string> = {
-  salario: "Salário",
-  vale: "Vale",
+  salario_base: "Salário base",
+  beneficio: "Benefício",
+  hora_extra: "Hora extra",
+  falta: "Falta",
+  atestado: "Atestado",
+  adiantamento: "Adiantamento",
+  bonificacao: "Bonificação",
+  desconto: "Desconto",
+  // Legacy (orphan na enum, ainda renderizam se houver linhas antigas)
   custo: "Custo",
   despesa: "Despesa",
-  adicional: "Adicional",
-   inss: "INSS",
-   fgts: "FGTS",
-   irpf: "IRPF",
+  inss: "INSS",
+  fgts: "FGTS",
+  irpf: "IRPF",
 };
 
-const deductionTypes = ["inss", "irpf", "despesa", "vale", "custo"];
-const earningsTypes = ["salario", "adicional", "beneficio"];
+const deductionTypes = ["desconto", "falta", "adiantamento", "inss", "irpf", "despesa", "custo"];
+const earningsTypes = ["salario_base", "hora_extra", "beneficio", "bonificacao", "atestado"];
 
 // Helper to load image as base64
 const loadImageAsBase64 = async (url: string): Promise<string | null> => {

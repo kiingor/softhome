@@ -155,11 +155,11 @@ const DashboardHome = () => {
 
   // Payroll by type chart data
   const payrollByType = [
-    { name: "Salário", value: payrollEntries.filter((e) => e.type === "salario").reduce((sum, e) => sum + Number(e.value), 0) },
-    { name: "Vale", value: payrollEntries.filter((e) => e.type === "vale").reduce((sum, e) => sum + Number(e.value), 0) },
-    { name: "Adicional", value: payrollEntries.filter((e) => e.type === "adicional").reduce((sum, e) => sum + Number(e.value), 0) },
-    { name: "Custo", value: payrollEntries.filter((e) => e.type === "custo").reduce((sum, e) => sum + Number(e.value), 0) },
-    { name: "Despesa", value: payrollEntries.filter((e) => e.type === "despesa").reduce((sum, e) => sum + Number(e.value), 0) },
+    { name: "Salário base", value: payrollEntries.filter((e) => e.type === "salario_base").reduce((sum, e) => sum + Number(e.value), 0) },
+    { name: "Hora extra", value: payrollEntries.filter((e) => e.type === "hora_extra").reduce((sum, e) => sum + Number(e.value), 0) },
+    { name: "Benefício", value: payrollEntries.filter((e) => e.type === "beneficio").reduce((sum, e) => sum + Number(e.value), 0) },
+    { name: "Bonificação", value: payrollEntries.filter((e) => e.type === "bonificacao").reduce((sum, e) => sum + Number(e.value), 0) },
+    { name: "Desconto", value: payrollEntries.filter((e) => e.type === "desconto").reduce((sum, e) => sum + Number(e.value), 0) },
   ].filter((item) => item.value > 0);
 
   // Stats cards

@@ -44,7 +44,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 interface PendingEntry {
   id: string;
-  type: "salario" | "adicional" | "custo" | "despesa" | "vale" | "inss" | "fgts" | "irpf";
+  type: "salario_base" | "hora_extra" | "custo" | "despesa" | "beneficio" | "inss" | "fgts" | "irpf";
   description: string;
   value: number;
   is_fixed: boolean;
@@ -115,7 +115,7 @@ const CollaboratorModal = ({
 
   // Entry form state - extended with month/year/installment
   const [entryForm, setEntryForm] = useState({
-    type: "adicional" as "salario" | "adicional" | "custo" | "despesa" | "vale",
+    type: "hora_extra" as "salario_base" | "hora_extra" | "custo" | "despesa" | "beneficio",
     description: "",
     value: "",
     is_fixed: false,
@@ -329,7 +329,7 @@ const CollaboratorModal = ({
           const newEntries: PendingEntry[] = [
             {
               id: `position-${position.id}`,
-              type: "salario" as const,
+              type: "salario_base" as const,
               description: `Salário Base - ${position.name}`,
               value: position.salary,
               is_fixed: true,
@@ -402,7 +402,7 @@ const CollaboratorModal = ({
         .eq("collaborator_id", collaboratorId)
         .eq("month", currentMonth)
         .eq("year", currentYear)
-        .in("type", ["salario", "inss", "fgts", "irpf"]);
+        .in("type", ["salario_base", "inss", "fgts", "irpf"]);
 
       // 3. Create new entries with new position values
       if (newPosition.salary > 0) {
@@ -410,7 +410,7 @@ const CollaboratorModal = ({
           {
             collaborator_id: collaboratorId,
             company_id: currentCompany.id,
-            type: "salario",
+            type: "salario_base",
             description: `Salário Base - ${newPosition.name}`,
             value: newPosition.salary,
             month: currentMonth,
@@ -786,7 +786,7 @@ const CollaboratorModal = ({
     }
 
     setAddEntryOpen(false);
-    setEntryForm({ type: "adicional", description: "", value: "", is_fixed: false, month: currentMonth, year: currentYear, is_installment: false, installment_count: 2 });
+    setEntryForm({ type: "hora_extra", description: "", value: "", is_fixed: false, month: currentMonth, year: currentYear, is_installment: false, installment_count: 2 });
     toast.success("Lançamento adicionado!");
   };
 
@@ -841,7 +841,7 @@ const CollaboratorModal = ({
 
       refetchEntries();
       setAddEntryOpen(false);
-      setEntryForm({ type: "adicional", description: "", value: "", is_fixed: false, month: currentMonth, year: currentYear, is_installment: false, installment_count: 2 });
+      setEntryForm({ type: "hora_extra", description: "", value: "", is_fixed: false, month: currentMonth, year: currentYear, is_installment: false, installment_count: 2 });
       toast.success("Lançamento adicionado!");
     } catch (error) {
       toast.error("Erro ao adicionar lançamento");
@@ -1021,8 +1021,8 @@ const CollaboratorModal = ({
 
   // Get entry type color
   const getEntryTypeVariant = (type: string): "default" | "secondary" | "destructive" | "outline" => {
-    if (type === "custo" || type === "despesa" || type === "inss" || type === "irpf" || type === "vale") return "destructive";
-    if (type === "salario") return "default";
+    if (type === "custo" || type === "despesa" || type === "inss" || type === "irpf" || type === "beneficio") return "destructive";
+    if (type === "salario_base") return "default";
     if (type === "fgts") return "outline";
     return "secondary";
   };
@@ -1341,11 +1341,11 @@ const CollaboratorModal = ({
                                       {entry.description || getEntryTypeLabel(entry.type)}
                                     </span>
                                     <span className={`font-mono text-sm font-semibold shrink-0 ${
-                                      ["inss", "irpf", "despesa", "vale", "custo", "fgts"].includes(entry.type) 
+                                      ["inss", "irpf", "despesa", "beneficio", "custo", "fgts"].includes(entry.type) 
                                         ? "text-destructive" 
                                         : "text-green-600"
                                     }`}>
-                                      {["inss", "irpf", "despesa", "vale", "custo", "fgts"].includes(entry.type) ? "- " : "+ "}
+                                      {["inss", "irpf", "despesa", "beneficio", "custo", "fgts"].includes(entry.type) ? "- " : "+ "}
                                       {formatCurrency(entry.value)}
                                     </span>
                                   </div>
@@ -1677,11 +1677,14 @@ const CollaboratorModal = ({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="salario">Salário</SelectItem>
-                  <SelectItem value="adicional">Adicional</SelectItem>
-                  <SelectItem value="vale">Vale</SelectItem>
-                  <SelectItem value="custo">Custo</SelectItem>
-                  <SelectItem value="despesa">Despesa</SelectItem>
+                  <SelectItem value="salario_base">Salário base</SelectItem>
+                  <SelectItem value="hora_extra">Hora extra</SelectItem>
+                  <SelectItem value="beneficio">Benefício</SelectItem>
+                  <SelectItem value="bonificacao">Bonificação</SelectItem>
+                  <SelectItem value="atestado">Atestado</SelectItem>
+                  <SelectItem value="adiantamento">Adiantamento</SelectItem>
+                  <SelectItem value="desconto">Desconto</SelectItem>
+                  <SelectItem value="falta">Falta</SelectItem>
                 </SelectContent>
               </Select>
             </div>
