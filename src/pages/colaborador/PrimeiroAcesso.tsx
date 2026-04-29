@@ -293,7 +293,7 @@ export default function PrimeiroAcesso() {
                   <h3 className="font-medium mb-2">Lançamentos</h3>
                   <div className="space-y-2">
                     {data.financialEntries.map((entry) => {
-                      const isCredit = entry.type === "salario" || entry.type === "adicional";
+                      const isCredit = entry.type === "salario_base" || entry.type === "hora_extra" || entry.type === "beneficio" || entry.type === "bonificacao" || entry.type === "atestado";
                       const sign = isCredit ? "+" : "-";
                       const colorClass = isCredit ? "text-green-600" : "text-red-600";
                       return (

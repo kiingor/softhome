@@ -51,7 +51,7 @@ import PayrollEntryForm from "@/components/payroll/PayrollEntryForm";
 
 interface PayrollEntry {
   id: string;
-   type: "salario" | "vale" | "custo" | "despesa" | "adicional" | "beneficio" | "inss" | "fgts" | "irpf";
+   type: "salario_base" | "beneficio" | "custo" | "despesa" | "hora_extra" | "falta" | "atestado" | "adiantamento" | "bonificacao" | "desconto" | "inss" | "fgts" | "irpf";
   description: string | null;
   value: number;
   month: number;

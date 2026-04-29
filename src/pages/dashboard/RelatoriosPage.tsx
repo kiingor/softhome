@@ -57,9 +57,9 @@ const typeLabels: Record<string, string> = {
 };
 
 // Types that are earnings (proventos)
-const earningsTypes = ["salario", "adicional"];
-// Types that are deductions (descontos) 
-const deductionTypes = ["inss", "irpf", "despesa", "custo", "vale"];
+const earningsTypes = ["salario_base", "hora_extra", "beneficio", "bonificacao", "atestado"];
+// Types that are deductions (descontos)
+const deductionTypes = ["desconto", "falta", "adiantamento", "inss", "irpf", "despesa", "custo"];
 
 const RelatoriosPage = () => {
   const { currentCompany, hasAnyRole } = useDashboard();

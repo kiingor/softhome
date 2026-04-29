@@ -18,7 +18,8 @@ export type ModuleType =
   | "jornada"
   | "admissoes"
   | "vagas"
-  | "candidatos";
+  | "candidatos"
+  | "folha";
 
 export interface ModulePermissions {
   canView: boolean;

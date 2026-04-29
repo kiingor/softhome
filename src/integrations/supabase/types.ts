@@ -2769,14 +2769,19 @@ export type Database = {
         | "other"
       payroll_alert_severity: "info" | "warning" | "critical"
       payroll_entry_type:
-        | "salario"
-        | "vale"
+        | "salario_base"
+        | "beneficio"
         | "custo"
         | "despesa"
-        | "adicional"
+        | "hora_extra"
         | "inss"
         | "fgts"
         | "irpf"
+        | "falta"
+        | "atestado"
+        | "adiantamento"
+        | "bonificacao"
+        | "desconto"
       payroll_period_status: "open" | "closed" | "exported"
       plan_tier: "essencial" | "crescer" | "profissional" | "empresa_plus"
     }
@@ -2990,14 +2995,19 @@ export const Constants = {
       ],
       payroll_alert_severity: ["info", "warning", "critical"],
       payroll_entry_type: [
-        "salario",
-        "vale",
+        "salario_base",
+        "beneficio",
         "custo",
         "despesa",
-        "adicional",
+        "hora_extra",
         "inss",
         "fgts",
         "irpf",
+        "falta",
+        "atestado",
+        "adiantamento",
+        "bonificacao",
+        "desconto",
       ],
       payroll_period_status: ["open", "closed", "exported"],
       plan_tier: ["essencial", "crescer", "profissional", "empresa_plus"],
