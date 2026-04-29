@@ -275,6 +275,165 @@ export type Database = {
           },
         ]
       }
+      agent_messages: {
+        Row: {
+          content: string
+          content_blocks: Json | null
+          created_at: string
+          id: string
+          metadata: Json | null
+          model: string | null
+          role: Database["public"]["Enums"]["agent_message_role"]
+          session_id: string
+          token_input: number | null
+          token_output: number | null
+        }
+        Insert: {
+          content: string
+          content_blocks?: Json | null
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          model?: string | null
+          role: Database["public"]["Enums"]["agent_message_role"]
+          session_id: string
+          token_input?: number | null
+          token_output?: number | null
+        }
+        Update: {
+          content?: string
+          content_blocks?: Json | null
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          model?: string | null
+          role?: Database["public"]["Enums"]["agent_message_role"]
+          session_id?: string
+          token_input?: number | null
+          token_output?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_messages_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "agent_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_search_log: {
+        Row: {
+          agent_kind: string
+          company_id: string
+          created_at: string
+          duration_ms: number | null
+          id: string
+          query: string
+          results: Json
+          session_id: string | null
+          threshold: number | null
+          top_k: number
+          user_id: string
+        }
+        Insert: {
+          agent_kind: string
+          company_id: string
+          created_at?: string
+          duration_ms?: number | null
+          id?: string
+          query: string
+          results: Json
+          session_id?: string | null
+          threshold?: number | null
+          top_k?: number
+          user_id: string
+        }
+        Update: {
+          agent_kind?: string
+          company_id?: string
+          created_at?: string
+          duration_ms?: number | null
+          id?: string
+          query?: string
+          results?: Json
+          session_id?: string | null
+          threshold?: number | null
+          top_k?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_search_log_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "agent_search_log_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_search_log_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "agent_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_sessions: {
+        Row: {
+          agent_kind: string
+          archived_at: string | null
+          company_id: string
+          created_at: string
+          id: string
+          title: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          agent_kind: string
+          archived_at?: string | null
+          company_id: string
+          created_at?: string
+          id?: string
+          title?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          agent_kind?: string
+          archived_at?: string | null
+          company_id?: string
+          created_at?: string
+          id?: string
+          title?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_sessions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "agent_sessions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_log: {
         Row: {
           action: string
@@ -2804,6 +2963,7 @@ export type Database = {
         | "contract_signed"
         | "admitted"
         | "cancelled"
+      agent_message_role: "user" | "assistant" | "system" | "tool"
       app_role:
         | "admin_gc"
         | "rh"
@@ -3025,6 +3185,7 @@ export const Constants = {
         "admitted",
         "cancelled",
       ],
+      agent_message_role: ["user", "assistant", "system", "tool"],
       app_role: [
         "admin_gc",
         "rh",

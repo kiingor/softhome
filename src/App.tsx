@@ -32,6 +32,7 @@ import VagaDetailPage from "./modules/recruitment/pages/VagaDetailPage";
 import CandidatosPage from "./modules/recruitment/pages/CandidatosPage";
 import PeriodosPage from "./modules/payroll/pages/PeriodosPage";
 import PeriodDetailPage from "./modules/payroll/pages/PeriodDetailPage";
+import RecrutadorPage from "./modules/agents/pages/RecrutadorPage";
 
 // Portal do Colaborador
 import { PortalProvider } from "./contexts/PortalContext";
@@ -92,6 +93,7 @@ const App = () => {
             <Route path="candidatos" element={<CandidatosPage />} />
             <Route path="folha" element={<PeriodosPage />} />
             <Route path="folha/:id" element={<PeriodDetailPage />} />
+            <Route path="recrutador" element={<RecrutadorPage />} />
           </Route>
 
           {/* Portal do Colaborador - Login */}
