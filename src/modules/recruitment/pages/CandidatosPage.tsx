@@ -23,10 +23,10 @@ import {
   Plus,
   MagnifyingGlass as Search,
   Users,
-  Eye,
 } from "@phosphor-icons/react";
 import { useCandidates } from "../hooks/use-candidates";
 import { NewCandidateForm } from "../components/NewCandidateForm";
+import { CvUploadCell } from "../components/CvUploadCell";
 import type { CandidateManualValues } from "../schemas/recruitment.schema";
 import { formatCPF } from "@/lib/validators";
 
@@ -169,22 +169,7 @@ export default function CandidatosPage() {
                       {new Date(c.created_at).toLocaleDateString("pt-BR")}
                     </TableCell>
                     <TableCell className="text-right">
-                      {c.cv_url ? (
-                        <Button asChild variant="ghost" size="sm">
-                          <a
-                            href={c.cv_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            <Eye className="w-4 h-4 mr-1" />
-                            Ver CV
-                          </a>
-                        </Button>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">
-                          Sem CV
-                        </span>
-                      )}
+                      <CvUploadCell candidate={c} />
                     </TableCell>
                   </TableRow>
                 ))}

@@ -551,12 +551,72 @@ export type Database = {
           },
         ]
       }
+      candidate_embeddings: {
+        Row: {
+          candidate_id: string
+          company_id: string
+          content: string
+          created_at: string
+          embedding: string
+          id: string
+          model: string
+          token_count: number | null
+          updated_at: string
+        }
+        Insert: {
+          candidate_id: string
+          company_id: string
+          content: string
+          created_at?: string
+          embedding: string
+          id?: string
+          model: string
+          token_count?: number | null
+          updated_at?: string
+        }
+        Update: {
+          candidate_id?: string
+          company_id?: string
+          content?: string
+          created_at?: string
+          embedding?: string
+          id?: string
+          model?: string
+          token_count?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "candidate_embeddings_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: true
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "candidate_embeddings_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "candidate_embeddings_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       candidates: {
         Row: {
           company_id: string
           cpf: string | null
           created_at: string
           cv_filename: string | null
+          cv_processed_at: string | null
+          cv_summary: string | null
           cv_url: string | null
           email: string | null
           id: string
@@ -573,6 +633,8 @@ export type Database = {
           cpf?: string | null
           created_at?: string
           cv_filename?: string | null
+          cv_processed_at?: string | null
+          cv_summary?: string | null
           cv_url?: string | null
           email?: string | null
           id?: string
@@ -589,6 +651,8 @@ export type Database = {
           cpf?: string | null
           created_at?: string
           cv_filename?: string | null
+          cv_processed_at?: string | null
+          cv_summary?: string | null
           cv_url?: string | null
           email?: string | null
           id?: string
@@ -2689,6 +2753,19 @@ export type Database = {
       is_company_admin: {
         Args: { _company_id: string; _user_id: string }
         Returns: boolean
+      }
+      match_candidates: {
+        Args: {
+          filter_company_id?: string
+          match_count?: number
+          match_threshold?: number
+          query_embedding: string
+        }
+        Returns: {
+          candidate_id: string
+          content: string
+          similarity: number
+        }[]
       }
       user_belongs_to_company: {
         Args: { _company_id: string; _user_id: string }
