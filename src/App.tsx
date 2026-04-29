@@ -29,6 +29,7 @@ import AdmissionDetailPage from "./modules/admission/pages/AdmissionDetailPage";
 import VagasPage from "./modules/recruitment/pages/VagasPage";
 import VagaDetailPage from "./modules/recruitment/pages/VagaDetailPage";
 import CandidatosPage from "./modules/recruitment/pages/CandidatosPage";
+import AplicarPage from "./modules/recruitment/pages/AplicarPage";
 import PeriodosPage from "./modules/payroll/pages/PeriodosPage";
 import PeriodDetailPage from "./modules/payroll/pages/PeriodDetailPage";
 import RecrutadorPage from "./modules/agents/pages/RecrutadorPage";
@@ -68,6 +69,9 @@ const App = () => {
         <Routes>
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/login" element={<Login />} />
+
+          {/* Form público de candidatura (sem auth, fora do DashboardLayout) */}
+          <Route path="/aplicar/:jobId" element={<AplicarPage />} />
 
           {/* Dashboard routes with persistent layout */}
           <Route path="/dashboard" element={<DashboardLayout />}>

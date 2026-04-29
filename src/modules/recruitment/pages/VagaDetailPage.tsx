@@ -7,7 +7,10 @@ import {
   ArrowLeft,
   Pencil,
   CircleNotch as Loader2,
+  Copy,
+  LinkSimple,
 } from "@phosphor-icons/react";
+import { toast } from "sonner";
 import {
   useJobOpening,
   useJobApplications,
@@ -125,6 +128,43 @@ export default function VagaDetailPage() {
           </Button>
         </div>
       </div>
+
+      {/* Link público pra divulgar a vaga */}
+      {job.status === "open" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <LinkSimple className="w-4 h-4" />
+              Link de candidatura
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2 flex-wrap">
+              <code className="flex-1 min-w-[280px] text-xs bg-muted px-3 py-2 rounded font-mono break-all">
+                {`${window.location.origin}/aplicar/${job.id}`}
+              </code>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  navigator.clipboard
+                    .writeText(`${window.location.origin}/aplicar/${job.id}`)
+                    .then(() => toast.success("Link copiado ✓"))
+                    .catch(() => toast.error("Não rolou copiar."));
+                }}
+              >
+                <Copy className="w-4 h-4 mr-2" />
+                Copiar
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              Compartilhe esse link onde quiser. Quem aplicar vai entrar
+              direto no pipeline desta vaga + ficar no banco de talentos
+              (se consentir).
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Descrição + requisitos colapsável */}
       {(job.description || job.requirements) && (
