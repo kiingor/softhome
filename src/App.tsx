@@ -30,6 +30,7 @@ import VagasPage from "./modules/recruitment/pages/VagasPage";
 import VagaDetailPage from "./modules/recruitment/pages/VagaDetailPage";
 import CandidatosPage from "./modules/recruitment/pages/CandidatosPage";
 import AplicarPage from "./modules/recruitment/pages/AplicarPage";
+import AdmissaoPublicaPage from "./modules/admission/pages/AdmissaoPublicaPage";
 import PeriodosPage from "./modules/payroll/pages/PeriodosPage";
 import PeriodDetailPage from "./modules/payroll/pages/PeriodDetailPage";
 import RecrutadorPage from "./modules/agents/pages/RecrutadorPage";
@@ -70,8 +71,9 @@ const App = () => {
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/login" element={<Login />} />
 
-          {/* Form público de candidatura (sem auth, fora do DashboardLayout) */}
+          {/* Forms públicos (sem auth, fora do DashboardLayout) */}
           <Route path="/aplicar/:jobId" element={<AplicarPage />} />
+          <Route path="/admissao/:token" element={<AdmissaoPublicaPage />} />
 
           {/* Dashboard routes with persistent layout */}
           <Route path="/dashboard" element={<DashboardLayout />}>
