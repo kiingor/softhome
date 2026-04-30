@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash as Trash2, Briefcase, Info, FileText } from "@phosphor-icons/react";
+import { Plus, Pencil, Trash as Trash2, Briefcase, Info, FileText, Copy } from "@phosphor-icons/react";
 import { supabase } from '@/integrations/supabase/client';
 import { useDashboard } from '@/contexts/DashboardContext';
 import PermissionGuard from '@/components/dashboard/PermissionGuard';
@@ -294,6 +294,17 @@ export default function CargosPage() {
                       <TableCell>{(position.irpf_percent || 0).toFixed(2).replace('.', ',')}%</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Copiar ID"
+                            onClick={() => {
+                              navigator.clipboard.writeText(position.id);
+                              toast.success("ID copiado!");
+                            }}
+                          >
+                            <Copy className="h-4 w-4 text-muted-foreground" />
+                          </Button>
                           {canDelete && (
                             <AlertDialog>
                               <AlertDialogTrigger asChild>

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Users, Pencil, Trash as Trash2 } from "@phosphor-icons/react";
+import { Plus, Users, Pencil, Trash as Trash2, Copy } from "@phosphor-icons/react";
 import { supabase } from '@/integrations/supabase/client';
 import { useDashboard } from '@/contexts/DashboardContext';
 import PermissionGuard from '@/components/dashboard/PermissionGuard';
@@ -325,6 +325,17 @@ export default function SetoresPage() {
                       <TableCell>{team.stores?.store_name || '-'}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Copiar ID"
+                            onClick={() => {
+                              navigator.clipboard.writeText(team.id);
+                              toast.success("ID copiado!");
+                            }}
+                          >
+                            <Copy className="h-4 w-4 text-muted-foreground" />
+                          </Button>
                           <Button
                             variant="ghost"
                             size="icon"
