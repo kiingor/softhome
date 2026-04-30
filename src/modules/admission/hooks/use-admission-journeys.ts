@@ -115,14 +115,71 @@ export function useAdmissionJourneys(options: UseAdmissionJourneysOptions = {}) 
 
       if (eventError) console.error("Erro ao registrar evento:", eventError);
 
+      // 4. Auto-envio do link por email se candidato tem email cadastrado.
+      //    Falha silenciosa: RH ainda pode reenviar manualmente no detail.
+      if (values.candidate_email) {
+        try {
+          await supabase.functions.invoke("admission-send-token", {
+            body: {
+              journey_id: journey.id,
+              public_url_origin: window.location.origin,
+            },
+          });
+        } catch (err) {
+          console.warn("[admission] auto-send do email falhou:", err);
+        }
+      }
+
       return journey;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admission-journeys"] });
+      queryClient.invalidateQueries({ queryKey: ["admission-events"] });
       toast.success("Admissão criada ✓");
     },
     onError: (err: Error) => {
       toast.error("Não rolou. " + (err.message ?? "Tenta de novo?"));
+    },
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Reenvia link por email (botão "Enviar por email" no detail)
+  // ─────────────────────────────────────────────────────────────────────────
+  const sendTokenEmail = useMutation({
+    mutationFn: async (journeyId: string) => {
+      const { data, error } = await supabase.functions.invoke<{
+        success: boolean;
+        sent_to: string;
+        resend_id: string;
+      }>("admission-send-token", {
+        body: {
+          journey_id: journeyId,
+          public_url_origin: window.location.origin,
+        },
+      });
+
+      if (error) {
+        let msg = error.message;
+        const ctx = (error as { context?: { json?: () => Promise<{ error?: string; details?: string }> } }).context;
+        if (ctx?.json) {
+          try {
+            const body = await ctx.json();
+            if (body?.error) msg = body.error + (body.details ? ` — ${body.details}` : "");
+          } catch {
+            // ignore
+          }
+        }
+        throw new Error(msg);
+      }
+      if (!data) throw new Error("Resposta vazia");
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["admission-events"] });
+      toast.success(`Email enviado pra ${data.sent_to} ✓`);
+    },
+    onError: (err: Error) => {
+      toast.error("Não rolou enviar. " + (err.message ?? "Tenta de novo?"));
     },
   });
 
@@ -229,6 +286,7 @@ export function useAdmissionJourneys(options: UseAdmissionJourneysOptions = {}) 
     createJourney,
     updateStatus,
     regenerateToken,
+    sendTokenEmail,
   };
 }
 
