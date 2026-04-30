@@ -49,6 +49,12 @@ export function CvUploadCell({ candidate }: CvUploadCellProps) {
 
   const handleViewCv = async () => {
     if (!candidate.cv_url) return;
+    // URL completa (vinda da API ou storage público) — abre direto
+    if (candidate.cv_url.startsWith("http")) {
+      window.open(candidate.cv_url, "_blank", "noopener");
+      return;
+    }
+    // Path relativo de storage — gera signed URL
     const url = await getCvSignedUrl(candidate.cv_url);
     if (url) {
       window.open(url, "_blank", "noopener");
