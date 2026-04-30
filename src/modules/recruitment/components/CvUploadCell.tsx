@@ -79,7 +79,7 @@ export function CvUploadCell({ candidate }: CvUploadCellProps) {
       {indexed && (
         <Badge
           variant="outline"
-          className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 border-0 text-xs font-normal"
+          className="bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300 border-0 text-xs font-normal"
         >
           <CheckCircle className="w-3 h-3 mr-1" />
           Indexado

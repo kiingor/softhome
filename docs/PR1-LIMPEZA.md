@@ -37,13 +37,13 @@ git checkout -b chore/remove-saas-layer
 - [ ] Sem fluxo de "criar conta de empresa" — admin G&C cria empresas via tela interna
 
 ### `index.html`
-- [ ] Trocar `<title>` pra "SoftHome"
+- [ ] Trocar `<title>` pra "SoftHouse"
 - [ ] Remover meta tags comerciais (description, og marketing)
 - [ ] Remover ambos JSON-LD (FAQ e Organization)
 - [ ] Atualizar favicon
 
 ### `package.json`
-- [ ] Trocar `name` pra `softhome`
+- [ ] Trocar `name` pra `SoftHouse`
 - [ ] Trocar `description`
 - [ ] Bumpar version pra `0.1.0`
 
@@ -90,7 +90,7 @@ chore: remove SaaS commercial layer for internal-only operation
 - Remove commercial landing page and FAQ
 - Remove master admin (multi-tenant master role)
 - Remove plan limits and billing utils
-- Update package.json and index.html for SoftHome branding
+- Update package.json and index.html for SoftHouse branding
 
 This PR strips the meurh fork down to its core RH features
 for internal Softcom use. No schema changes yet.

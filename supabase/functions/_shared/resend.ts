@@ -1,4 +1,4 @@
-// Wrapper Resend pra Edge Functions SoftHome.
+// Wrapper Resend pra Edge Functions SoftHouse.
 //
 // Usa fetch direto (Resend REST API simples) — sem dependência de SDK.
 // Lê RESEND_API_KEY do env. FROM padrão é onboarding@resend.dev (sandbox
@@ -13,7 +13,7 @@
 //     html: "<p>Olá!</p>",
 //   });
 
-const DEFAULT_FROM = "SoftHome <onboarding@resend.dev>";
+const DEFAULT_FROM = "SoftHouse <onboarding@resend.dev>";
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 
 export interface SendEmailOptions {
@@ -81,7 +81,7 @@ export async function sendEmail(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Template baseline pra emails internos do SoftHome
+// Template baseline pra emails internos do SoftHouse
 // (header verde, container central, footer com microcopy)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -94,14 +94,14 @@ export interface BaseTemplateOptions {
   ctaLabel?: string;
   /** URL do CTA (obrigatório se ctaLabel) */
   ctaUrl?: string;
-  /** Empresa pra mostrar no header (default "SoftHome") */
+  /** Empresa pra mostrar no header (default "SoftHouse") */
   companyName?: string;
   /** Texto do footer (default microcopy padrão) */
   footerText?: string;
 }
 
 export function renderBaseTemplate(opts: BaseTemplateOptions): string {
-  const company = opts.companyName ?? "SoftHome";
+  const company = opts.companyName ?? "SoftHouse";
   const footer = opts.footerText ??
     "Email automático do sistema de Gente & Cultura. Se não era pra ti, pode ignorar.";
 
@@ -110,7 +110,7 @@ export function renderBaseTemplate(opts: BaseTemplateOptions): string {
         <tr>
           <td style="padding: 24px 32px 8px;">
             <a href="${opts.ctaUrl}"
-               style="display:inline-block;background:#10b981;color:#ffffff;
+               style="display:inline-block;background:#F97316;color:#ffffff;
                       padding:12px 24px;border-radius:8px;text-decoration:none;
                       font-weight:600;font-family:Manrope,Arial,sans-serif;
                       font-size:15px;">
@@ -122,7 +122,7 @@ export function renderBaseTemplate(opts: BaseTemplateOptions): string {
           <td style="padding:0 32px 24px;font-size:13px;color:#64748b;
                      font-family:Manrope,Arial,sans-serif;">
             Botão não funciona? Copia e cola este link no navegador:<br/>
-            <a href="${opts.ctaUrl}" style="color:#10b981;word-break:break-all;">
+            <a href="${opts.ctaUrl}" style="color:#F97316;word-break:break-all;">
               ${opts.ctaUrl}
             </a>
           </td>
@@ -144,7 +144,7 @@ export function renderBaseTemplate(opts: BaseTemplateOptions): string {
                style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;
                       box-shadow:0 1px 3px rgba(0,0,0,0.04);">
           <tr>
-            <td style="background:#10b981;padding:20px 32px;color:#ffffff;
+            <td style="background:#F97316;padding:20px 32px;color:#ffffff;
                        font-weight:700;font-size:18px;letter-spacing:-0.01em;">
               ${escapeHtml(company)} — Gente & Cultura
             </td>

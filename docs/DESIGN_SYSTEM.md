@@ -1,4 +1,4 @@
-# SoftHome — Design System
+# SoftHouse — Design System
 
 Tom geral: **friendly/amigável, light-first, denso quando útil, espaçoso quando humano.**
 
@@ -16,7 +16,7 @@ Tom geral: **friendly/amigável, light-first, denso quando útil, espaçoso quan
 
 ```css
 /* Primary — emerald */
---primary: 158 64% 40%;          /* #10b981 */
+--primary: 158 64% 40%;          /* #F97316 */
 --primary-foreground: 0 0% 100%;
 
 /* Background light */
@@ -83,7 +83,7 @@ Sutis. Tailwind `shadow-sm` em cards default, `shadow-md` em modais/sheets, `sha
 
 ### Layout
 
-- **Sidebar fixa colapsável** à esquerda (logo SoftHome no topo, módulos no meio, perfil no rodapé)
+- **Sidebar fixa colapsável** à esquerda (logo SoftHouse no topo, módulos no meio, perfil no rodapé)
 - **Top bar** com breadcrumb + busca global + notificações + avatar
 - **Main content** com `max-w-7xl mx-auto`
 
@@ -152,7 +152,7 @@ Tom: amigável em pt-BR brasileiro. Direto, sem rebuscar. Emoji só em contextos
 
 ### Tabela de exemplos
 
-| Contexto | Sério-corporativo (não usar) | SoftHome (usar) |
+| Contexto | Sério-corporativo (não usar) | SoftHouse (usar) |
 |---|---|---|
 | Empty state colaboradores | "Nenhum colaborador cadastrado" | "Tá vazio por aqui. Bora cadastrar o primeiro?" |
 | Empty state candidatos | "Sem candidatos para esta vaga" | "Ainda não chegou ninguém. Bora divulgar a vaga?" |
@@ -162,7 +162,7 @@ Tom: amigável em pt-BR brasileiro. Direto, sem rebuscar. Emoji só em contextos
 | CPF inválido | "CPF inválido" | "Esse CPF não tá batendo, dá uma conferida?" |
 | CNPJ inválido | "CNPJ inválido" | "Esse CNPJ tá com algo errado, confere aí?" |
 | Email duplicado | "Email já cadastrado" | "Esse email já tá no sistema." |
-| Onboarding | "Bem-vindo ao SoftHome" | "Que bom te ver aqui 👋" |
+| Onboarding | "Bem-vindo ao SoftHouse" | "Que bom te ver aqui 👋" |
 | Documento aprovado | "Documento aprovado" | "Documento ok ✓" |
 | Documento rejeitado | "Documento rejeitado" | "Esse documento precisa de ajuste. Veja o motivo." |
 | Insígnia conquistada | "Insígnia obtida com sucesso" | "Conquistou uma insígnia! 🎉" |
@@ -194,10 +194,10 @@ Verbo no infinitivo ou imperativo, nunca "Sim/Não" em diálogos importantes.
 
 ## 5. Logo
 
-**Wordmark "SoftHome"** em Manrope 800, com pequeno símbolo emerald antes (sugestão: casa estilizada do Phosphor `House` em emerald, ou um círculo com inicial).
+**Wordmark "SoftHouse"** em Manrope 800, com pequeno símbolo emerald antes (sugestão: casa estilizada do Phosphor `House` em emerald, ou um círculo com inicial).
 
 ```
-[●] SoftHome     ← em Manrope 800
+[●] SoftHouse     ← em Manrope 800
 ```
 
 Versão MVP. Logo "de verdade" entra quando tiver budget/tempo.
@@ -208,7 +208,7 @@ SVG simples emerald, mesma forma do símbolo do wordmark. 32x32 e 16x16 fallback
 
 ## 6. Ilustrações
 
-Biblioteca: **unDraw** (https://undraw.co/illustrations) com cor customizada emerald (`#10b981`).
+Biblioteca: **unDraw** (https://undraw.co/illustrations) com cor customizada emerald (`#F97316`).
 
 Salvar em `src/shared/illustrations/` como SVGs. Componentes wrapper:
 

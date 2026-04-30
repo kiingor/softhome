@@ -1,4 +1,4 @@
-# SoftHome
+# SoftHouse
 
 Sistema interno de Gente & Cultura da Softcom (~300 colaboradores). Single-tenant, multi-CNPJ.
 

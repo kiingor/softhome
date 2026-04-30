@@ -154,12 +154,12 @@ export default function AdmissaoPublicaPage() {
             <div
               className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 ${
                 isFinal
-                  ? "bg-emerald-100 dark:bg-emerald-900/30"
+                  ? "bg-orange-100 dark:bg-orange-900/30"
                   : "bg-muted"
               }`}
             >
               {isFinal ? (
-                <Trophy className="w-8 h-8 text-emerald-700 dark:text-emerald-300" />
+                <Trophy className="w-8 h-8 text-orange-700 dark:text-orange-300" />
               ) : (
                 <Warning className="w-8 h-8 text-muted-foreground" />
               )}
@@ -195,7 +195,7 @@ export default function AdmissaoPublicaPage() {
   return (
     <div className="min-h-screen gradient-warm py-8 px-4">
       <div className="max-w-2xl mx-auto">
-        {/* Header SoftHome */}
+        {/* Header SoftHouse */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2 mb-2">
             <div className="w-10 h-10 rounded-xl gradient-hero flex items-center justify-center shadow-soft">
@@ -204,7 +204,7 @@ export default function AdmissaoPublicaPage() {
               </span>
             </div>
             <span className="text-lg font-extrabold tracking-tight text-foreground">
-              SoftHome
+              SoftHouse
             </span>
           </div>
         </div>
@@ -313,7 +313,7 @@ export default function AdmissaoPublicaPage() {
         )}
 
         <p className="text-xs text-muted-foreground text-center mt-6">
-          Powered by SoftHome — Sistema interno de Gente & Cultura
+          Powered by SoftHouse — Sistema interno de Gente & Cultura
         </p>
       </div>
     </div>
@@ -340,7 +340,7 @@ function DocRow({
   // Status colors
   const statusBadge =
     doc.status === "approved"
-      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
+      ? "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300"
       : doc.status === "needs_adjustment"
       ? "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300"
       : doc.status === "submitted" || doc.status === "ai_validating"
@@ -355,12 +355,12 @@ function DocRow({
       <div
         className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
           doc.status === "approved"
-            ? "bg-emerald-100 dark:bg-emerald-900/30"
+            ? "bg-orange-100 dark:bg-orange-900/30"
             : "bg-muted"
         }`}
       >
         {doc.status === "approved" ? (
-          <CheckCircle className="w-5 h-5 text-emerald-700 dark:text-emerald-300" />
+          <CheckCircle className="w-5 h-5 text-orange-700 dark:text-orange-300" />
         ) : (
           <FileText className="w-5 h-5 text-muted-foreground" />
         )}

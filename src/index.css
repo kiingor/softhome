@@ -4,7 +4,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* SoftHome — design tokens (ver docs/DESIGN_SYSTEM.md) */
+/* SoftHouse — design tokens (ver docs/DESIGN_SYSTEM.md) */
 
 @layer base {
   :root {
@@ -18,8 +18,8 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
 
-    /* Emerald primary */
-    --primary: 158 64% 40%;
+    /* Orange primary (#F97316) */
+    --primary: 21 95% 53%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 210 40% 96%;
@@ -28,38 +28,38 @@
     --muted: 210 40% 96%;
     --muted-foreground: 215 16% 47%;
 
-    --accent: 158 64% 40%;
+    --accent: 21 95% 53%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 158 64% 40%;
+    --success: 21 95% 53%;
     --warning: 38 92% 50%;
     --info: 217 91% 60%;
 
     --border: 214 32% 91%;
     --input: 214 32% 91%;
-    --ring: 158 64% 40%;
+    --ring: 21 95% 53%;
 
     --radius: 0.5rem;
 
     /* Custom tokens */
-    --gradient-hero: linear-gradient(135deg, hsl(158 64% 40%) 0%, hsl(158 64% 50%) 100%);
+    --gradient-hero: linear-gradient(135deg, hsl(21 95% 53%) 0%, hsl(21 95% 60%) 100%);
     --gradient-warm: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(210 40% 98%) 100%);
     --shadow-soft: 0 4px 20px -4px hsl(222 47% 11% / 0.06);
     --shadow-card: 0 8px 32px -8px hsl(222 47% 11% / 0.10);
-    --shadow-glow: 0 0 40px hsl(158 64% 40% / 0.25);
+    --shadow-glow: 0 0 40px hsl(21 95% 53% / 0.25);
 
     /* Sidebar */
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 222 47% 20%;
-    --sidebar-primary: 158 64% 40%;
+    --sidebar-primary: 21 95% 53%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 210 40% 96%;
     --sidebar-accent-foreground: 222 47% 11%;
     --sidebar-border: 214 32% 91%;
-    --sidebar-ring: 158 64% 40%;
+    --sidebar-ring: 21 95% 53%;
   }
 
   .dark {
@@ -72,7 +72,7 @@
     --popover: 222 47% 13%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 158 64% 50%;
+    --primary: 21 95% 60%;
     --primary-foreground: 222 47% 11%;
 
     --secondary: 217 33% 18%;
@@ -81,7 +81,7 @@
     --muted: 217 33% 18%;
     --muted-foreground: 215 20% 65%;
 
-    --accent: 158 64% 50%;
+    --accent: 21 95% 60%;
     --accent-foreground: 222 47% 11%;
 
     --destructive: 0 84% 60%;
@@ -89,16 +89,16 @@
 
     --border: 217 33% 22%;
     --input: 217 33% 22%;
-    --ring: 158 64% 50%;
+    --ring: 21 95% 60%;
 
     --sidebar-background: 222 47% 13%;
     --sidebar-foreground: 210 40% 90%;
-    --sidebar-primary: 158 64% 50%;
+    --sidebar-primary: 21 95% 60%;
     --sidebar-primary-foreground: 222 47% 11%;
     --sidebar-accent: 217 33% 18%;
     --sidebar-accent-foreground: 210 40% 98%;
     --sidebar-border: 217 33% 22%;
-    --sidebar-ring: 158 64% 50%;
+    --sidebar-ring: 21 95% 60%;
   }
 }
 

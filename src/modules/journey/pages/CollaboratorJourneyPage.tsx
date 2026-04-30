@@ -318,12 +318,12 @@ const STATUS_TONES: Record<
   },
   completed: {
     icon: CheckCircle,
-    iconColor: "text-emerald-700 dark:text-emerald-300",
-    iconBg: "bg-emerald-100 dark:bg-emerald-900/30",
-    bg: "bg-emerald-50 dark:bg-emerald-900/10",
-    border: "border-emerald-200 dark:border-emerald-800",
+    iconColor: "text-orange-700 dark:text-orange-300",
+    iconBg: "bg-orange-100 dark:bg-orange-900/30",
+    bg: "bg-orange-50 dark:bg-orange-900/10",
+    border: "border-orange-200 dark:border-orange-800",
     badgeClass:
-      "bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800",
+      "bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800",
   },
   overdue: {
     icon: Warning,

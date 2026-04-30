@@ -148,7 +148,7 @@ serve(async (req) => {
     .eq("id", journey.company_id)
     .maybeSingle();
 
-  const companyName = company?.company_name ?? "SoftHome";
+  const companyName = company?.company_name ?? "SoftHouse";
   const candidateUrl = `${origin}/admissao/${journey.access_token}`;
   const expiresStr = journey.token_expires_at
     ? new Date(journey.token_expires_at).toLocaleDateString("pt-BR")

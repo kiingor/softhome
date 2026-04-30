@@ -1,11 +1,11 @@
 ---
-name: softhome-schema-designer
-description: Use this skill when designing or modifying database schema for the SoftHome system. Triggers on requests to create tables, write migrations, define RLS policies, add indexes, or model new entities. Applies SoftHome conventions automatically (uuid PKs, timestamps, audit triggers, RLS by company_id, rollback blocks). Do not use for queries, edge functions, or frontend modeling.
+name: SoftHouse-schema-designer
+description: Use this skill when designing or modifying database schema for the SoftHouse system. Triggers on requests to create tables, write migrations, define RLS policies, add indexes, or model new entities. Applies SoftHouse conventions automatically (uuid PKs, timestamps, audit triggers, RLS by company_id, rollback blocks). Do not use for queries, edge functions, or frontend modeling.
 ---
 
-# SoftHome Schema Designer
+# SoftHouse Schema Designer
 
-Skill para modelagem e migrations no SoftHome. Aplica convenções do projeto sem precisar perguntar.
+Skill para modelagem e migrations no SoftHouse. Aplica convenções do projeto sem precisar perguntar.
 
 ## Quando usar
 
@@ -23,7 +23,7 @@ Skill para modelagem e migrations no SoftHome. Aplica convenções do projeto se
 - Componentes React
 - Lógica de cálculo
 
-## Convenções obrigatórias SoftHome
+## Convenções obrigatórias SoftHouse
 
 ### Toda tabela nova tem
 1. `id uuid PRIMARY KEY DEFAULT gen_random_uuid()`
@@ -259,4 +259,4 @@ Se alguma não existe ainda, criar na migration apropriada e listar aqui.
 5. Index em qual coluna pra performance?
 6. Comportamento `ON DELETE` da FK (cascata, restrição, set null)?
 
-Se ficar claro do contexto, não pergunta — aplica os defaults SoftHome.
+Se ficar claro do contexto, não pergunta — aplica os defaults SoftHouse.

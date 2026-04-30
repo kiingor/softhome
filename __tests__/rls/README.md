@@ -1,4 +1,4 @@
-# RLS Tests — SoftHome
+# RLS Tests — SoftHouse
 
 Suite de testes de **Row Level Security** que valida o isolamento por CNPJ
 (multi-CNPJ) e por papel exigidos pelo `docs/adr/0002-multi-cnpj.md`.
@@ -84,7 +84,7 @@ Para cada execução, `createFixtures()` cria:
 | `collaboratorA`   | (registro)   | A        | Linha em `collaborators`.                                 |
 | `collaboratorB`   | (registro)   | B        | Linha em `collaborators` (sem usuário associado).         |
 
-Cada usuário é criado com email `rls-test-<role>-<companyTag>-<runId>@softhome.test`,
+Cada usuário é criado com email `rls-test-<role>-<companyTag>-<runId>@SoftHouse.test`,
 senha aleatória, e `email_confirm: true` (via service_role).
 
 `signInAs(role, company)` retorna um cliente Supabase autenticado como

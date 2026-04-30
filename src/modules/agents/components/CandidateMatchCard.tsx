@@ -23,7 +23,7 @@ export function CandidateMatchCard({
   const score = Math.round(candidate.similarity * 100);
   const scoreClass =
     score >= 70
-      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
+      ? "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300"
       : score >= 50
       ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
       : "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300";

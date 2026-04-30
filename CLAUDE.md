@@ -1,4 +1,4 @@
-# SoftHome — Sistema de Gente & Cultura interno
+# SoftHouse — Sistema de Gente & Cultura interno
 
 > Contexto pro Claude Code. Lê isso antes de qualquer ação no repo.
 
@@ -16,7 +16,7 @@ Forkado a partir do `kiingor/meurh` (produto SaaS comercial), em processo de tra
 - **IA produção:** Claude (paga) v1 → modelo local em fase posterior
 - **Tipografia:** Manrope (interface + títulos)
 - **Ícones:** Phosphor Icons
-- **Cor accent:** emerald (#10b981)
+- **Cor accent:** emerald (#F97316)
 - **Forms:** react-hook-form + zod
 - **Tabelas:** TanStack Table
 
@@ -72,7 +72,7 @@ supabase/
 docs/
 ├── PLANEJAMENTO.md       # plano completo, fonte de verdade do escopo
 ├── DESIGN_SYSTEM.md      # tokens, microcopy, padrões visuais
-├── PR1-LIMPEZA.md        # checklist da migração meurh → softhome
+├── PR1-LIMPEZA.md        # checklist da migração meurh → SoftHouse
 └── adr/                  # Architecture Decision Records
     ├── 0001-stack.md
     ├── 0002-multi-cnpj.md
@@ -81,7 +81,7 @@ docs/
 
 .claude/
 └── skills/               # skills de dev (Claude Code carrega automaticamente)
-    └── softhome-schema-designer/
+    └── SoftHouse-schema-designer/
         └── SKILL.md
 ```
 

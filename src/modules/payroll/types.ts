@@ -1,6 +1,6 @@
 // Tipos do módulo Folha (controle, NÃO cálculo CLT).
 //
-// CLAUDE.md princípio 2: SoftHome não calcula folha.
+// CLAUDE.md princípio 2: SoftHouse não calcula folha.
 // Apenas controla lançamentos e exporta organizado pro contador.
 
 import type { Database } from "@/integrations/supabase/types";
@@ -25,7 +25,7 @@ export type PayrollAlertSeverity =
   Database["public"]["Enums"]["payroll_alert_severity"];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Tipos de lançamento ATIVOS no SoftHome (decisão Q1 da Fase 4)
+// Tipos de lançamento ATIVOS no SoftHouse (decisão Q1 da Fase 4)
 // Os outros valores do enum são órfãos legacy meurh; não usar pra novos
 // lançamentos. UI mostra só estes.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -103,7 +103,7 @@ export const PERIOD_STATUS_COLORS: Record<PayrollPeriodStatus, string> = {
   closed:
     "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
   exported:
-    "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
+    "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

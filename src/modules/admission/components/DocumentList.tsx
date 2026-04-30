@@ -85,14 +85,14 @@ export function DocumentList({ journeyId, canManage }: DocumentListProps) {
                 className={cn(
                   "w-9 h-9 rounded-lg flex items-center justify-center shrink-0",
                   doc.status === "approved"
-                    ? "bg-emerald-100 dark:bg-emerald-900/30"
+                    ? "bg-orange-100 dark:bg-orange-900/30"
                     : doc.status === "needs_adjustment"
                     ? "bg-orange-100 dark:bg-orange-900/30"
                     : "bg-muted"
                 )}
               >
                 {doc.status === "approved" ? (
-                  <Check className="w-4 h-4 text-emerald-700 dark:text-emerald-300" />
+                  <Check className="w-4 h-4 text-orange-700 dark:text-orange-300" />
                 ) : doc.status === "needs_adjustment" ? (
                   <Warning className="w-4 h-4 text-orange-700 dark:text-orange-300" />
                 ) : (
@@ -140,7 +140,7 @@ export function DocumentList({ journeyId, canManage }: DocumentListProps) {
                             variant="outline"
                             size="sm"
                             onClick={() => handleValidate(doc.id)}
-                            className="text-emerald-700 border-emerald-200 hover:bg-emerald-50 dark:text-emerald-300 dark:border-emerald-800"
+                            className="text-orange-700 border-orange-200 hover:bg-orange-50 dark:text-orange-300 dark:border-orange-800"
                           >
                             <Sparkle className="w-4 h-4 mr-1" />
                             {doc.ai_validation_result ? "Revalidar IA" : "Validar com IA"}
@@ -219,11 +219,11 @@ function AIValidationCard({
 
   const tone = hasIssue
     ? "bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-800"
-    : "bg-emerald-50 border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-800";
+    : "bg-orange-50 border-orange-200 dark:bg-orange-900/20 dark:border-orange-800";
 
   const titleTone = hasIssue
     ? "text-amber-900 dark:text-amber-200"
-    : "text-emerald-900 dark:text-emerald-200";
+    : "text-orange-900 dark:text-orange-200";
 
   const confidencePct = confidence != null ? `${Math.round(confidence * 100)}%` : "—";
 

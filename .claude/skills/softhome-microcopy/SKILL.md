@@ -1,12 +1,12 @@
 ---
-name: softhome-microcopy
-description: Use this skill when writing user-facing strings (UI labels, toasts, empty states, error messages, confirmation dialogs, button copy) for SoftHome. Triggers on requests to write or improve copy in pt-BR for the SoftHome RH system. Applies the tone defined in docs/DESIGN_SYSTEM.md section 4 — friendly, direct, no infantilism, emoji only in welcome/achievement contexts.
+name: SoftHouse-microcopy
+description: Use this skill when writing user-facing strings (UI labels, toasts, empty states, error messages, confirmation dialogs, button copy) for SoftHouse. Triggers on requests to write or improve copy in pt-BR for the SoftHouse RH system. Applies the tone defined in docs/DESIGN_SYSTEM.md section 4 — friendly, direct, no infantilism, emoji only in welcome/achievement contexts.
 model: sonnet
 ---
 
-# SoftHome Microcopy
+# SoftHouse Microcopy
 
-Skill que codifica o tom e padrão de microcopy do SoftHome (ver `docs/DESIGN_SYSTEM.md` seção 4).
+Skill que codifica o tom e padrão de microcopy do SoftHouse (ver `docs/DESIGN_SYSTEM.md` seção 4).
 
 ## Quando usar
 
@@ -162,7 +162,7 @@ Mantém pessoalidade do "tu/você" (preferência: tratar por "você").
 
 1. **Frases curtas.** Se passou de 15 palavras, corta.
 2. **Voz ativa.** "Cadastramos seu colaborador" > "Seu colaborador foi cadastrado."
-3. **Segunda pessoa.** "Você" ou "tu" — escolha consistente. SoftHome usa **"você"** (mais brasileiro neutro), mas em contextos de descontraído como toasts pode usar "tu" eventualmente.
+3. **Segunda pessoa.** "Você" ou "tu" — escolha consistente. SoftHouse usa **"você"** (mais brasileiro neutro), mas em contextos de descontraído como toasts pode usar "tu" eventualmente.
 4. **Português br, não pt-pt.** "Você" não "tu" formal, "celular" não "telemóvel", etc.
 5. **Sem jargão técnico.** "Erro 500" é pra log, não pra usuário. Pro usuário: "Algo não foi bem aqui."
 6. **Sem inglês desnecessário.** "Salvar" não "Save", "Buscar" não "Search". Mas mantém termos consagrados: "login", "dashboard", "kanban".
