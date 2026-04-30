@@ -20,6 +20,7 @@ import {
   CircleNotch as Loader2,
   Trophy,
   XCircle,
+  EnvelopeSimple as Mail,
 } from "@phosphor-icons/react";
 import { useDashboard } from "@/contexts/DashboardContext";
 import {
@@ -41,7 +42,7 @@ export default function AdmissionDetailPage() {
 
   const { data: journey, isLoading } = useAdmissionJourney(id);
   const { documents } = useAdmissionDocuments(id);
-  const { updateStatus, regenerateToken } = useAdmissionJourneys();
+  const { updateStatus, regenerateToken, sendTokenEmail } = useAdmissionJourneys();
 
   const [confirmAction, setConfirmAction] = useState<
     "cancel" | "admit" | null
@@ -160,6 +161,21 @@ export default function AdmissionDetailPage() {
               <Copy className="w-4 h-4 mr-2" />
               Copiar
             </Button>
+            {canManage && journey.candidate_email && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => sendTokenEmail.mutate(journey.id)}
+                disabled={sendTokenEmail.isPending || !!tokenExpired}
+              >
+                {sendTokenEmail.isPending ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Mail className="w-4 h-4 mr-2" />
+                )}
+                Enviar por email
+              </Button>
+            )}
             {canManage && (
               <Button
                 variant="outline"
@@ -192,7 +208,11 @@ export default function AdmissionDetailPage() {
               "Sem expiração."
             )}
           </p>
-          {/* TODO: Sessão futura — botão "Enviar por email" usando Resend */}
+          {!journey.candidate_email && canManage && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Pra mandar por email, cadastra o email do candidato primeiro.
+            </p>
+          )}
         </CardContent>
       </Card>
 
