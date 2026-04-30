@@ -34,7 +34,7 @@ export const JOB_STATUS_LABELS: Record<JobOpeningStatus, string> = {
 
 export const JOB_STATUS_COLORS: Record<JobOpeningStatus, string> = {
   draft: "bg-muted text-muted-foreground",
-  open: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
+  open: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
   paused: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
   filled: "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300",
   cancelled: "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300",
@@ -58,7 +58,7 @@ export const STAGE_COLORS: Record<ApplicationStage, string> = {
   interview_manager:
     "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
   offer: "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300",
-  accepted: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
+  accepted: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
   rejected: "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300",
   withdrawn: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
 };

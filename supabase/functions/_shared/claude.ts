@@ -1,5 +1,5 @@
 /**
- * Claude API wrapper for SoftHome — Deno (Edge Functions) edition.
+ * Claude API wrapper for SoftHouse — Deno (Edge Functions) edition.
  *
  * Mirror of `src/lib/claude.ts` adapted for the Supabase Edge Functions
  * runtime (Deno). Key differences from the Node/Vite version:
@@ -22,7 +22,7 @@
 // equivalent of a version bump in package.json for the Node side.
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.91.1";
 
-/** Default model used by every SoftHome agent unless explicitly overridden. */
+/** Default model used by every SoftHouse agent unless explicitly overridden. */
 export const DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-6";
 
 /** Default max output tokens. Bump per-call for long extractions / reports. */
@@ -82,7 +82,7 @@ export interface CallClaudeOptions {
 }
 
 /**
- * Calls Claude with sensible SoftHome defaults. See `src/lib/claude.ts` for
+ * Calls Claude with sensible SoftHouse defaults. See `src/lib/claude.ts` for
  * the full doc — behavior is identical here.
  *
  * @example

@@ -39,11 +39,11 @@ export const JOURNEY_STATUS_COLORS: Record<AdmissionJourneyStatus, string> = {
   docs_pending: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
   docs_in_review: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
   docs_needs_adjustment: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
-  docs_approved: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
+  docs_approved: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
   exam_scheduled: "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300",
   exam_done: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300",
   contract_signed: "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300",
-  admitted: "bg-emerald-600 text-white dark:bg-emerald-700",
+  admitted: "bg-orange-600 text-white dark:bg-orange-700",
   cancelled: "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300",
 };
 

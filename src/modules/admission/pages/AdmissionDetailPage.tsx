@@ -128,7 +128,7 @@ export default function AdmissionDetailPage() {
               {docsStats.approved === docsStats.total && docsStats.total > 0 && (
                 <Button
                   onClick={() => setConfirmAction("admit")}
-                  className="bg-emerald-600 hover:bg-emerald-700"
+                  className="bg-orange-600 hover:bg-orange-700"
                 >
                   <Trophy className="w-4 h-4 mr-2" />
                   Admitir
@@ -295,7 +295,7 @@ export default function AdmissionDetailPage() {
               className={
                 confirmAction === "cancel"
                   ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  : "bg-emerald-600 hover:bg-emerald-700"
+                  : "bg-orange-600 hover:bg-orange-700"
               }
             >
               {confirmAction === "cancel" ? "Cancelar admissão" : "Admitir"}
@@ -325,7 +325,7 @@ function StatBlock({
         <p
           className={`text-2xl font-light mt-1 ${
             accent === "emerald"
-              ? "text-emerald-700 dark:text-emerald-400"
+              ? "text-orange-700 dark:text-orange-400"
               : accent === "orange"
               ? "text-orange-700 dark:text-orange-400"
               : "text-foreground"

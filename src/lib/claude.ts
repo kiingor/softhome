@@ -1,5 +1,5 @@
 /**
- * Claude API wrapper for SoftHome.
+ * Claude API wrapper for SoftHouse.
  *
  * Thin layer over `@anthropic-ai/sdk` used by:
  *  - Edge Functions (admission-document-validate, recruitment-cv-screen, agent-mcp-bridge)
@@ -28,7 +28,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 
-/** Default model used by every SoftHome agent unless explicitly overridden. */
+/** Default model used by every SoftHouse agent unless explicitly overridden. */
 export const DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-6";
 
 /** Default max output tokens. Bump per-call for long extractions / reports. */
@@ -106,7 +106,7 @@ export interface CallClaudeOptions {
 }
 
 /**
- * Calls Claude with sensible SoftHome defaults.
+ * Calls Claude with sensible SoftHouse defaults.
  *
  * Behaviors:
  *  - Defaults to Sonnet 4.6 + 4096 max tokens.
@@ -125,7 +125,7 @@ export interface CallClaudeOptions {
  *
  * @example
  *   const res = await callClaude({
- *     system: "You are a document validator for SoftHome admissions.",
+ *     system: "You are a document validator for SoftHouse admissions.",
  *     messages: [{ role: "user", content: "Is this RG legible?" }],
  *   });
  *   console.log(extractTextFromResponse(res));

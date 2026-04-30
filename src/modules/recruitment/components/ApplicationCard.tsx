@@ -69,7 +69,7 @@ export function ApplicationCard({
               variant="outline"
               className={
                 scoreNum >= 80
-                  ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 border-0 text-xs"
+                  ? "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300 border-0 text-xs"
                   : scoreNum >= 50
                   ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border-0 text-xs"
                   : "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300 border-0 text-xs"
@@ -148,7 +148,7 @@ export function ApplicationCard({
               {application.stage === "accepted" && onStartAdmission && (
                 <>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={onStartAdmission} className="text-emerald-700 dark:text-emerald-300">
+                  <DropdownMenuItem onClick={onStartAdmission} className="text-orange-700 dark:text-orange-300">
                     <Trophy className="w-4 h-4 mr-2" />
                     Iniciar admissão
                   </DropdownMenuItem>

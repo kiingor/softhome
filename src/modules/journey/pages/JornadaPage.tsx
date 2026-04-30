@@ -76,7 +76,7 @@ export default function JornadaPage() {
     return Array.from(seen.values());
   }, [assignments]);
 
-  const companyName = currentCompany?.company_name ?? "SoftHome";
+  const companyName = currentCompany?.company_name ?? "SoftHouse";
   const canExport = assignments.length > 0;
 
   const handleExportExcel = () => {

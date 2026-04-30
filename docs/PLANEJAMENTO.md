@@ -1,4 +1,4 @@
-# SoftHome — Planejamento
+# SoftHouse — Planejamento
 
 **Versão:** 1.1
 **Status:** Em estruturação
@@ -189,12 +189,12 @@ Detalhamento completo em `docs/adr/0003-agents.md`.
 
 | Skill | Quando dispara |
 |---|---|
-| softhome-schema-designer | Modelagem de tabela, RLS, índice, migration |
-| softhome-module-scaffold | Novo módulo, nova página |
-| softhome-rls-writer | Policies RLS |
-| softhome-edge-function-builder | Edge Function nova |
-| softhome-shadcn-form | Formulário com validação BR |
-| softhome-test-recipe | Testes Vitest + Testing Library |
+| SoftHouse-schema-designer | Modelagem de tabela, RLS, índice, migration |
+| SoftHouse-module-scaffold | Novo módulo, nova página |
+| SoftHouse-rls-writer | Policies RLS |
+| SoftHouse-edge-function-builder | Edge Function nova |
+| SoftHouse-shadcn-form | Formulário com validação BR |
+| SoftHouse-test-recipe | Testes Vitest + Testing Library |
 
 ### 5.3 Agentes de dev
 
@@ -203,7 +203,7 @@ Detalhamento completo em `docs/adr/0003-agents.md`.
 
 ## 6. Próximos passos
 
-1. ✅ Fork `meurh` → `softhome` no GitHub
+1. ✅ Fork `meurh` → `SoftHouse` no GitHub
 2. ✅ Branch `reference/meurh-original` criada
 3. [ ] PR1: limpeza do código SaaS (ver `PR1-LIMPEZA.md`)
 4. [ ] PR2: novo Supabase corporativo conectado, schema base, ADRs commitados
@@ -218,6 +218,6 @@ Detalhamento completo em `docs/adr/0003-agents.md`.
 - [ ] Provedor de email transacional (Resend ou AWS SES)
 - [ ] Política de retenção LGPD por tabela
 - [ ] Decisão WhatsApp Evolution: v1 ou backlog
-- [ ] Logo SoftHome (caminho recomendado: wordmark Manrope 800 + ícone emerald simples)
+- [ ] Logo SoftHouse (caminho recomendado: wordmark Manrope 800 + ícone emerald simples)
 - [ ] SSO ou email/senha + MFA
 - [ ] Aprovador final mudanças sensíveis (admin G&C)

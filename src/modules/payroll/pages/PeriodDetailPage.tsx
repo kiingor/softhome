@@ -314,7 +314,7 @@ export default function PeriodDetailPage() {
                           value < 0
                             ? "text-rose-700 dark:text-rose-300"
                             : earning
-                            ? "text-emerald-700 dark:text-emerald-300"
+                            ? "text-orange-700 dark:text-orange-300"
                             : "text-foreground"
                         }`}
                       >
@@ -433,7 +433,7 @@ function StatBlock({
         <p
           className={`text-xl font-light mt-1 ${
             accent === "emerald"
-              ? "text-emerald-700 dark:text-emerald-400"
+              ? "text-orange-700 dark:text-orange-400"
               : accent === "rose"
               ? "text-rose-700 dark:text-rose-400"
               : "text-foreground"

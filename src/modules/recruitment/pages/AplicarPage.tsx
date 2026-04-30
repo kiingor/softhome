@@ -143,8 +143,8 @@ export default function AplicarPage() {
       <div className="min-h-screen gradient-warm flex items-center justify-center p-6">
         <Card className="w-full max-w-md">
           <CardContent className="p-8 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-4">
-              <CheckCircle className="w-8 h-8 text-emerald-700 dark:text-emerald-300" />
+            <div className="w-16 h-16 rounded-2xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="w-8 h-8 text-orange-700 dark:text-orange-300" />
             </div>
             <h1 className="text-xl font-bold text-foreground mb-2">
               Recebemos sua candidatura! 🎉
@@ -166,7 +166,7 @@ export default function AplicarPage() {
   return (
     <div className="min-h-screen gradient-warm py-8 px-4">
       <div className="max-w-2xl mx-auto">
-        {/* Header SoftHome */}
+        {/* Header SoftHouse */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2 mb-2">
             <div className="w-10 h-10 rounded-xl gradient-hero flex items-center justify-center shadow-soft">
@@ -175,7 +175,7 @@ export default function AplicarPage() {
               </span>
             </div>
             <span className="text-lg font-extrabold tracking-tight text-foreground">
-              SoftHome
+              SoftHouse
             </span>
           </div>
         </div>
@@ -395,7 +395,7 @@ export default function AplicarPage() {
         </Card>
 
         <p className="text-xs text-muted-foreground text-center mt-6">
-          Powered by SoftHome — Sistema interno de Gente & Cultura
+          Powered by SoftHouse — Sistema interno de Gente & Cultura
         </p>
       </div>
     </div>

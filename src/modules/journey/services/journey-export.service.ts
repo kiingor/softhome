@@ -179,19 +179,19 @@ export const exportJourneyPDF = (
   const margin = 14;
   const generatedAt = formatDateTime(new Date());
 
-  // Header — wordmark SoftHome (texto, sem imagem) + empresa + data
+  // Header — wordmark SoftHouse (texto, sem imagem) + empresa + data
   let y = 12;
 
-  // Símbolo emerald antes do wordmark (círculo simples, mantém o
-  // padrão "[●] SoftHome" da seção 5 do DESIGN_SYSTEM.md sem custo
+  // Símbolo orange antes do wordmark (círculo simples, mantém o
+  // padrão "[●] SoftHouse" da seção 5 do DESIGN_SYSTEM.md sem custo
   // de carregar SVG/PNG)
-  doc.setFillColor(16, 185, 129); // emerald-500 (#10b981)
+  doc.setFillColor(249, 115, 22); // orange-500 (#F97316)
   doc.circle(margin + 2, y + 2, 2, "F");
 
   doc.setTextColor(0, 0, 0);
   doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
-  doc.text("SoftHome", margin + 7, y + 3);
+  doc.text("SoftHouse", margin + 7, y + 3);
 
   doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
@@ -240,7 +240,7 @@ export const exportJourneyPDF = (
     head: [["Data", "Colaborador", "Insígnia", "Categoria", "Peso", "Evidência"]],
     body: conquistasBody.length > 0 ? conquistasBody : [["—", "—", "—", "—", "—", "—"]],
     theme: "striped",
-    headStyles: { fillColor: [16, 185, 129] }, // emerald-500
+    headStyles: { fillColor: [16, 185, 129] }, // orange-500
     styles: { fontSize: 8, cellPadding: 2 },
     columnStyles: {
       0: { cellWidth: 22 },

@@ -5,7 +5,7 @@
 
 ## Contexto
 
-Inspiração da Tako: "exército de agentes de IA" com fonte única de dados, executando tarefas operacionais. Tradução pra SoftHome: 2 agentes em produção (Analista + Recruiter) + agentes auxiliares sem chat (Document Validator, Coordenador). LLM começa em Claude paga, transição pra modelo local em fase posterior.
+Inspiração da Tako: "exército de agentes de IA" com fonte única de dados, executando tarefas operacionais. Tradução pra SoftHouse: 2 agentes em produção (Analista + Recruiter) + agentes auxiliares sem chat (Document Validator, Coordenador). LLM começa em Claude paga, transição pra modelo local em fase posterior.
 
 Risco central: agente com acesso ao banco pode vazar PII em conversa, executar ação errada irreversível, ou ser enganado por prompt injection (ex: candidato envia CV com instrução escondida).
 

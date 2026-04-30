@@ -96,7 +96,7 @@ export default function DashboardSidebar() {
             <span className="text-primary-foreground font-extrabold text-xl">S</span>
           </div>
           <div>
-            <h1 className="font-extrabold text-foreground tracking-tight">SoftHome</h1>
+            <h1 className="font-extrabold text-foreground tracking-tight">SoftHouse</h1>
             <p className="text-xs text-muted-foreground">Gente & Cultura</p>
           </div>
         </div>

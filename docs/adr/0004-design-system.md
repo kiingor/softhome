@@ -5,7 +5,7 @@
 
 ## Contexto
 
-Sistema usado diariamente por time de G&C. Tema sério (RH, dados pessoais, decisões trabalhistas) com necessidade de aproximação humana. Solo dev sem designer. Identidade SoftHome a criar do zero.
+Sistema usado diariamente por time de G&C. Tema sério (RH, dados pessoais, decisões trabalhistas) com necessidade de aproximação humana. Solo dev sem designer. Identidade SoftHouse a criar do zero.
 
 ## Decisão
 
@@ -14,12 +14,12 @@ Detalhamento completo em `docs/DESIGN_SYSTEM.md`. Resumo das escolhas:
 - **Personalidade:** friendly/amigável (referência: Gusto)
 - **Modo:** light-first com dark opcional
 - **Densidade:** híbrida — denso em listagens, espaçoso em forms
-- **Cor accent:** emerald (#10b981) — única cor de marca
+- **Cor accent:** emerald (#F97316) — única cor de marca
 - **Tipografia:** Manrope em todos os pesos, fonte única
 - **Ícones:** Phosphor Icons
 - **Componentes base:** shadcn/ui
 - **Ilustrações:** unDraw em emerald, em estados vazios e conquistas
-- **Logo v0:** wordmark "SoftHome" Manrope 800 + ícone emerald simples
+- **Logo v0:** wordmark "SoftHouse" Manrope 800 + ícone emerald simples
 
 ## Alternativas consideradas
 
@@ -30,7 +30,7 @@ Detalhamento completo em `docs/DESIGN_SYSTEM.md`. Resumo das escolhas:
 **Considerada.** Viável, mas falta personalidade de marca.
 
 ### Tako-like (dark, serifada, premium)
-**Rejeitada.** Tako é produto comercial vendendo pra C-level. SoftHome é interno operacional. Tom diferente.
+**Rejeitada.** Tako é produto comercial vendendo pra C-level. SoftHouse é interno operacional. Tom diferente.
 
 ### Material Design / Ant Design
 **Rejeitada.** Estética datada, vira "sistema corporativo genérico".
