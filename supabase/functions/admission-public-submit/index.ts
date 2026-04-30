@@ -28,6 +28,9 @@
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.0";
+import { runDocumentValidation } from "../_shared/validate-admission-doc.ts";
+
+declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -251,6 +254,31 @@ serve(async (req) => {
       .from("admission_journeys")
       .update({ status: "docs_in_review" })
       .eq("id", journey.id);
+  }
+
+  // 7. Auto-trigger da IA pra cada doc novo, em background.
+  //    Não bloqueia a resposta — RH abre a journey e o parecer já tá pronto.
+  //    Falha silenciosa: RH ainda pode disparar manual via "Validar com IA".
+  if (uploaded.length > 0) {
+    const validations = Promise.allSettled(
+      uploaded.map((u) =>
+        runDocumentValidation({
+          sbAdmin,
+          documentId: u.doc_id,
+          actorUserId: null,
+        }).catch((err) => {
+          console.error(
+            `[auto-validate] doc ${u.doc_id} (${u.doc_type}):`,
+            (err as Error).message,
+          );
+        })
+      ),
+    );
+    if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
+      EdgeRuntime.waitUntil(validations);
+    }
+    // Se EdgeRuntime não existir (ambiente local), promise fica órfã —
+    // ainda completa, só não bloqueia o response.
   }
 
   return jsonResponse({
