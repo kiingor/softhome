@@ -2,8 +2,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useDashboard } from "@/contexts/DashboardContext";
 import { toast } from "sonner";
-import type { AdmissionDocument } from "../types";
+import type { AdmissionDocument, AIValidationResult } from "../types";
 import type { RejectDocumentValues } from "../schemas/admission.schema";
+
+interface ValidateResponse {
+  success: boolean;
+  result: AIValidationResult;
+  confidence: number;
+}
 
 export function useAdmissionDocuments(journeyId: string | undefined) {
   const { currentCompany } = useDashboard();
@@ -114,10 +120,43 @@ export function useAdmissionDocuments(journeyId: string | undefined) {
     },
   });
 
+  const validateDocument = useMutation({
+    mutationFn: async (documentId: string) => {
+      const { data, error } = await supabase.functions.invoke<ValidateResponse>(
+        "admission-document-validate",
+        { body: { document_id: documentId } },
+      );
+      if (error) {
+        let msg = error.message;
+        const ctx = (error as { context?: { json?: () => Promise<{ error?: string; details?: string }> } }).context;
+        if (ctx?.json) {
+          try {
+            const body = await ctx.json();
+            if (body?.error) msg = body.error + (body.details ? ` — ${body.details}` : "");
+          } catch {
+            // ignore
+          }
+        }
+        throw new Error(msg);
+      }
+      if (!data || !data.success) throw new Error("Resposta inválida da IA");
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admission-documents"] });
+      queryClient.invalidateQueries({ queryKey: ["admission-events"] });
+      toast.success("Parecer da IA pronto.");
+    },
+    onError: (err: Error) => {
+      toast.error("IA não conseguiu validar. " + (err.message ?? "Tenta de novo?"));
+    },
+  });
+
   return {
     documents,
     isLoading,
     approveDocument,
     rejectDocument,
+    validateDocument,
   };
 }
