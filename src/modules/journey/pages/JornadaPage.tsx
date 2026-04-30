@@ -241,17 +241,22 @@ export default function JornadaPage() {
           ) : (
             <ul className="divide-y divide-border">
               {collaboratorRows.map((c) => (
-                <li key={c.id} className="py-3 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="font-medium text-foreground truncate">{c.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Última conquista{" "}
-                      {new Date(c.latest).toLocaleDateString("pt-BR")}
-                    </p>
-                  </div>
-                  <BadgeUI variant="secondary" className="shrink-0">
-                    {c.count} {c.count === 1 ? "insígnia" : "insígnias"}
-                  </BadgeUI>
+                <li key={c.id}>
+                  <Link
+                    to={`/dashboard/jornada/colaborador/${c.id}`}
+                    className="py-3 flex items-center justify-between gap-3 hover:bg-muted/50 -mx-2 px-2 rounded transition-colors"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium text-foreground truncate">{c.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Última conquista{" "}
+                        {new Date(c.latest).toLocaleDateString("pt-BR")}
+                      </p>
+                    </div>
+                    <BadgeUI variant="secondary" className="shrink-0">
+                      {c.count} {c.count === 1 ? "insígnia" : "insígnias"}
+                    </BadgeUI>
+                  </Link>
                 </li>
               ))}
             </ul>

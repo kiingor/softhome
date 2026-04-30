@@ -24,6 +24,7 @@ import ExamesPage from "./pages/dashboard/ExamesPage";
 // Modules (novo layout per CLAUDE.md)
 import JornadaPage from "./modules/journey/pages/JornadaPage";
 import BadgesPage from "./modules/journey/pages/BadgesPage";
+import CollaboratorJourneyPage from "./modules/journey/pages/CollaboratorJourneyPage";
 import AdmissoesPage from "./modules/admission/pages/AdmissoesPage";
 import AdmissionDetailPage from "./modules/admission/pages/AdmissionDetailPage";
 import VagasPage from "./modules/recruitment/pages/VagasPage";
@@ -90,6 +91,10 @@ const App = () => {
             <Route path="exames" element={<ExamesPage />} />
             <Route path="jornada" element={<JornadaPage />} />
             <Route path="jornada/badges" element={<BadgesPage />} />
+            <Route
+              path="jornada/colaborador/:id"
+              element={<CollaboratorJourneyPage />}
+            />
             <Route path="admissoes" element={<AdmissoesPage />} />
             <Route path="admissoes/:id" element={<AdmissionDetailPage />} />
             <Route path="vagas" element={<VagasPage />} />

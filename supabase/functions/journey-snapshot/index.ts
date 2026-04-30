@@ -9,8 +9,10 @@
 // Updates existing rows whose status drifted to overdue.
 //
 // Uses SUPABASE_SERVICE_ROLE_KEY internally to bypass RLS.
-// Calling JWT must be a valid authenticated user (not anon) — even when called
-// behind pg_cron/net.http_post, we expect a Bearer token.
+//
+// Auth (Bearer token):
+//   - User JWT (admin_gc/gestor_gc/rh) → manual trigger pelo dashboard
+//   - SUPABASE_SERVICE_ROLE_KEY → trigger automático via pg_cron (system call)
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.0";
@@ -144,7 +146,10 @@ serve(async (req) => {
     );
   }
 
-  // --- Auth gate: require a valid authenticated JWT --------------------
+  // --- Auth gate ------------------------------------------------------
+  // Aceita 2 formas:
+  //  1) Bearer = SUPABASE_SERVICE_ROLE_KEY → chamada de sistema (pg_cron)
+  //  2) Bearer = JWT de auth.users → chamada manual via dashboard
   const authHeader = req.headers.get("Authorization");
   if (!authHeader || !authHeader.toLowerCase().startsWith("bearer ")) {
     return new Response(
@@ -153,22 +158,27 @@ serve(async (req) => {
     );
   }
 
-  try {
-    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: userData, error: userErr } = await userClient.auth.getUser();
-    if (userErr || !userData?.user) {
+  const token = authHeader.replace(/^bearer\s+/i, "").trim();
+  const isSystemCall = token === supabaseServiceKey;
+
+  if (!isSystemCall) {
+    try {
+      const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: userData, error: userErr } = await userClient.auth.getUser();
+      if (userErr || !userData?.user) {
+        return new Response(
+          JSON.stringify({ error: "Não autorizado" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    } catch (e) {
       return new Response(
-        JSON.stringify({ error: "Não autorizado" }),
+        JSON.stringify({ error: "Falha ao validar token", detail: String((e as Error).message) }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
-  } catch (e) {
-    return new Response(
-      JSON.stringify({ error: "Falha ao validar token", detail: String((e as Error).message) }),
-      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
   }
 
   const admin = createClient(supabaseUrl, supabaseServiceKey, {
