@@ -55,6 +55,7 @@ const menuCategories: MenuCategory[] = [
       { icon: ClipboardCheck, label: "Exames", href: "/dashboard/exames", module: "exames" },
       { icon: BarChart3, label: "Relatórios", href: "/dashboard/relatorios", module: "relatorios" },
       { icon: FileText, label: "Contabilidade", href: "/dashboard/contabilidade", module: "contabilidade" },
+      { icon: Robot, label: "Analista (IA)", href: "/dashboard/analista", module: "relatorios" },
     ],
   },
 ];
