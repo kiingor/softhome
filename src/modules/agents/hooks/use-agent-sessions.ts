@@ -6,6 +6,7 @@ import type {
   AgentSession,
   AgentMessage,
   AgentKind,
+  AnalystChatResponse,
   RecruiterSearchResponse,
 } from "../types";
 
@@ -82,6 +83,51 @@ export function useAgentMessages(sessionId: string | null) {
       return (data ?? []) as AgentMessage[];
     },
     enabled: !!sessionId,
+  });
+}
+
+// Hook que invoca o Edge Function analyst-chat.
+// Multi-turn com tool use: Claude decide quais views agent_* consultar.
+export function useAnalystChat() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      sessionId,
+      query,
+    }: {
+      sessionId: string | null;
+      query: string;
+    }) => {
+      const { data, error } = await supabase.functions.invoke<AnalystChatResponse>(
+        "analyst-chat",
+        { body: { sessionId, query } },
+      );
+      if (error) {
+        let msg = error.message;
+        const ctx = (error as { context?: { json?: () => Promise<{ error?: string }> } }).context;
+        if (ctx?.json) {
+          try {
+            const body = await ctx.json();
+            if (body?.error) msg = body.error;
+          } catch {
+            // ignore
+          }
+        }
+        throw new Error(msg);
+      }
+      if (!data || !data.success) throw new Error("Analista retornou sem sucesso.");
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["agent-sessions"] });
+      queryClient.invalidateQueries({
+        queryKey: ["agent-messages", data.sessionId],
+      });
+    },
+    onError: (err: Error) => {
+      toast.error("Não rolou. " + (err.message ?? "Tenta de novo?"));
+    },
   });
 }
 

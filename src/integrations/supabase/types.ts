@@ -1,3 +1,10 @@
+node.exe : Initialising login role...
+No linha:1 caractere:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Initialising login role...:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
 export type Json =
   | string
   | number
@@ -2761,6 +2768,59 @@ export type Database = {
       }
     }
     Views: {
+      agent_admission_funnel: {
+        Row: {
+          avg_days_in_status: number | null
+          company_id: string | null
+          count: number | null
+          latest_movement_at: string | null
+          oldest_journey_at: string | null
+          regime: Database["public"]["Enums"]["collaborator_regime"] | null
+          status: Database["public"]["Enums"]["admission_journey_status"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admission_journeys_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "admission_journeys_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_collaborator_distribution: {
+        Row: {
+          company_id: string | null
+          count: number | null
+          position_title: string | null
+          regime: Database["public"]["Enums"]["collaborator_regime"] | null
+          status: Database["public"]["Enums"]["collaborator_status"] | null
+          team_name: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collaborators_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "collaborators_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_company_overview: {
         Row: {
           active_collaborators: number | null
@@ -2820,6 +2880,31 @@ export type Database = {
           },
           {
             foreignKeyName: "collaborator_badges_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_milestone_overview: {
+        Row: {
+          avg_badges_at_milestone: number | null
+          company_id: string | null
+          count: number | null
+          kind: Database["public"]["Enums"]["journey_milestone_kind"] | null
+          status: Database["public"]["Enums"]["journey_milestone_status"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "journey_milestones_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "journey_milestones_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"

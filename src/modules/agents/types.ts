@@ -53,3 +53,29 @@ export interface RecruiterMessageMetadata {
     similarity: number;
   }>;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Analista G&C
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AnalystChatResponse {
+  success: boolean;
+  sessionId: string;
+  userMessageId: string;
+  assistantMessageId: string;
+  assistantText: string;
+  toolCalls: string[];
+  durationMs: number;
+  tokens: {
+    input: number;
+    output: number;
+  };
+}
+
+export interface AnalystMessageMetadata {
+  tool_calls: Array<{
+    tool: string;
+    input: unknown;
+    output: unknown;
+  }>;
+}
