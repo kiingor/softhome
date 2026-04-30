@@ -87,6 +87,7 @@ const CollaboratorModal = ({
     phone: "",
     position_id: "",
     store_id: "",
+    contracted_store_id: "",
     team_id: "",
     admission_date: "",
     status: "ativo" as "ativo" | "inativo" | "aguardando_documentacao" | "validacao_pendente" | "reprovado",
@@ -287,6 +288,7 @@ const CollaboratorModal = ({
           phone: collaborator.phone || "",
           position_id: collaborator.position_id || "",
           store_id: collaborator.store_id || "",
+          contracted_store_id: collaborator.contracted_store_id || "",
           team_id: collaborator.team_id || "",
           admission_date: collaborator.admission_date || "",
           status: collaborator.status || "ativo",
@@ -302,6 +304,7 @@ const CollaboratorModal = ({
           phone: "",
           position_id: "",
           store_id: "",
+          contracted_store_id: "",
           team_id: "",
           admission_date: "",
           status: "aguardando_documentacao",
@@ -647,6 +650,7 @@ const CollaboratorModal = ({
         phone: formData.phone.replace(/\D/g, "") || null,
         position_id: formData.position_id || null,
         store_id: formData.store_id || null,
+        contracted_store_id: formData.contracted_store_id || null,
         team_id: formData.team_id || null,
         admission_date: formData.admission_date || null,
         is_temp: formData.is_temp,
@@ -1062,10 +1066,11 @@ const CollaboratorModal = ({
                 </div>
               )}
 
-              <TabsContent value="geral" className="flex-1 min-h-0 overflow-hidden m-0">
-                <div className="h-full grid grid-cols-1 lg:grid-cols-2 divide-x min-h-0 overflow-hidden">
+              <TabsContent value="geral" className="flex-1 min-h-0 overflow-hidden m-0 flex flex-col">
+                <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 divide-x min-h-0 overflow-hidden">
               {/* Left Column - Dados Cadastrais */}
-              <ScrollArea className="h-full">
+              <div className="flex flex-col min-h-0 overflow-hidden">
+              <ScrollArea className="flex-1 min-h-0">
                 <div className="p-6 space-y-4">
                   <h3 className="font-semibold text-lg flex items-center gap-2">
                     <Users className="w-5 h-5 text-primary" />
@@ -1151,36 +1156,59 @@ const CollaboratorModal = ({
 
                   <Separator />
 
-                  {/* Store with quick create */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label>Empresa</Label>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setCreateStoreOpen(true)}
-                        className="h-6 text-xs"
+                  {/* Empresa + Empresa Contratada (lado a lado) */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label>Empresa</Label>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setCreateStoreOpen(true)}
+                          className="h-6 text-xs"
+                        >
+                          <Plus className="w-3 h-3 mr-1" />
+                          Nova
+                        </Button>
+                      </div>
+                      <Select
+                        value={formData.store_id}
+                        onValueChange={(v) => setFormData((prev) => ({ ...prev, store_id: v }))}
                       >
-                        <Plus className="w-3 h-3 mr-1" />
-                        Nova
-                      </Button>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {stores.map((store) => (
+                            <SelectItem key={store.id} value={store.id}>
+                              {store.store_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
-                    <Select
-                      value={formData.store_id}
-                      onValueChange={(v) => setFormData((prev) => ({ ...prev, store_id: v }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione uma empresa" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {stores.map((store) => (
-                          <SelectItem key={store.id} value={store.id}>
-                            {store.store_name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+
+                    <div className="space-y-2">
+                      <Label>Empresa Contratada</Label>
+                      <Select
+                        value={formData.contracted_store_id}
+                        onValueChange={(v) =>
+                          setFormData((prev) => ({ ...prev, contracted_store_id: v }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {stores.map((store) => (
+                            <SelectItem key={store.id} value={store.id}>
+                              {store.store_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
 
                   {/* Team with quick create */}
@@ -1291,6 +1319,7 @@ const CollaboratorModal = ({
                   </div>
                 </div>
               </ScrollArea>
+              </div>
 
               {/* Right Column - Financeiro */}
               <div className="flex flex-col min-h-0 bg-muted/30">

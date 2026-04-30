@@ -1036,6 +1036,7 @@ export type Database = {
           admission_date: string | null
           birth_date: string | null
           company_id: string
+          contracted_store_id: string | null
           cpf: string
           created_at: string
           email: string | null
@@ -1057,6 +1058,7 @@ export type Database = {
           admission_date?: string | null
           birth_date?: string | null
           company_id: string
+          contracted_store_id?: string | null
           cpf: string
           created_at?: string
           email?: string | null
@@ -1078,6 +1080,7 @@ export type Database = {
           admission_date?: string | null
           birth_date?: string | null
           company_id?: string
+          contracted_store_id?: string | null
           cpf?: string
           created_at?: string
           email?: string | null
@@ -1108,6 +1111,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collaborators_contracted_store_id_fkey"
+            columns: ["contracted_store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
             referencedColumns: ["id"]
           },
           {
@@ -3337,3 +3347,4 @@ export const Constants = {
     },
   },
 } as const
+<claude-code-hint v="1" type="plugin" value="supabase@claude-plugins-official" />
