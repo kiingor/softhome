@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Environment variables — nunca commitar
+.env
+.env.local
+.env.*.local
+
 # Supabase CLI cache (project ref, link metadata)
 supabase/.temp/
 supabase/.branches/
