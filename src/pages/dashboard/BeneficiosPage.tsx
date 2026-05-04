@@ -27,7 +27,7 @@ import {
 import { Gift, Plus, Pencil, Trash as Trash2 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import PermissionGuard from "@/components/dashboard/PermissionGuard";
-import BenefitForm from "@/components/benefits/BenefitForm";
+import BenefitForm, { BENEFIT_CATEGORY_LABELS, type BenefitCategory } from "@/components/benefits/BenefitForm";
 import { formatCurrency } from "@/lib/formatters";
 import { DayAbbrev, dayLabels } from "@/lib/workingDays";
 
@@ -84,6 +84,7 @@ const BeneficiosPage = () => {
       description?: string;
       value: number;
       value_type: "monthly" | "daily";
+      category: BenefitCategory;
       applicable_days: string[];
     }) => {
       const { error } = await supabase.from("benefits").insert({
@@ -91,6 +92,7 @@ const BeneficiosPage = () => {
         description: data.description || null,
         value: data.value,
         value_type: data.value_type,
+        category: data.category,
         applicable_days: data.applicable_days,
         company_id: currentCompany!.id,
       });
@@ -114,6 +116,7 @@ const BeneficiosPage = () => {
       description?: string;
       value: number;
       value_type: "monthly" | "daily";
+      category: BenefitCategory;
       applicable_days: string[];
     }) => {
       const { error } = await supabase
@@ -123,6 +126,7 @@ const BeneficiosPage = () => {
           description: data.description || null,
           value: data.value,
           value_type: data.value_type,
+          category: data.category,
           applicable_days: data.applicable_days,
         })
         .eq("id", data.id);
@@ -160,6 +164,7 @@ const BeneficiosPage = () => {
     description?: string;
     value: number;
     value_type: "monthly" | "daily";
+    category: BenefitCategory;
     applicable_days: string[];
   }) => {
     setIsSubmitting(true);
@@ -236,6 +241,7 @@ const BeneficiosPage = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nome</TableHead>
+                    <TableHead>Categoria</TableHead>
                     <TableHead>Descrição</TableHead>
                     <TableHead className="text-right">Valor</TableHead>
                     <TableHead>Tipo</TableHead>
@@ -251,6 +257,11 @@ const BeneficiosPage = () => {
                       <TableRow key={benefit.id}>
                         <TableCell className="font-medium">
                           {benefit.name}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-xs">
+                            {BENEFIT_CATEGORY_LABELS[(benefit.category ?? "other") as BenefitCategory]}
+                          </Badge>
                         </TableCell>
                         <TableCell className="text-muted-foreground max-w-[200px] truncate">
                           {benefit.description || "-"}
@@ -325,6 +336,7 @@ const BeneficiosPage = () => {
             description: editingBenefit.description,
             value: editingBenefit.value || 0,
             value_type: editingBenefit.value_type || "monthly",
+            category: (editingBenefit.category ?? "other") as BenefitCategory,
             applicable_days: editingBenefit.applicable_days || ["mon", "tue", "wed", "thu", "fri"],
           } : undefined}
           isLoading={isSubmitting}

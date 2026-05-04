@@ -8,10 +8,12 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { formatCurrency, getCurrentCompetencia } from "@/lib/formatters";
 import { calculateMonthlyBenefitValue, dayLabels, DayAbbrev } from "@/lib/workingDays";
+import { useStoreHolidays } from "@/modules/payroll/hooks/use-store-holidays";
 
 const MeusBeneficiosPage = () => {
   const { collaborator } = usePortal();
   const { month: currentMonth, year: currentYear } = getCurrentCompetencia();
+  const { holidayDates } = useStoreHolidays(collaborator?.store_id ?? null, currentYear);
 
   // Fetch benefits assigned to the collaborator
   const { data: myBenefits = [], isLoading } = useQuery({
@@ -42,7 +44,8 @@ const MeusBeneficiosPage = () => {
       valueType,
       applicableDays,
       currentMonth,
-      currentYear
+      currentYear,
+      holidayDates,
     );
   };
 

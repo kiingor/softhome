@@ -552,6 +552,7 @@ export type Database = {
       benefits: {
         Row: {
           applicable_days: string[] | null
+          category: Database["public"]["Enums"]["benefit_category"]
           company_id: string
           created_at: string
           description: string | null
@@ -562,6 +563,7 @@ export type Database = {
         }
         Insert: {
           applicable_days?: string[] | null
+          category?: Database["public"]["Enums"]["benefit_category"]
           company_id: string
           created_at?: string
           description?: string | null
@@ -572,6 +574,7 @@ export type Database = {
         }
         Update: {
           applicable_days?: string[] | null
+          category?: Database["public"]["Enums"]["benefit_category"]
           company_id?: string
           created_at?: string
           description?: string | null
@@ -2355,6 +2358,57 @@ export type Database = {
           },
         ]
       }
+      store_holidays: {
+        Row: {
+          id: string
+          store_id: string
+          company_id: string
+          date: string
+          name: string
+          type: Database["public"]["Enums"]["holiday_type"]
+          source: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          store_id: string
+          company_id: string
+          date: string
+          name: string
+          type?: Database["public"]["Enums"]["holiday_type"]
+          source?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          store_id?: string
+          company_id?: string
+          date?: string
+          name?: string
+          type?: Database["public"]["Enums"]["holiday_type"]
+          source?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "store_holidays_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "store_holidays_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stores: {
         Row: {
           address: string | null
@@ -3109,7 +3163,15 @@ export type Database = {
         | "cultura"
         | "integracao"
         | "outro"
+      benefit_category:
+        | "meal"
+        | "transport"
+        | "health"
+        | "daycare"
+        | "bonus"
+        | "other"
       collaborator_regime: "clt" | "pj" | "estagiario"
+      holiday_type: "national" | "state" | "municipal" | "manual"
       collaborator_status:
         | "ativo"
         | "inativo"
@@ -3334,7 +3396,9 @@ export const Constants = {
         "integracao",
         "outro",
       ],
+      benefit_category: ["meal", "transport", "health", "daycare", "bonus", "other"],
       collaborator_regime: ["clt", "pj", "estagiario"],
+      holiday_type: ["national", "state", "municipal", "manual"],
       collaborator_status: [
         "ativo",
         "inativo",

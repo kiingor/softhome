@@ -21,6 +21,7 @@ import {
 import { FileText, CaretLeft as ChevronLeft, CaretRight as ChevronRight, TrendUp as TrendingUp, CurrencyDollar as DollarSign, Gift, Info } from "@phosphor-icons/react";
 import { formatCurrency, getMonthName } from "@/lib/formatters";
 import { calculateMonthlyBenefitValue, getBenefitCalculationDescription, DayAbbrev } from "@/lib/workingDays";
+import { useStoreHolidays } from "@/modules/payroll/hooks/use-store-holidays";
 
 const typeLabels: Record<string, string> = {
   salario: "Salário",
@@ -61,6 +62,7 @@ const MeuExtratoPage = () => {
   const { collaborator } = usePortal();
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const { holidayDates } = useStoreHolidays(collaborator?.store_id ?? null, selectedYear);
 
   const { data: entries = [], isLoading: isLoadingEntries } = useQuery({
     queryKey: ["my-payroll-entries", collaborator?.id, selectedMonth, selectedYear],
@@ -147,7 +149,8 @@ const MeuExtratoPage = () => {
       valueType,
       applicableDays,
       selectedMonth,
-      selectedYear
+      selectedYear,
+      holidayDates,
     );
   };
 
@@ -161,7 +164,8 @@ const MeuExtratoPage = () => {
       valueType,
       applicableDays,
       selectedMonth,
-      selectedYear
+      selectedYear,
+      holidayDates,
     );
   };
 

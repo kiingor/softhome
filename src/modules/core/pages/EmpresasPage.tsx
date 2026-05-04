@@ -1,6 +1,14 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Buildings as Building2, Pencil, Trash as Trash2, Copy } from "@phosphor-icons/react";
+import { Plus, Buildings as Building2, Pencil, Trash as Trash2, Copy, CalendarBlank, DotsThreeVertical } from "@phosphor-icons/react";
+import { useNavigate } from "react-router-dom";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { supabase } from '@/integrations/supabase/client';
 import { useDashboard } from '@/contexts/DashboardContext';
 import PermissionGuard from '@/components/dashboard/PermissionGuard';
@@ -59,6 +67,7 @@ export default function EmpresasPage() {
   const { currentCompany } = useDashboard();
   const selectedCompanyId = currentCompany?.id;
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingStore, setEditingStore] = useState<Store | null>(null);
   const [formData, setFormData] = useState({
@@ -336,56 +345,18 @@ export default function EmpresasPage() {
                       <TableCell>{store.store_code || '-'}</TableCell>
                       <TableCell>{store.address || '-'}</TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Copiar ID"
-                            onClick={() => {
-                              navigator.clipboard.writeText(store.id);
-                              toast.success("ID copiado!");
-                            }}
-                          >
-                            <Copy className="h-4 w-4 text-muted-foreground" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleOpenDialog(store)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>
-                                  Excluir Empresa
-                                </AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Tem certeza que deseja excluir a empresa "
-                                  {store.store_name}"? Esta ação não pode ser
-                                  desfeita.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() =>
-                                    deleteMutation.mutate(store.id)
-                                  }
-                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                >
-                                  Excluir
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
+                        <StoreActionsMenu
+                          store={store}
+                          onCalendar={() =>
+                            navigate(`/dashboard/empresas/${store.id}/calendario`)
+                          }
+                          onCopyId={() => {
+                            navigator.clipboard.writeText(store.id);
+                            toast.success("ID copiado!");
+                          }}
+                          onEdit={() => handleOpenDialog(store)}
+                          onDelete={() => deleteMutation.mutate(store.id)}
+                        />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -396,5 +367,78 @@ export default function EmpresasPage() {
         </Card>
       </div>
     </PermissionGuard>
+  );
+}
+
+interface StoreActionsMenuProps {
+  store: Store;
+  onCalendar: () => void;
+  onCopyId: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}
+
+function StoreActionsMenu({
+  store,
+  onCalendar,
+  onCopyId,
+  onEdit,
+  onDelete,
+}: StoreActionsMenuProps) {
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" title="Ações">
+            <DotsThreeVertical className="h-5 w-5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-44">
+          <DropdownMenuItem onClick={onCalendar}>
+            <CalendarBlank className="mr-2 h-4 w-4" />
+            Calendário
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onEdit}>
+            <Pencil className="mr-2 h-4 w-4" />
+            Editar
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onCopyId}>
+            <Copy className="mr-2 h-4 w-4" />
+            Copiar ID
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={() => setConfirmDeleteOpen(true)}
+            className="text-destructive focus:text-destructive"
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            Excluir
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Empresa</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir a empresa "{store.store_name}"?
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={onDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

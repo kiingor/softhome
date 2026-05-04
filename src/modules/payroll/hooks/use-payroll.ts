@@ -15,6 +15,7 @@ import type {
   NewEntryValues,
   ReverseEntryValues,
 } from "../schemas/payroll.schema";
+import { calculateMonthlyBenefitValue, type DayAbbrev } from "@/lib/workingDays";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Lista de períodos da empresa atual (dashboard mensal)
@@ -115,27 +116,91 @@ export function usePayrollPeriods() {
         }
 
         // 3b. Benefícios assigned
-        // benefits_assignments é a tabela que liga collaborator <-> benefit
+        // Pega value_type/applicable_days pra calcular valor mensal correto
+        // (daily × dias úteis − feriados da store do colaborador).
         const { data: assignments } = await supabase
           .from("benefits_assignments")
-          .select("collaborator_id, benefit:benefits(name, value), collaborator:collaborators!inner(company_id, status)")
+          .select(
+            "collaborator_id, benefit:benefits(name, value, value_type, applicable_days), collaborator:collaborators!inner(company_id, status, store_id, contracted_store_id)",
+          )
           .eq("collaborator.company_id", companyId)
           .eq("collaborator.status", "ativo");
+
+        // Carrega feriados do ano pra todas as stores envolvidas (1 query).
+        const storeIds = Array.from(
+          new Set(
+            (assignments ?? [])
+              .map((a) => {
+                const c = a.collaborator as
+                  | { store_id: string | null; contracted_store_id: string | null }
+                  | null;
+                return c?.store_id || c?.contracted_store_id || null;
+              })
+              .filter((id): id is string => !!id),
+          ),
+        );
+
+        const holidaysByStore = new Map<string, string[]>();
+        if (storeIds.length > 0) {
+          const { data: hols } = await supabase
+            .from("store_holidays")
+            .select("store_id, date")
+            .in("store_id", storeIds)
+            .gte("date", `${year}-01-01`)
+            .lte("date", `${year}-12-31`);
+          for (const h of (hols ?? []) as Array<{ store_id: string; date: string }>) {
+            const arr = holidaysByStore.get(h.store_id) ?? [];
+            arr.push(h.date);
+            holidaysByStore.set(h.store_id, arr);
+          }
+        }
 
         const benefitEntries =
           (assignments ?? [])
             .map((a) => {
               const benefit = a.benefit as
-                | { name: string; value: number }
+                | {
+                    name: string;
+                    value: number;
+                    value_type: "monthly" | "daily" | null;
+                    applicable_days: string[] | null;
+                  }
                 | null;
               if (!benefit || benefit.value <= 0) return null;
+
+              const collab = a.collaborator as
+                | { store_id: string | null; contracted_store_id: string | null }
+                | null;
+              const benefitStoreId =
+                collab?.store_id || collab?.contracted_store_id || null;
+              const holidays = benefitStoreId
+                ? holidaysByStore.get(benefitStoreId) ?? []
+                : [];
+
+              const monthlyValue = calculateMonthlyBenefitValue(
+                benefit.value,
+                (benefit.value_type ?? "monthly") as "monthly" | "daily",
+                (benefit.applicable_days ?? [
+                  "mon",
+                  "tue",
+                  "wed",
+                  "thu",
+                  "fri",
+                ]) as DayAbbrev[],
+                month,
+                year,
+                holidays,
+              );
+
+              if (monthlyValue <= 0) return null;
+
               return {
                 company_id: companyId,
                 collaborator_id: a.collaborator_id,
                 store_id: null,
                 type: "beneficio" as const,
                 description: `${benefit.name} (auto)`,
-                value: benefit.value,
+                value: monthlyValue,
                 is_fixed: true,
                 month,
                 year,

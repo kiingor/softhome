@@ -12,6 +12,7 @@ import DashboardLayout from "./components/dashboard/DashboardLayout";
 import DashboardHome from "./pages/dashboard/DashboardHome";
 import ColaboradoresPage from "./modules/core/pages/ColaboradoresPage";
 import EmpresasPage from "./modules/core/pages/EmpresasPage";
+import CalendarioFeriadosPage from "./modules/core/pages/CalendarioFeriadosPage";
 import SetoresPage from "./modules/core/pages/SetoresPage";
 import CargosPage from "./modules/core/pages/CargosPage";
 import FeriasPage from "./pages/dashboard/FeriasPage";
@@ -83,6 +84,7 @@ const App = () => {
             <Route path="colaboradores" element={<ColaboradoresPage />} />
             <Route path="setores" element={<SetoresPage />} />
             <Route path="empresas" element={<EmpresasPage />} />
+            <Route path="empresas/:storeId/calendario" element={<CalendarioFeriadosPage />} />
             <Route path="cargos" element={<CargosPage />} />
             <Route path="ferias" element={<FeriasPage />} />
             <Route path="beneficios" element={<BeneficiosPage />} />

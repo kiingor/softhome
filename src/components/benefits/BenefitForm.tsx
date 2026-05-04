@@ -31,11 +31,29 @@ import { DayAbbrev, dayLabels, defaultWorkingDays, countWorkingDays } from "@/li
 import { formatCurrencyForInput, parseCurrencyInput, formatNumberAsCurrency, formatCurrency, getCurrentCompetencia } from "@/lib/formatters";
 import { useState, useEffect } from "react";
 
+export type BenefitCategory =
+  | "meal"
+  | "transport"
+  | "health"
+  | "daycare"
+  | "bonus"
+  | "other";
+
+export const BENEFIT_CATEGORY_LABELS: Record<BenefitCategory, string> = {
+  meal: "Alimentação (VR/VA)",
+  transport: "Transporte (VT)",
+  health: "Saúde (Plano/Odonto)",
+  daycare: "Auxílio Creche",
+  bonus: "Bônus / PLR",
+  other: "Outro",
+};
+
 const benefitSchema = z.object({
   name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
   description: z.string().optional(),
   value: z.string().min(1, "Valor é obrigatório"),
   value_type: z.enum(["monthly", "daily"]),
+  category: z.enum(["meal", "transport", "health", "daycare", "bonus", "other"]),
   applicable_days: z.array(z.string()).optional(),
 });
 
@@ -49,6 +67,7 @@ interface BenefitFormProps {
     description?: string;
     value: number;
     value_type: "monthly" | "daily";
+    category: BenefitCategory;
     applicable_days: string[];
   }) => Promise<void>;
   initialData?: {
@@ -56,6 +75,7 @@ interface BenefitFormProps {
     description?: string | null;
     value?: number;
     value_type?: "monthly" | "daily";
+    category?: BenefitCategory;
     applicable_days?: string[];
   };
   isLoading?: boolean;
@@ -87,6 +107,7 @@ const BenefitForm = ({
       description: initialData?.description || "",
       value: "",
       value_type: initialData?.value_type || "monthly",
+      category: initialData?.category || "other",
       applicable_days: initialData?.applicable_days || defaultWorkingDays,
     },
   });
@@ -117,6 +138,7 @@ const BenefitForm = ({
         description: initialData?.description || "",
         value: initialValue,
         value_type: initialData?.value_type || "monthly",
+        category: initialData?.category || "other",
         applicable_days: initialData?.applicable_days || defaultWorkingDays,
       });
     }
@@ -135,6 +157,7 @@ const BenefitForm = ({
       description: data.description,
       value: numericValue,
       value_type: data.value_type,
+      category: data.category,
       applicable_days: data.value_type === "daily" ? (data.applicable_days || defaultWorkingDays) : defaultWorkingDays,
     });
     form.reset();
@@ -160,6 +183,34 @@ const BenefitForm = ({
                   <FormControl>
                     <Input placeholder="Ex: Vale Transporte" {...field} />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="category"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Categoria</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {(Object.keys(BENEFIT_CATEGORY_LABELS) as BenefitCategory[]).map((c) => (
+                        <SelectItem key={c} value={c}>
+                          {BENEFIT_CATEGORY_LABELS[c]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    Usado em relatórios e regras específicas (ex: VT desconta 6% do salário).
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

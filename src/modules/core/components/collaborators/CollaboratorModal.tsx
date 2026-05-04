@@ -38,6 +38,7 @@ import { formatCPFInput, cleanCPF, validateCPF, formatPhoneInput, formatCEPInput
 import { sendWhatsAppNotification } from "@/lib/whatsappNotifications";
 import { formatCurrency, formatCurrencyForInput, parseCurrencyInput, getCurrentCompetencia } from "@/lib/formatters";
 import { calculateMonthlyBenefitValue, getBenefitCalculationDescription, DayAbbrev } from "@/lib/workingDays";
+import { useStoreHolidays } from "@/modules/payroll/hooks/use-store-holidays";
 import CollaboratorValidationTab from "./CollaboratorValidationTab";
 import { PositionChangeDialog } from "@/components/exames/PositionChangeDialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -258,6 +259,14 @@ const CollaboratorModal = ({
     },
     enabled: !!currentCompany?.id && open,
   });
+
+  // Feriados da store do colaborador (pra cálculo de benefícios diários).
+  // Cai pra contracted_store_id se não tem store_id.
+  const benefitStoreId = formData.store_id || formData.contracted_store_id || null;
+  const { holidayDates } = useStoreHolidays(
+    open ? benefitStoreId : null,
+    currentYear,
+  );
 
   // Fetch vacation periods for existing collaborator
   const { data: vacationPeriods = [] } = useQuery({
@@ -1002,7 +1011,8 @@ const CollaboratorModal = ({
       valueType,
       applicableDays as DayAbbrev[],
       currentMonth,
-      currentYear
+      currentYear,
+      holidayDates,
     );
 
     setPendingBenefits((prev) => [
@@ -1109,7 +1119,8 @@ const CollaboratorModal = ({
           a.benefit.value_type || "monthly",
           (a.benefit.applicable_days || ["mon", "tue", "wed", "thu", "fri"]) as DayAbbrev[],
           currentMonth,
-          currentYear
+          currentYear,
+          holidayDates,
         );
         return sum + value;
       }, 0);
@@ -1692,7 +1703,8 @@ const CollaboratorModal = ({
                                   b.value_type,
                                   b.applicable_days as DayAbbrev[],
                                   currentMonth,
-                                  currentYear
+                                  currentYear,
+                                  holidayDates,
                                 );
                                 return (
                                   <div
@@ -1732,14 +1744,16 @@ const CollaboratorModal = ({
                                   benefit.value_type || "monthly",
                                   (benefit.applicable_days || ["mon", "tue", "wed", "thu", "fri"]) as DayAbbrev[],
                                   currentMonth,
-                                  currentYear
+                                  currentYear,
+                                  holidayDates,
                                 );
                                 const description = getBenefitCalculationDescription(
                                   benefit.value || 0,
                                   benefit.value_type || "monthly",
                                   (benefit.applicable_days || ["mon", "tue", "wed", "thu", "fri"]) as DayAbbrev[],
                                   currentMonth,
-                                  currentYear
+                                  currentYear,
+                                  holidayDates,
                                 );
 
                                 return (
