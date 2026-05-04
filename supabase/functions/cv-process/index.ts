@@ -78,6 +78,40 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: CORS_HEADERS });
   }
+  // GET /?ping=claude — smoke test do Claude (sem PDF, sem auth)
+  if (req.method === "GET") {
+    const url = new URL(req.url);
+    if (url.searchParams.get("ping") === "claude") {
+      const t0 = Date.now();
+      try {
+        const resp = await Promise.race([
+          callClaude({
+            messages: [{ role: "user", content: "Diga 'ok' e nada mais." }],
+            maxTokens: 10,
+            direct: true,
+          }),
+          new Promise<never>((_, rej) =>
+            setTimeout(() => rej(new Error("timeout 30s")), 30000)
+          ),
+        ]);
+        return jsonResponse({
+          ok: true,
+          ms: Date.now() - t0,
+          text: extractTextFromResponse(resp),
+          model: resp.model,
+          baseUrl: Deno.env.get("ANTHROPIC_BASE_URL") || "default",
+        });
+      } catch (e) {
+        return jsonResponse({
+          ok: false,
+          ms: Date.now() - t0,
+          error: (e as Error).message,
+          baseUrl: Deno.env.get("ANTHROPIC_BASE_URL") || "default",
+        }, 500);
+      }
+    }
+    return jsonResponse({ ok: true, hint: "Use ?ping=claude pra smoke test" });
+  }
   if (req.method !== "POST") {
     return jsonResponse(
       { error: "Method not allowed" },
@@ -179,84 +213,108 @@ serve(async (req) => {
     }
   }
 
+  // Helpers de tracing/timeouts pra identificar etapa lenta
+  const trace: Array<{ step: string; ms: number; ok: boolean; info?: string }> = [];
+  const tStart = Date.now();
+  const stepStart = () => Date.now();
+  const stepEnd = (name: string, t0: number, ok: boolean, info?: string) => {
+    const ms = Date.now() - t0;
+    trace.push({ step: name, ms, ok, info });
+    console.log(`[cv-process] ${name}: ${ms}ms ${ok ? "ok" : "FAIL"}${info ? ` (${info})` : ""}`);
+  };
+  const withTimeout = async <T,>(p: Promise<T>, ms: number, label: string): Promise<T> => {
+    return await Promise.race([
+      p,
+      new Promise<never>((_, rej) =>
+        setTimeout(() => rej(new Error(`Timeout ${ms}ms em ${label}`)), ms)
+      ),
+    ]);
+  };
+
   // 4. Obtém PDF — Storage (filePath) OU HTTP fetch (cvUrl)
   let buffer: ArrayBuffer;
+  let t0 = stepStart();
   if (filePath) {
-    const { data: pdfBlob, error: dlErr } = await sbAdmin
-      .storage
-      .from("candidate-cvs")
-      .download(filePath);
-
-    if (dlErr || !pdfBlob) {
-      return jsonResponse(
-        { error: "PDF not found in storage", details: dlErr?.message },
-        404,
+    try {
+      const { data: pdfBlob, error: dlErr } = await withTimeout(
+        sbAdmin.storage.from("candidate-cvs").download(filePath),
+        15000,
+        "storage.download",
       );
+      if (dlErr || !pdfBlob) throw new Error(dlErr?.message ?? "no blob");
+      buffer = await pdfBlob.arrayBuffer();
+      stepEnd("download_storage", t0, true, `${Math.round(buffer.byteLength / 1024)}KB`);
+    } catch (err) {
+      stepEnd("download_storage", t0, false, (err as Error).message);
+      return jsonResponse({ error: "PDF não encontrado no Storage", trace }, 404);
     }
-    buffer = await pdfBlob.arrayBuffer();
   } else {
     try {
-      const resp = await fetch(cvUrl!);
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 15000);
+      const resp = await fetch(cvUrl!, { signal: ctrl.signal });
+      clearTimeout(timer);
       if (!resp.ok) {
-        return jsonResponse(
-          { error: `Falha ao baixar CV da URL: HTTP ${resp.status}` },
-          422,
-        );
-      }
-      const contentType = resp.headers.get("content-type") ?? "";
-      if (!contentType.includes("pdf") && !cvUrl!.toLowerCase().endsWith(".pdf")) {
-        return jsonResponse(
-          { error: `URL não retornou PDF (content-type: ${contentType})` },
-          422,
-        );
+        stepEnd("fetch_cv_url", t0, false, `HTTP ${resp.status}`);
+        return jsonResponse({ error: `HTTP ${resp.status} ao baixar CV`, trace }, 422);
       }
       buffer = await resp.arrayBuffer();
+      stepEnd("fetch_cv_url", t0, true, `${Math.round(buffer.byteLength / 1024)}KB`);
     } catch (err) {
-      return jsonResponse(
-        { error: "Falha ao baixar CV", details: (err as Error).message },
-        422,
-      );
+      stepEnd("fetch_cv_url", t0, false, (err as Error).message);
+      return jsonResponse({ error: "Falha baixando CV da URL", trace }, 422);
     }
   }
 
+  t0 = stepStart();
   const base64Pdf = arrayBufferToBase64(buffer);
+  stepEnd("base64_encode", t0, true, `${Math.round(base64Pdf.length / 1024)}KB`);
 
-  // 5. Claude extrai resumo estruturado
+  // 5. Claude extrai resumo estruturado (timeout 50s, antes do Edge timeout de 60s)
+  t0 = stepStart();
   let summary: string;
   try {
-    const claudeResp = await callClaude({
-      system: CV_EXTRACTION_PROMPT,
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "document",
-              source: {
-                type: "base64",
-                media_type: "application/pdf",
-                data: base64Pdf,
+    const claudeResp = await withTimeout(
+      callClaude({
+        system: CV_EXTRACTION_PROMPT,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "document",
+                source: {
+                  type: "base64",
+                  media_type: "application/pdf",
+                  data: base64Pdf,
+                },
               },
-            },
-            {
-              type: "text",
-              text:
-                `Currículo de ${candidate.name}. Extraia o resumo estruturado conforme o formato solicitado.`,
-            },
-          ],
-        },
-      ],
-      maxTokens: 2000,
-    });
+              {
+                type: "text",
+                text: `Currículo de ${candidate.name}. Extraia o resumo estruturado conforme o formato solicitado.`,
+              },
+            ],
+          },
+        ],
+        maxTokens: 2000,
+        direct: true,
+      }),
+      50000,
+      "claude.messages.create",
+    );
     summary = extractTextFromResponse(claudeResp).trim();
     if (!summary || summary.length < 20) {
-      throw new Error("Resumo retornado vazio ou muito curto");
+      throw new Error("Resumo vazio ou muito curto");
     }
+    stepEnd("claude", t0, true, `${summary.length} chars`);
   } catch (err) {
+    stepEnd("claude", t0, false, (err as Error).message);
     return jsonResponse(
       {
         error: "Falha ao processar PDF com Claude",
         details: (err as Error).message,
+        trace,
+        totalMs: Date.now() - tStart,
       },
       500,
     );

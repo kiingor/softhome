@@ -39,6 +39,7 @@ export type ClaudeTextBlock = Anthropic.TextBlock;
 export type ClaudeToolUseBlock = Anthropic.ToolUseBlock;
 
 let _client: Anthropic | null = null;
+let _directClient: Anthropic | null = null;
 
 /**
  * Returns a singleton Anthropic client. Reads `ANTHROPIC_API_KEY` from the
@@ -65,6 +66,31 @@ export function getClaudeClient(): Anthropic {
   return _client;
 }
 
+/**
+ * Cliente Anthropic direto (api.anthropic.com), sem passar pelo omnirouter.
+ * Lê `ANTHROPIC_DIRECT_API_KEY` (ou cai pra `ANTHROPIC_API_KEY` se não houver).
+ * Útil pra funções que precisam de baixa latência ou quando o omnirouter cai.
+ */
+export function getDirectClaudeClient(): Anthropic {
+  if (_directClient) return _directClient;
+
+  const apiKey = Deno.env.get("ANTHROPIC_DIRECT_API_KEY") ??
+    Deno.env.get("ANTHROPIC_API_KEY");
+  if (!apiKey) {
+    throw new Error(
+      "[claude] ANTHROPIC_DIRECT_API_KEY/ANTHROPIC_API_KEY ausente.",
+    );
+  }
+
+  // Força baseURL explícita — o SDK auto-lê ANTHROPIC_BASE_URL do env senão
+  // e cairia no omnirouter, anulando o "direct".
+  _directClient = new Anthropic({
+    apiKey,
+    baseURL: "https://api.anthropic.com",
+  });
+  return _directClient;
+}
+
 export interface CallClaudeOptions {
   /** System prompt — string or structured blocks. */
   system?: string | Anthropic.TextBlockParam[];
@@ -80,6 +106,8 @@ export interface CallClaudeOptions {
   maxTokens?: number;
   /** Disable automatic prompt caching. Default: false (caching ON). */
   disableCache?: boolean;
+  /** Bypassa o omnirouter — chama api.anthropic.com direto. */
+  direct?: boolean;
 }
 
 /**
@@ -104,12 +132,15 @@ export async function callClaude(
     model = DEFAULT_CLAUDE_MODEL,
     maxTokens = DEFAULT_MAX_TOKENS,
     disableCache = false,
+    direct = false,
   } = options;
 
-  const client = getClaudeClient();
+  const client = direct ? getDirectClaudeClient() : getClaudeClient();
+  // Modo direto: api.anthropic.com não aceita prefixo `cc/` (do omnirouter).
+  const finalModel = direct ? model.replace(/^cc\//, "") : model;
 
   const params: Anthropic.MessageCreateParamsNonStreaming = {
-    model,
+    model: finalModel,
     max_tokens: maxTokens,
     messages: disableCache ? messages : applyCacheToLastUserMessage(messages),
   };
