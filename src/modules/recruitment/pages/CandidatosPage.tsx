@@ -25,24 +25,12 @@ import {
   Plus,
   MagnifyingGlass as Search,
   Users,
-  Trash,
   Sparkle as Sparkles,
 } from "@phosphor-icons/react";
 import { reprocessCv } from "../services/cv-process.service";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { useCandidates } from "../hooks/use-candidates";
 import { NewCandidateForm } from "../components/NewCandidateForm";
-import { CvUploadCell } from "../components/CvUploadCell";
+import { CandidateActionsMenu } from "../components/CandidateActionsMenu";
 import type { CandidateManualValues } from "../schemas/recruitment.schema";
 import { formatCPF } from "@/lib/validators";
 
@@ -203,8 +191,7 @@ export default function CandidatosPage() {
                   <TableHead>CPF</TableHead>
                   <TableHead>Fonte</TableHead>
                   <TableHead>Cadastro</TableHead>
-                  <TableHead className="text-right">CV</TableHead>
-                  <TableHead className="w-[56px]"></TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -246,38 +233,11 @@ export default function CandidatosPage() {
                       {new Date(c.created_at).toLocaleDateString("pt-BR")}
                     </TableCell>
                     <TableCell className="text-right">
-                      <CvUploadCell candidate={c} />
-                    </TableCell>
-                    <TableCell>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            disabled={deactivateCandidate.isPending}
-                            title="Remover do banco de talentos"
-                          >
-                            <Trash className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Remover candidato</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              "{c.name}" será removido do banco de talentos. O histórico de candidaturas é preservado (LGPD). Quer continuar?
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => deactivateCandidate.mutate(c.id)}
-                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            >
-                              Remover
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                      <CandidateActionsMenu
+                        candidate={c}
+                        onDeactivate={(id) => deactivateCandidate.mutate(id)}
+                        isDeactivating={deactivateCandidate.isPending}
+                      />
                     </TableCell>
                   </TableRow>
                 ))}
