@@ -659,9 +659,10 @@ const CollaboratorModal = ({
         ...(userId && { user_id: userId }),
       };
 
-      // New collaborators: force "aguardando_documentacao"; Editing: don't send status
+      // Cadastro avulso pelo admin: já entra "ativo". Quem precisa do fluxo
+      // de admissão (aguardando_documentacao) é admission-public-submit.
       const saveData = isNew
-        ? { ...baseData, status: "aguardando_documentacao" as const }
+        ? { ...baseData, status: "ativo" as const }
         : baseData;
 
       if (isNew) {
