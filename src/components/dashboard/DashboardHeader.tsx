@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { SignOut as LogOut, User, Gear as Settings } from "@phosphor-icons/react";
+import { SignOut as LogOut, User, Gear as Settings, MagnifyingGlass } from "@phosphor-icons/react";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { NotificationBell } from "./NotificationBell";
@@ -22,9 +22,14 @@ const roleLabels: Record<string, string> = {
   colaborador: "Colaborador",
 };
 
-const DashboardHeader = () => {
+interface DashboardHeaderProps {
+  onOpenSearch?: () => void;
+}
+
+const DashboardHeader = ({ onOpenSearch }: DashboardHeaderProps = {}) => {
   const { user, profile, roles, signOut } = useDashboard();
   const navigate = useNavigate();
+  const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/.test(navigator.platform);
 
   const handleSignOut = async () => {
     await signOut();
@@ -48,7 +53,19 @@ const DashboardHeader = () => {
   return (
     <header className="h-16 border-b border-border bg-card flex items-center justify-between px-6 sticky top-0 z-40">
       <div className="flex items-center gap-4">
-        {/* Espaço reservado para breadcrumbs ou outros elementos futuros */}
+        {onOpenSearch && (
+          <button
+            type="button"
+            onClick={onOpenSearch}
+            className="flex items-center gap-2 px-3 h-9 w-72 rounded-md border border-input bg-background text-sm text-muted-foreground hover:bg-accent transition-colors"
+          >
+            <MagnifyingGlass className="h-4 w-4" />
+            <span className="flex-1 text-left">Buscar no SoftHouse...</span>
+            <kbd className="hidden md:inline-flex items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">
+              {isMac ? "⌘" : "Ctrl"}+K
+            </kbd>
+          </button>
+        )}
       </div>
 
       <div className="flex items-center gap-3">

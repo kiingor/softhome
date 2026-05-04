@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import PermissionGuard from "@/components/dashboard/PermissionGuard";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Card, CardContent } from "@/components/ui/card";
@@ -82,6 +83,21 @@ const ColaboradoresPage = () => {
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Deep-link via ?openId=<uuid> (usado pelo GlobalSearch e outros lugares)
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const openId = searchParams.get("openId");
+    if (openId) {
+      setEditingId(openId);
+      setModalOpen(true);
+      // Limpa o param pra não reabrir o modal ao fechar
+      const next = new URLSearchParams(searchParams);
+      next.delete("openId");
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   // Delete confirmation state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
