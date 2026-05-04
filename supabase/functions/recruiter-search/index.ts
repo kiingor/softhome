@@ -278,6 +278,7 @@ ${c.cv_summary ?? "(sem resumo indexado)"}
         system: RECRUITER_SYSTEM_PROMPT,
         messages: [{ role: "user", content: userPrompt }],
         maxTokens: 1500,
+        direct: true,
       });
       assistantText = extractTextFromResponse(claudeResp).trim();
       tokensInput = claudeResp.usage?.input_tokens ?? 0;
