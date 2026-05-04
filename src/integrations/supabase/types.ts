@@ -1033,20 +1033,29 @@ export type Database = {
       }
       collaborators: {
         Row: {
+          address: string | null
           admission_date: string | null
           birth_date: string | null
+          city: string | null
           company_id: string
           contracted_store_id: string | null
           cpf: string
           created_at: string
+          district: string | null
           email: string | null
           id: string
+          is_apprentice: boolean
+          is_pcd: boolean
           is_temp: boolean
           name: string
+          notes: string | null
           phone: string | null
           position: string | null
           position_id: string | null
+          postal_code: string | null
           regime: Database["public"]["Enums"]["collaborator_regime"]
+          rg: string | null
+          state: string | null
           status: Database["public"]["Enums"]["collaborator_status"]
           store_id: string | null
           team_id: string | null
@@ -1055,20 +1064,29 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          address?: string | null
           admission_date?: string | null
           birth_date?: string | null
+          city?: string | null
           company_id: string
           contracted_store_id?: string | null
           cpf: string
           created_at?: string
+          district?: string | null
           email?: string | null
           id?: string
+          is_apprentice?: boolean
+          is_pcd?: boolean
           is_temp?: boolean
           name: string
+          notes?: string | null
           phone?: string | null
           position?: string | null
           position_id?: string | null
+          postal_code?: string | null
           regime?: Database["public"]["Enums"]["collaborator_regime"]
+          rg?: string | null
+          state?: string | null
           status?: Database["public"]["Enums"]["collaborator_status"]
           store_id?: string | null
           team_id?: string | null
@@ -1077,20 +1095,29 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          address?: string | null
           admission_date?: string | null
           birth_date?: string | null
+          city?: string | null
           company_id?: string
           contracted_store_id?: string | null
           cpf?: string
           created_at?: string
+          district?: string | null
           email?: string | null
           id?: string
+          is_apprentice?: boolean
+          is_pcd?: boolean
           is_temp?: boolean
           name?: string
+          notes?: string | null
           phone?: string | null
           position?: string | null
           position_id?: string | null
+          postal_code?: string | null
           regime?: Database["public"]["Enums"]["collaborator_regime"]
+          rg?: string | null
+          state?: string | null
           status?: Database["public"]["Enums"]["collaborator_status"]
           store_id?: string | null
           team_id?: string | null

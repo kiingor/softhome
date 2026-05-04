@@ -32,9 +32,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { FloppyDisk as Save, Plus, CurrencyDollar as DollarSign, Gift, Buildings as Building2, Users, CircleNotch as Loader2, X, Wallet, TreePalm as Palmtree, ArrowsLeftRight as ArrowRightLeft } from "@phosphor-icons/react";
+import { FloppyDisk as Save, Plus, CurrencyDollar as DollarSign, Gift, Buildings as Building2, Users, CircleNotch as Loader2, X, Wallet, TreePalm as Palmtree, ArrowsLeftRight as ArrowRightLeft, Power, Trash } from "@phosphor-icons/react";
 import { toast } from "sonner";
-import { formatCPFInput, cleanCPF, validateCPF, formatPhoneInput } from "@/lib/validators";
+import { formatCPFInput, cleanCPF, validateCPF, formatPhoneInput, formatCEPInput, cleanCEP, BRAZIL_STATES } from "@/lib/validators";
 import { sendWhatsAppNotification } from "@/lib/whatsappNotifications";
 import { formatCurrency, formatCurrencyForInput, parseCurrencyInput, getCurrentCompetencia } from "@/lib/formatters";
 import { calculateMonthlyBenefitValue, getBenefitCalculationDescription, DayAbbrev } from "@/lib/workingDays";
@@ -83,20 +83,35 @@ const CollaboratorModal = ({
   const [formData, setFormData] = useState({
     name: "",
     cpf: "",
+    rg: "",
     email: "",
     phone: "",
+    birth_date: "",
     position_id: "",
     store_id: "",
     contracted_store_id: "",
     team_id: "",
     admission_date: "",
+    regime: "clt" as "clt" | "pj" | "estagiario",
     status: "ativo" as "ativo" | "inativo" | "aguardando_documentacao" | "validacao_pendente" | "reprovado",
     is_temp: false,
+    is_pcd: false,
+    is_apprentice: false,
+    address: "",
+    district: "",
+    city: "",
+    state: "",
+    postal_code: "",
+    notes: "",
     password: "",
   });
   const [showPasswordField, setShowPasswordField] = useState(false);
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeactivating, setIsDeactivating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [confirmDeactivate, setConfirmDeactivate] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [previousPositionId, setPreviousPositionId] = useState<string | null>(null);
 
   // Pending entries/benefits for new collaborators
@@ -281,34 +296,69 @@ const CollaboratorModal = ({
   useEffect(() => {
     if (open) {
       if (collaborator) {
+        const c = collaborator as typeof collaborator & {
+          rg?: string | null;
+          birth_date?: string | null;
+          regime?: "clt" | "pj" | "estagiario" | null;
+          is_pcd?: boolean | null;
+          is_apprentice?: boolean | null;
+          address?: string | null;
+          district?: string | null;
+          city?: string | null;
+          state?: string | null;
+          postal_code?: string | null;
+          notes?: string | null;
+        };
         setFormData({
-          name: collaborator.name || "",
-          cpf: collaborator.cpf || "",
-          email: collaborator.email || "",
-          phone: collaborator.phone || "",
-          position_id: collaborator.position_id || "",
-          store_id: collaborator.store_id || "",
-          contracted_store_id: collaborator.contracted_store_id || "",
-          team_id: collaborator.team_id || "",
-          admission_date: collaborator.admission_date || "",
-          status: collaborator.status || "ativo",
-          is_temp: collaborator.is_temp || false,
+          name: c.name || "",
+          cpf: c.cpf || "",
+          rg: c.rg || "",
+          email: c.email || "",
+          phone: c.phone || "",
+          birth_date: c.birth_date || "",
+          position_id: c.position_id || "",
+          store_id: c.store_id || "",
+          contracted_store_id: c.contracted_store_id || "",
+          team_id: c.team_id || "",
+          admission_date: c.admission_date || "",
+          regime: (c.regime as "clt" | "pj" | "estagiario") || "clt",
+          status: c.status || "ativo",
+          is_temp: c.is_temp || false,
+          is_pcd: c.is_pcd || false,
+          is_apprentice: c.is_apprentice || false,
+          address: c.address || "",
+          district: c.district || "",
+          city: c.city || "",
+          state: c.state || "",
+          postal_code: c.postal_code ? formatCEPInput(c.postal_code) : "",
+          notes: c.notes || "",
           password: "",
         });
-        setShowPasswordField(!collaborator.user_id);
+        setShowPasswordField(!c.user_id);
       } else {
         setFormData({
           name: "",
           cpf: "",
+          rg: "",
           email: "",
           phone: "",
+          birth_date: "",
           position_id: "",
           store_id: "",
           contracted_store_id: "",
           team_id: "",
           admission_date: "",
-          status: "aguardando_documentacao",
+          regime: "clt",
+          status: "ativo",
           is_temp: false,
+          is_pcd: false,
+          is_apprentice: false,
+          address: "",
+          district: "",
+          city: "",
+          state: "",
+          postal_code: "",
+          notes: "",
           password: "",
         });
         setShowPasswordField(false);
@@ -646,14 +696,25 @@ const CollaboratorModal = ({
       const baseData = {
         name: formData.name.trim(),
         cpf: cleanedCPF,
+        rg: formData.rg.trim() || null,
         email: formData.email.trim().toLowerCase() || null,
         phone: formData.phone.replace(/\D/g, "") || null,
+        birth_date: formData.birth_date || null,
         position_id: formData.position_id || null,
         store_id: formData.store_id || null,
         contracted_store_id: formData.contracted_store_id || null,
         team_id: formData.team_id || null,
         admission_date: formData.admission_date || null,
+        regime: formData.regime,
         is_temp: formData.is_temp,
+        is_pcd: formData.is_pcd,
+        is_apprentice: formData.is_apprentice,
+        address: formData.address.trim() || null,
+        district: formData.district.trim() || null,
+        city: formData.city.trim() || null,
+        state: formData.state || null,
+        postal_code: cleanCEP(formData.postal_code) || null,
+        notes: formData.notes.trim() || null,
         company_id: currentCompany!.id,
         position: positions.find((p) => p.id === formData.position_id)?.name || null,
         ...(userId && { user_id: userId }),
@@ -746,6 +807,56 @@ const CollaboratorModal = ({
     } finally {
       setIsSaving(false);
       setIsCreatingUser(false);
+    }
+  };
+
+  // Desativar colaborador (status=inativo + termination_date)
+  const handleDeactivate = async () => {
+    if (!collaboratorId) return;
+    setIsDeactivating(true);
+    try {
+      const { error } = await supabase
+        .from("collaborators")
+        .update({
+          status: "inativo",
+          termination_date: new Date().toISOString().slice(0, 10),
+        })
+        .eq("id", collaboratorId);
+      if (error) throw error;
+      toast.success("Colaborador desativado.");
+      queryClient.invalidateQueries({ queryKey: ["collaborators"] });
+      queryClient.invalidateQueries({ queryKey: ["collaborator", collaboratorId] });
+      onSuccess?.();
+      setConfirmDeactivate(false);
+      onOpenChange(false);
+    } catch (error: any) {
+      toast.error("Erro ao desativar: " + error.message);
+    } finally {
+      setIsDeactivating(false);
+    }
+  };
+
+  // Excluir colaborador (chama Edge Function que apaga auth user + dados)
+  const handleDelete = async () => {
+    if (!collaboratorId) return;
+    setIsDeleting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("delete-collaborator", {
+        body: { collaboratorId },
+      });
+      if (error) throw error;
+      if ((data as { error?: string } | null)?.error) {
+        throw new Error((data as { error: string }).error);
+      }
+      toast.success("Colaborador excluído.");
+      queryClient.invalidateQueries({ queryKey: ["collaborators"] });
+      onSuccess?.();
+      setConfirmDelete(false);
+      onOpenChange(false);
+    } catch (error: any) {
+      toast.error("Erro ao excluir: " + error.message);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -1155,6 +1266,110 @@ const CollaboratorModal = ({
                     </div>
                   )}
 
+                  {/* RG + Data de Nascimento */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="rg">RG</Label>
+                      <Input
+                        id="rg"
+                        value={formData.rg}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, rg: e.target.value }))}
+                        placeholder="00.000.000-0"
+                        maxLength={20}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="birth_date">Data de Nascimento</Label>
+                      <Input
+                        id="birth_date"
+                        type="date"
+                        value={formData.birth_date}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, birth_date: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Tipo de Contrato (regime) */}
+                  <div className="space-y-2">
+                    <Label>Tipo de Contrato</Label>
+                    <Select
+                      value={formData.regime}
+                      onValueChange={(v) => setFormData((prev) => ({ ...prev, regime: v as typeof prev.regime }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="clt">CLT</SelectItem>
+                        <SelectItem value="pj">PJ</SelectItem>
+                        <SelectItem value="estagiario">Estagiário</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Endereço */}
+                  <div className="space-y-2">
+                    <Label htmlFor="address">Endereço</Label>
+                    <Input
+                      id="address"
+                      value={formData.address}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, address: e.target.value }))}
+                      placeholder="Rua, número, complemento"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="district">Bairro</Label>
+                      <Input
+                        id="district"
+                        value={formData.district}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, district: e.target.value }))}
+                        placeholder="Bairro"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="postal_code">CEP</Label>
+                      <Input
+                        id="postal_code"
+                        value={formData.postal_code}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, postal_code: formatCEPInput(e.target.value) }))}
+                        placeholder="00000-000"
+                        maxLength={9}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-[1fr_auto] gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="city">Cidade</Label>
+                      <Input
+                        id="city"
+                        value={formData.city}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, city: e.target.value }))}
+                        placeholder="Cidade"
+                      />
+                    </div>
+                    <div className="space-y-2 w-24">
+                      <Label>UF</Label>
+                      <Select
+                        value={formData.state}
+                        onValueChange={(v) => setFormData((prev) => ({ ...prev, state: v }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="UF" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {BRAZIL_STATES.map((uf) => (
+                            <SelectItem key={uf} value={uf}>
+                              {uf}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
                   <Separator />
 
                   {/* Empresa + Empresa Contratada (lado a lado) */}
@@ -1305,18 +1520,57 @@ const CollaboratorModal = ({
 
                   <Separator />
 
-                  {/* Colaborador Avulso */}
-                  <div className="space-y-2">
-                    <Label>Colaborador Avulso</Label>
-                    <div className="flex items-center space-x-2 pt-2">
-                      <Switch
-                        checked={formData.is_temp}
-                        onCheckedChange={(v) => setFormData((prev) => ({ ...prev, is_temp: v }))}
-                      />
-                      <span className="text-sm text-muted-foreground">
-                        {formData.is_temp ? "Sim" : "Não"}
-                      </span>
+                  {/* Flags: Avulso / PCD / Aprendiz */}
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label>Avulso</Label>
+                      <div className="flex items-center space-x-2 pt-2">
+                        <Switch
+                          checked={formData.is_temp}
+                          onCheckedChange={(v) => setFormData((prev) => ({ ...prev, is_temp: v }))}
+                        />
+                        <span className="text-sm text-muted-foreground">
+                          {formData.is_temp ? "Sim" : "Não"}
+                        </span>
+                      </div>
                     </div>
+                    <div className="space-y-2">
+                      <Label>PCD</Label>
+                      <div className="flex items-center space-x-2 pt-2">
+                        <Switch
+                          checked={formData.is_pcd}
+                          onCheckedChange={(v) => setFormData((prev) => ({ ...prev, is_pcd: v }))}
+                        />
+                        <span className="text-sm text-muted-foreground">
+                          {formData.is_pcd ? "Sim" : "Não"}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Jovem Aprendiz</Label>
+                      <div className="flex items-center space-x-2 pt-2">
+                        <Switch
+                          checked={formData.is_apprentice}
+                          onCheckedChange={(v) => setFormData((prev) => ({ ...prev, is_apprentice: v }))}
+                        />
+                        <span className="text-sm text-muted-foreground">
+                          {formData.is_apprentice ? "Sim" : "Não"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Observações */}
+                  <div className="space-y-2">
+                    <Label htmlFor="notes">Observações</Label>
+                    <textarea
+                      id="notes"
+                      value={formData.notes}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
+                      placeholder="Notas internas sobre o colaborador..."
+                      rows={3}
+                      className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    />
                   </div>
                 </div>
               </ScrollArea>
@@ -1636,21 +1890,105 @@ const CollaboratorModal = ({
           )}
 
           {/* Footer - Always Visible */}
-          <div className="shrink-0 flex justify-end gap-3 px-6 py-4 border-t bg-background">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSave} disabled={isSaving}>
-              {isSaving ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Save className="w-4 h-4 mr-2" />
+          <div className="shrink-0 flex items-center justify-between gap-3 px-6 py-4 border-t bg-background">
+            <div className="flex items-center gap-2">
+              {!isNew && canManage && formData.status !== "inativo" && (
+                <Button
+                  variant="outline"
+                  onClick={() => setConfirmDeactivate(true)}
+                  disabled={isDeactivating || isDeleting}
+                >
+                  <Power className="w-4 h-4 mr-2" />
+                  Desativar
+                </Button>
               )}
-              Salvar
-            </Button>
+              {!isNew && canManage && (
+                <Button
+                  variant="outline"
+                  className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => setConfirmDelete(true)}
+                  disabled={isDeactivating || isDeleting}
+                >
+                  <Trash className="w-4 h-4 mr-2" />
+                  Excluir
+                </Button>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleSave} disabled={isSaving}>
+                {isSaving ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4 mr-2" />
+                )}
+                Salvar
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Confirm Deactivate */}
+      <AlertDialog open={confirmDeactivate} onOpenChange={setConfirmDeactivate}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desativar colaborador?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {formData.name} fica marcado como <strong>inativo</strong> e a
+              data de hoje vira a data de desligamento. O histórico (folha,
+              férias, exames) é preservado. Você pode reativar editando o
+              status no modal depois.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeactivating}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeactivate}
+              disabled={isDeactivating}
+            >
+              {isDeactivating ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Power className="w-4 h-4 mr-2" />
+              )}
+              Desativar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirm Delete */}
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir colaborador?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação <strong>não pode ser desfeita</strong>. Vai remover{" "}
+              {formData.name}, todos os lançamentos de folha, benefícios,
+              exames e (se houver) o acesso dele ao Portal do Colaborador.
+              Para histórico, prefira <em>Desativar</em>.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Trash className="w-4 h-4 mr-2" />
+              )}
+              Excluir definitivamente
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Add Entry Dialog - Extended with month/year/installment */}
       <Dialog open={addEntryOpen} onOpenChange={setAddEntryOpen}>
