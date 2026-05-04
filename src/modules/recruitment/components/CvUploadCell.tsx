@@ -9,10 +9,12 @@ import {
   Eye,
   CheckCircle,
   ArrowsClockwise as RefreshCw,
+  Sparkle as Sparkles,
 } from "@phosphor-icons/react";
 import {
   uploadAndProcessCv,
   getCvSignedUrl,
+  reprocessCv,
 } from "../services/cv-process.service";
 import type { Candidate } from "../types";
 
@@ -38,6 +40,20 @@ export function CvUploadCell({ candidate }: CvUploadCellProps) {
     setIsProcessing(true);
     try {
       await uploadAndProcessCv(candidate.id, candidate.company_id, file);
+      toast.success("CV indexado ✓");
+      queryClient.invalidateQueries({ queryKey: ["candidates"] });
+    } catch (err) {
+      toast.error("Não rolou. " + (err as Error).message);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleReprocess = async () => {
+    if (!candidate.cv_url) return;
+    setIsProcessing(true);
+    try {
+      await reprocessCv(candidate.id, candidate.cv_url);
       toast.success("CV indexado ✓");
       queryClient.invalidateQueries({ queryKey: ["candidates"] });
     } catch (err) {
@@ -95,6 +111,18 @@ export function CvUploadCell({ candidate }: CvUploadCellProps) {
       {hasCv && (
         <Button variant="ghost" size="sm" onClick={handleViewCv} title="Ver CV">
           <Eye className="w-4 h-4" />
+        </Button>
+      )}
+
+      {hasCv && !indexed && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleReprocess}
+          title="Gerar embedding pra busca semântica"
+        >
+          <Sparkles className="w-4 h-4 mr-1" />
+          Indexar
         </Button>
       )}
 

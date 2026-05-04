@@ -67,6 +67,30 @@ export async function uploadAndProcessCv(
   return data;
 }
 
+// Reprocessa um CV já cadastrado (gera/atualiza embedding) a partir do
+// cv_url existente. Usa filePath se for path de Storage; cvUrl se for
+// URL pública (caso de candidato vindo via API de migração).
+export async function reprocessCv(
+  candidateId: string,
+  cvUrl: string,
+): Promise<CvProcessResult> {
+  const isExternalUrl = cvUrl.startsWith("http");
+  const body = isExternalUrl
+    ? { candidateId, cvUrl }
+    : { candidateId, filePath: cvUrl };
+
+  const { data, error } = await supabase.functions.invoke<CvProcessResult>(
+    "cv-process",
+    { body },
+  );
+
+  if (error) throw new Error("Falha no processamento: " + error.message);
+  if (!data || !data.success) {
+    throw new Error("Edge Function não confirmou sucesso.");
+  }
+  return data;
+}
+
 // Gera signed URL temporária pra view do CV (bucket é privado)
 export async function getCvSignedUrl(
   filePath: string,

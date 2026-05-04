@@ -1,14 +1,19 @@
 // Edge Function: cv-process
 //
 // Processa o PDF do CV de um candidato:
-//   1. Baixa o PDF do Storage bucket 'candidate-cvs'
+//   1. Baixa o PDF (do Storage bucket 'candidate-cvs' OU de URL pública externa)
 //   2. Envia pra Claude (Sonnet 4.6) que extrai resumo estruturado em pt-BR
 //   3. Embed do resumo via OpenAI text-embedding-3-small
-//   4. Upsert em candidate_embeddings + atualiza candidates (cv_url, cv_summary,
-//      cv_processed_at)
+//   4. Upsert em candidate_embeddings + atualiza candidates (cv_url se filePath,
+//      cv_summary, cv_processed_at)
 //
-// Body: { candidateId: uuid, filePath: string }
-// Auth: requer JWT válido (admin_gc/gestor_gc/rh).
+// Body: { candidateId: uuid, filePath?: string, cvUrl?: string }
+//   - filePath: path no bucket 'candidate-cvs' (fluxo de upload via UI)
+//   - cvUrl: URL pública (fluxo via api-candidates / migração)
+//   Um dos dois é obrigatório.
+//
+// Auth: aceita JWT de user (admin_gc/gestor_gc/rh) OU service_role (chamada
+// interna entre Edge Functions, ex: api-candidates).
 //
 // Deploy: npx supabase functions deploy cv-process
 // Secrets necessários: ANTHROPIC_API_KEY, ANTHROPIC_BASE_URL (opcional),
@@ -90,37 +95,32 @@ serve(async (req) => {
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-  // Cliente com JWT do user pra validar autenticação
-  const sbUser = createClient(supabaseUrl, anonKey, {
-    global: { headers: { Authorization: authHeader } },
-  });
-  const {
-    data: { user },
-    error: authErr,
-  } = await sbUser.auth.getUser();
-  if (authErr || !user) {
-    return jsonResponse({ error: "Invalid or expired token" }, 401);
-  }
+  // Detecta chamada interna (service_role) — bypassa permission check.
+  // Usada por api-candidates pra disparar cv-process após inserção.
+  const bearerToken = authHeader.replace(/^Bearer\s+/i, "");
+  const isInternalCall = bearerToken === serviceKey;
 
   // Cliente admin pra storage + DB writes (bypassa RLS pra service_role)
   const sbAdmin = createClient(supabaseUrl, serviceKey);
 
   // 2. Parse body
   let candidateId: string;
-  let filePath: string;
+  let filePath: string | undefined;
+  let cvUrl: string | undefined;
   try {
     const body = await req.json();
     candidateId = body.candidateId;
     filePath = body.filePath;
-    if (!candidateId || !filePath) throw new Error("missing");
+    cvUrl = body.cvUrl;
+    if (!candidateId || (!filePath && !cvUrl)) throw new Error("missing");
   } catch {
     return jsonResponse(
-      { error: "Body must include { candidateId, filePath }" },
+      { error: "Body must include { candidateId, filePath?, cvUrl? }" },
       400,
     );
   }
 
-  // 3. Verifica candidate + permissão (gestor_gc só processa da própria empresa)
+  // 3. Verifica candidate
   const { data: candidate, error: candErr } = await sbAdmin
     .from("candidates")
     .select("id, company_id, name")
@@ -131,55 +131,94 @@ serve(async (req) => {
     return jsonResponse({ error: "Candidate not found" }, 404);
   }
 
-  // Verifica role do user
-  const { data: roles } = await sbUser
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", user.id);
+  // Permission check só em chamada de user (não em service_role interna)
+  if (!isInternalCall) {
+    const sbUser = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const {
+      data: { user },
+      error: authErr,
+    } = await sbUser.auth.getUser();
+    if (authErr || !user) {
+      return jsonResponse({ error: "Invalid or expired token" }, 401);
+    }
 
-  const roleStrings = (roles ?? []).map((r) =>
-    String((r as { role: string }).role),
-  );
-  const isAdmin = roleStrings.includes("admin_gc") ||
-    roleStrings.includes("admin");
-  const isGestor = roleStrings.includes("gestor_gc") ||
-    roleStrings.includes("rh");
+    const { data: roles } = await sbUser
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id);
 
-  if (!isAdmin && !isGestor) {
-    return jsonResponse(
-      { error: "Sem permissão pra processar CVs" },
-      403,
+    const roleStrings = (roles ?? []).map((r) =>
+      String((r as { role: string }).role),
     );
+    const isAdmin = roleStrings.includes("admin_gc") ||
+      roleStrings.includes("admin");
+    const isGestor = roleStrings.includes("gestor_gc") ||
+      roleStrings.includes("rh");
+
+    if (!isAdmin && !isGestor) {
+      return jsonResponse(
+        { error: "Sem permissão pra processar CVs" },
+        403,
+      );
+    }
+
+    // gestor_gc: precisa pertencer à empresa do candidato
+    if (!isAdmin && isGestor) {
+      const { data: belongs } = await sbUser.rpc("user_belongs_to_company", {
+        _company_id: candidate.company_id,
+        _user_id: user.id,
+      });
+      if (!belongs) {
+        return jsonResponse(
+          { error: "Candidato não é da sua empresa" },
+          403,
+        );
+      }
+    }
   }
 
-  // gestor_gc: precisa pertencer à empresa do candidato
-  if (!isAdmin && isGestor) {
-    const { data: belongs } = await sbUser.rpc("user_belongs_to_company", {
-      _company_id: candidate.company_id,
-      _user_id: user.id,
-    });
-    if (!belongs) {
+  // 4. Obtém PDF — Storage (filePath) OU HTTP fetch (cvUrl)
+  let buffer: ArrayBuffer;
+  if (filePath) {
+    const { data: pdfBlob, error: dlErr } = await sbAdmin
+      .storage
+      .from("candidate-cvs")
+      .download(filePath);
+
+    if (dlErr || !pdfBlob) {
       return jsonResponse(
-        { error: "Candidato não é da sua empresa" },
-        403,
+        { error: "PDF not found in storage", details: dlErr?.message },
+        404,
+      );
+    }
+    buffer = await pdfBlob.arrayBuffer();
+  } else {
+    try {
+      const resp = await fetch(cvUrl!);
+      if (!resp.ok) {
+        return jsonResponse(
+          { error: `Falha ao baixar CV da URL: HTTP ${resp.status}` },
+          422,
+        );
+      }
+      const contentType = resp.headers.get("content-type") ?? "";
+      if (!contentType.includes("pdf") && !cvUrl!.toLowerCase().endsWith(".pdf")) {
+        return jsonResponse(
+          { error: `URL não retornou PDF (content-type: ${contentType})` },
+          422,
+        );
+      }
+      buffer = await resp.arrayBuffer();
+    } catch (err) {
+      return jsonResponse(
+        { error: "Falha ao baixar CV", details: (err as Error).message },
+        422,
       );
     }
   }
 
-  // 4. Baixa PDF do Storage
-  const { data: pdfBlob, error: dlErr } = await sbAdmin
-    .storage
-    .from("candidate-cvs")
-    .download(filePath);
-
-  if (dlErr || !pdfBlob) {
-    return jsonResponse(
-      { error: "PDF not found in storage", details: dlErr?.message },
-      404,
-    );
-  }
-
-  const buffer = await pdfBlob.arrayBuffer();
   const base64Pdf = arrayBufferToBase64(buffer);
 
   // 5. Claude extrai resumo estruturado
@@ -294,14 +333,15 @@ serve(async (req) => {
     );
   }
 
-  await sbAdmin
-    .from("candidates")
-    .update({
-      cv_url: filePath,
-      cv_summary: summary,
-      cv_processed_at: new Date().toISOString(),
-    })
-    .eq("id", candidateId);
+  // Atualiza candidates: cv_url só quando veio de filePath (Storage); pra cvUrl
+  // externa preserva o valor já existente na linha.
+  const updates: Record<string, unknown> = {
+    cv_summary: summary,
+    cv_processed_at: new Date().toISOString(),
+  };
+  if (filePath) updates.cv_url = filePath;
+
+  await sbAdmin.from("candidates").update(updates).eq("id", candidateId);
 
   return jsonResponse({
     success: true,

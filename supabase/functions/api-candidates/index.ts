@@ -100,5 +100,34 @@ serve(async (req) => {
     return json({ error: error.message }, 422);
   }
 
+  // Dispara cv-process em background pra gerar embedding (busca semântica)
+  // se cv_url foi fornecido. Fire-and-forget: a resposta não espera.
+  if (data.cv_url && data.cv_url.startsWith("http")) {
+    // @ts-ignore EdgeRuntime é injetado pelo Supabase Edge Runtime
+    EdgeRuntime.waitUntil(
+      triggerCvProcess(data.id, data.cv_url).catch((e) =>
+        console.error("[api-candidates] cv-process falhou:", e),
+      ),
+    );
+  }
+
   return json({ data }, 201);
 });
+
+async function triggerCvProcess(candidateId: string, cvUrl: string) {
+  const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/cv-process`;
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${serviceKey}`,
+    },
+    body: JSON.stringify({ candidateId, cvUrl }),
+  });
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`cv-process ${resp.status}: ${text}`);
+  }
+}
+
