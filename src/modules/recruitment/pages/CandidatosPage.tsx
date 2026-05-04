@@ -18,13 +18,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   CircleNotch as Loader2,
   Plus,
   MagnifyingGlass as Search,
   Users,
   Trash,
+  Sparkle as Sparkles,
 } from "@phosphor-icons/react";
+import { reprocessCv } from "../services/cv-process.service";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,10 +52,41 @@ export default function CandidatosPage() {
   );
   const [search, setSearch] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [bulkIndexing, setBulkIndexing] = useState<{ done: number; total: number } | null>(null);
+  const queryClient = useQueryClient();
 
   const { candidates, isLoading, createCandidate, deactivateCandidate } = useCandidates({
     isActive: activeFilter === "all" ? "all" : activeFilter === "active",
   });
+
+  const pendingIndexing = useMemo(
+    () => candidates.filter((c) => c.cv_url && !c.cv_processed_at),
+    [candidates]
+  );
+
+  const handleIndexAll = async () => {
+    if (pendingIndexing.length === 0) return;
+    setBulkIndexing({ done: 0, total: pendingIndexing.length });
+    let success = 0;
+    let failed = 0;
+    for (let i = 0; i < pendingIndexing.length; i++) {
+      const c = pendingIndexing[i];
+      try {
+        await reprocessCv(c.id, c.cv_url!);
+        success++;
+      } catch {
+        failed++;
+      }
+      setBulkIndexing({ done: i + 1, total: pendingIndexing.length });
+    }
+    setBulkIndexing(null);
+    queryClient.invalidateQueries({ queryKey: ["candidates"] });
+    if (failed === 0) {
+      toast.success(`${success} CV(s) indexados ✓`);
+    } else {
+      toast.warning(`${success} indexados, ${failed} falharam`);
+    }
+  };
 
   const filtered = useMemo(() => {
     if (!search.trim()) return candidates;
@@ -78,10 +113,31 @@ export default function CandidatosPage() {
             Currículos e candidatos guardados pra futuras vagas.
           </p>
         </div>
-        <Button onClick={() => setIsFormOpen(true)}>
-          <Plus className="w-4 h-4 mr-2" />
-          Cadastrar candidato
-        </Button>
+        <div className="flex items-center gap-2">
+          {pendingIndexing.length > 0 && (
+            <Button
+              variant="outline"
+              onClick={handleIndexAll}
+              disabled={bulkIndexing !== null}
+            >
+              {bulkIndexing ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Indexando {bulkIndexing.done}/{bulkIndexing.total}...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Indexar todos ({pendingIndexing.length})
+                </>
+              )}
+            </Button>
+          )}
+          <Button onClick={() => setIsFormOpen(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            Cadastrar candidato
+          </Button>
+        </div>
       </div>
 
       <Card>

@@ -22,8 +22,9 @@
 // equivalent of a version bump in package.json for the Node side.
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.91.1";
 
-/** Default model used by every SoftHouse agent unless explicitly overridden. */
-export const DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-6";
+/** Default model used by every SoftHouse agent unless explicitly overridden.
+ * Prefixo `cc/` é exigido pelo omnirouter (ANTHROPIC_BASE_URL custom da Softcom). */
+export const DEFAULT_CLAUDE_MODEL = "cc/claude-sonnet-4-6";
 
 /** Default max output tokens. Bump per-call for long extractions / reports. */
 export const DEFAULT_MAX_TOKENS = 4096;
