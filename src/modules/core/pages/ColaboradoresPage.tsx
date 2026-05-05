@@ -37,12 +37,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { UserPlus, MagnifyingGlass as Search, Funnel as Filter, DotsThree as MoreHorizontal, Pencil as Edit, Trash as Trash2, Users, ArrowsClockwise as RefreshCw } from "@phosphor-icons/react";
+import { UserPlus, MagnifyingGlass as Search, Funnel as Filter, DotsThree as MoreHorizontal, Pencil as Edit, Trash as Trash2, Users, ArrowsClockwise as RefreshCw, UploadSimple } from "@phosphor-icons/react";
 import { useDashboard } from "@/contexts/DashboardContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { formatCPF } from "@/lib/validators";
 import CollaboratorModal from "@/modules/core/components/collaborators/CollaboratorModal";
+import { CollaboratorsImportDialog } from "@/modules/core/components/collaborators/import/CollaboratorsImportDialog";
 import { TableSkeleton } from "@/components/ui/table-skeleton";
 
 interface Collaborator {
@@ -83,6 +84,7 @@ const ColaboradoresPage = () => {
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   // Deep-link via ?openId=<uuid> (usado pelo GlobalSearch e outros lugares)
   const [searchParams, setSearchParams] = useSearchParams();
@@ -317,10 +319,16 @@ const ColaboradoresPage = () => {
             </p>
           </div>
           {(canCreate || isAdmin) && (
-            <Button variant="hero" onClick={handleNewCollaborator}>
-              <UserPlus className="w-4 h-4 mr-2" />
-              Novo Colaborador
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => setImportOpen(true)}>
+                <UploadSimple className="w-4 h-4 mr-2" />
+                Importar
+              </Button>
+              <Button variant="hero" onClick={handleNewCollaborator}>
+                <UserPlus className="w-4 h-4 mr-2" />
+                Novo Colaborador
+              </Button>
+            </div>
           )}
         </div>
 
@@ -567,6 +575,16 @@ const ColaboradoresPage = () => {
           collaboratorId={editingId}
           onSuccess={handleModalSuccess}
         />
+
+        {/* Importação em massa */}
+        {currentCompany && (
+          <CollaboratorsImportDialog
+            open={importOpen}
+            onOpenChange={setImportOpen}
+            companyId={currentCompany.id}
+            onImportFinished={() => loadCollaborators()}
+          />
+        )}
 
         {/* Delete Confirmation Dialog */}
         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

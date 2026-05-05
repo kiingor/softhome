@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash as Trash2, Briefcase, Info, FileText, Copy } from "@phosphor-icons/react";
+import { Plus, Pencil, Trash as Trash2, Briefcase, Info, FileText, Copy, DotsThreeVertical, MagnifyingGlass } from "@phosphor-icons/react";
 import { supabase } from '@/integrations/supabase/client';
 import { useDashboard } from '@/contexts/DashboardContext';
 import PermissionGuard from '@/components/dashboard/PermissionGuard';
@@ -21,8 +21,11 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -41,6 +44,9 @@ interface Position {
   irpf_percent: number;
   risk_group: string | null;
   exam_periodicity_months: number | null;
+  team_id: string | null;
+  level: number | null;
+  teams?: { name: string } | null;
   created_at: string;
 }
 
@@ -52,6 +58,11 @@ interface PositionDocument {
   file_type: string;
 }
 
+const EMPTY_FORM = {
+  name: '', salary: '', inss_percent: '', fgts_percent: '', irpf_percent: '',
+  risk_group: '', exam_periodicity_months: '', team_id: '', level: '',
+};
+
 export default function CargosPage() {
   const { currentCompany } = useDashboard();
   const selectedCompanyId = currentCompany?.id;
@@ -60,28 +71,40 @@ export default function CargosPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPosition, setEditingPosition] = useState<Position | null>(null);
   const [dialogTab, setDialogTab] = useState('dados');
-  const [formData, setFormData] = useState({ 
-    name: '', salary: '', inss_percent: '', fgts_percent: '', irpf_percent: '', risk_group: '', exam_periodicity_months: '',
-  });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [teamFilter, setTeamFilter] = useState<string>('all');
+  const [formData, setFormData] = useState(EMPTY_FORM);
 
   // Document state
   const [isDocDialogOpen, setIsDocDialogOpen] = useState(false);
   const [editingDoc, setEditingDoc] = useState<PositionDocument | null>(null);
   const [docForm, setDocForm] = useState({ name: '', observation: '', file_type: 'pdf' });
+  const [deletingPosition, setDeletingPosition] = useState<Position | null>(null);
+  const [deletingDoc, setDeletingDoc] = useState<PositionDocument | null>(null);
 
   const { data: positions = [], isLoading } = useQuery({
     queryKey: ['positions', selectedCompanyId],
     queryFn: async () => {
       if (!selectedCompanyId) return [];
       const { data, error } = await supabase
-        .from('positions').select('*').eq('company_id', selectedCompanyId).order('name');
+        .from('positions').select('*, teams(name)').eq('company_id', selectedCompanyId).order('name');
       if (error) throw error;
       return data as Position[];
     },
     enabled: !!selectedCompanyId,
   });
 
-  // Fetch documents for the editing position
+  const { data: teams = [] } = useQuery({
+    queryKey: ['teams', selectedCompanyId],
+    queryFn: async () => {
+      if (!selectedCompanyId) return [];
+      const { data, error } = await supabase.from('teams').select('id, name').eq('company_id', selectedCompanyId).order('name');
+      if (error) throw error;
+      return data as { id: string; name: string }[];
+    },
+    enabled: !!selectedCompanyId,
+  });
+
   const { data: positionDocuments = [], isLoading: isDocsLoading } = useQuery({
     queryKey: ['position-documents', editingPosition?.id],
     queryFn: async () => {
@@ -94,7 +117,6 @@ export default function CargosPage() {
     enabled: !!editingPosition?.id,
   });
 
-  // Fetch doc counts per position for the listing
   const { data: docCounts = {} } = useQuery({
     queryKey: ['position-doc-counts', selectedCompanyId],
     queryFn: async () => {
@@ -109,8 +131,16 @@ export default function CargosPage() {
     enabled: !!selectedCompanyId,
   });
 
+  const filteredPositions = positions.filter(p => {
+    if (teamFilter === 'none' && p.team_id) return false;
+    if (teamFilter !== 'all' && teamFilter !== 'none' && p.team_id !== teamFilter) return false;
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return p.name.toLowerCase().includes(q) || (p.teams?.name || '').toLowerCase().includes(q);
+  });
+
   const createMutation = useMutation({
-    mutationFn: async (data: { name: string; salary: number; inss_percent: number; fgts_percent: number; irpf_percent: number; risk_group: string | null; exam_periodicity_months: number | null }) => {
+    mutationFn: async (data: { name: string; salary: number; inss_percent: number; fgts_percent: number; irpf_percent: number; risk_group: string | null; exam_periodicity_months: number | null; team_id: string | null; level: number | null }) => {
       const { error } = await supabase.from('positions').insert({ company_id: selectedCompanyId, ...data });
       if (error) throw error;
     },
@@ -119,7 +149,7 @@ export default function CargosPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async (data: { id: string; name: string; salary: number; inss_percent: number; fgts_percent: number; irpf_percent: number; risk_group: string | null; exam_periodicity_months: number | null }) => {
+    mutationFn: async (data: { id: string; name: string; salary: number; inss_percent: number; fgts_percent: number; irpf_percent: number; risk_group: string | null; exam_periodicity_months: number | null; team_id: string | null; level: number | null }) => {
       const { id, ...rest } = data;
       const { error } = await supabase.from('positions').update(rest).eq('id', id);
       if (error) throw error;
@@ -134,7 +164,6 @@ export default function CargosPage() {
     onError: (error) => { toast.error('Erro: ' + error.message); },
   });
 
-  // Document mutations
   const createDocMutation = useMutation({
     mutationFn: async (data: { name: string; observation: string; file_type: string }) => {
       const { error } = await supabase.from('position_documents').insert({
@@ -173,16 +202,17 @@ export default function CargosPage() {
         fgts_percent: (position.fgts_percent || 0).toString().replace('.', ','),
         irpf_percent: (position.irpf_percent || 0).toString().replace('.', ','),
         risk_group: position.risk_group || '', exam_periodicity_months: position.exam_periodicity_months?.toString() || '',
+        team_id: position.team_id || '', level: position.level?.toString() || '',
       });
     } else {
       setEditingPosition(null);
-      setFormData({ name: '', salary: '', inss_percent: '', fgts_percent: '', irpf_percent: '', risk_group: '', exam_periodicity_months: '' });
+      setFormData(EMPTY_FORM);
     }
     setDialogTab('dados');
     setIsDialogOpen(true);
   };
 
-  const handleCloseDialog = () => { setIsDialogOpen(false); setEditingPosition(null); setDialogTab('dados'); setFormData({ name: '', salary: '', inss_percent: '', fgts_percent: '', irpf_percent: '', risk_group: '', exam_periodicity_months: '' }); };
+  const handleCloseDialog = () => { setIsDialogOpen(false); setEditingPosition(null); setDialogTab('dados'); setFormData(EMPTY_FORM); };
 
   const handleSalaryChange = (value: string) => {
     const numbers = value.replace(/\D/g, '');
@@ -206,11 +236,13 @@ export default function CargosPage() {
     const irpf_percent = parseFloat(formData.irpf_percent.replace(',', '.')) || 0;
     const risk_group = formData.risk_group || null;
     const exam_periodicity_months = formData.exam_periodicity_months ? parseInt(formData.exam_periodicity_months) : null;
+    const team_id = formData.team_id || null;
+    const level = formData.level ? parseInt(formData.level) : null;
 
     if (editingPosition) {
-      updateMutation.mutate({ id: editingPosition.id, name: formData.name, salary, inss_percent, fgts_percent, irpf_percent, risk_group, exam_periodicity_months });
+      updateMutation.mutate({ id: editingPosition.id, name: formData.name, salary, inss_percent, fgts_percent, irpf_percent, risk_group, exam_periodicity_months, team_id, level });
     } else {
-      createMutation.mutate({ name: formData.name, salary, inss_percent, fgts_percent, irpf_percent, risk_group, exam_periodicity_months });
+      createMutation.mutate({ name: formData.name, salary, inss_percent, fgts_percent, irpf_percent, risk_group, exam_periodicity_months, team_id, level });
     }
   };
 
@@ -241,88 +273,94 @@ export default function CargosPage() {
 
         <Card className="animate-scale-in">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Briefcase className="h-5 w-5" />Lista de Cargos</CardTitle>
-            <CardDescription>{positions.length} cargo(s) cadastrado(s)</CardDescription>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <CardTitle className="flex items-center gap-2"><Briefcase className="h-5 w-5" />Lista de Cargos</CardTitle>
+                <CardDescription>{filteredPositions.length} cargo(s) encontrado(s)</CardDescription>
+              </div>
+              <div className="relative">
+                <MagnifyingGlass className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por nome ou setor..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-8 w-64"
+                />
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             {isLoading ? (
-              <TableSkeleton columns={4} rows={4} />
+              <TableSkeleton columns={5} rows={4} />
             ) : positions.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Briefcase className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p>Nenhum cargo cadastrado</p>
                 <p className="text-sm">Clique em "Novo Cargo" para começar</p>
               </div>
+            ) : filteredPositions.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <MagnifyingGlass className="h-10 w-10 mx-auto mb-3 opacity-50" />
+                <p>Nenhum cargo encontrado para "{searchQuery}"</p>
+              </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nome do Cargo</TableHead>
+                    <TableHead>Setor</TableHead>
+                    <TableHead>Nível</TableHead>
                     <TableHead>Salário</TableHead>
-                    <TableHead>Grupo Risco</TableHead>
-                    <TableHead>Periodicidade</TableHead>
-                    <TableHead>Documentos</TableHead>
-                    <TableHead>INSS</TableHead>
-                    <TableHead>FGTS</TableHead>
-                    <TableHead>IRPF</TableHead>
                     <TableHead className="w-[100px]">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody className="stagger-animation">
-                  {positions.map((position) => (
+                  {filteredPositions.map((position) => (
                     <TableRow
                       key={position.id}
                       className="table-row-animate cursor-pointer hover:bg-muted/50"
                       onClick={() => handleOpenDialog(position)}
                     >
                       <TableCell className="font-medium">{position.name}</TableCell>
-                      <TableCell>{formatCurrency(position.salary)}</TableCell>
-                      <TableCell>{position.risk_group || '-'}</TableCell>
-                      <TableCell>{position.exam_periodicity_months ? `${position.exam_periodicity_months} meses` : '-'}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{position.teams?.name || '-'}</TableCell>
                       <TableCell>
-                        {docCounts[position.id] ? (
-                          <Badge variant="secondary" className="text-xs">
-                            <FileText className="w-3 h-3 mr-1" />
-                            {docCounts[position.id]}
-                          </Badge>
+                        {position.level ? (
+                          <Badge variant="outline" className="text-xs font-mono">N{position.level}</Badge>
                         ) : (
                           <span className="text-muted-foreground text-sm">-</span>
                         )}
                       </TableCell>
-                      <TableCell>{(position.inss_percent || 0).toFixed(2).replace('.', ',')}%</TableCell>
-                      <TableCell>{(position.fgts_percent || 0).toFixed(2).replace('.', ',')}%</TableCell>
-                      <TableCell>{(position.irpf_percent || 0).toFixed(2).replace('.', ',')}%</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Copiar ID"
-                            onClick={() => {
-                              navigator.clipboard.writeText(position.id);
-                              toast.success("ID copiado!");
-                            }}
-                          >
-                            <Copy className="h-4 w-4 text-muted-foreground" />
-                          </Button>
-                          {canDelete && (
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="icon"><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Excluir Cargo</AlertDialogTitle>
-                                  <AlertDialogDescription>Tem certeza que deseja excluir "{position.name}"? Esta ação não pode ser desfeita.</AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => deleteMutation.mutate(position.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Excluir</AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          )}
-                        </div>
+                      <TableCell>{formatCurrency(position.salary)}</TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <DotsThreeVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleOpenDialog(position)}>
+                              <Pencil className="w-4 h-4 mr-2" />
+                              Editar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => { navigator.clipboard.writeText(position.id); toast.success("ID copiado!"); }}>
+                              <Copy className="w-4 h-4 mr-2" />
+                              Copiar ID
+                            </DropdownMenuItem>
+                            {canDelete && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={() => setDeletingPosition(position)}
+                                >
+                                  <Trash2 className="w-4 h-4 mr-2" />
+                                  Excluir
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -354,6 +392,30 @@ export default function CargosPage() {
                     <div className="space-y-2">
                       <Label htmlFor="name">Nome do Cargo</Label>
                       <Input id="name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="Ex: Analista de RH" required />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <Label>Setor</Label>
+                        <Select value={formData.team_id || 'none'} onValueChange={(v) => setFormData({ ...formData, team_id: v === 'none' ? '' : v })}>
+                          <SelectTrigger><SelectValue placeholder="Selecione o setor" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Nenhum</SelectItem>
+                            {teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Nível (1–12)</Label>
+                        <Select value={formData.level || 'none'} onValueChange={(v) => setFormData({ ...formData, level: v === 'none' ? '' : v })}>
+                          <SelectTrigger><SelectValue placeholder="Selecione o nível" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Nenhum</SelectItem>
+                            {Array.from({ length: 12 }, (_, i) => i + 1).map(n => (
+                              <SelectItem key={n} value={n.toString()}>Nível {n}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="salary">Salário (R$)</Label>
@@ -449,30 +511,33 @@ export default function CargosPage() {
                               <Badge variant="outline" className="text-xs">{fileTypeLabels[doc.file_type] || doc.file_type}</Badge>
                             </TableCell>
                             <TableCell>
-                              <div className="flex items-center gap-1">
-                                {canEdit && (
-                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditingDoc(doc); setDocForm({ name: doc.name, observation: doc.observation || '', file_type: doc.file_type }); setIsDocDialogOpen(true); }}>
-                                    <Pencil className="h-3.5 w-3.5" />
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7">
+                                    <DotsThreeVertical className="h-3.5 w-3.5" />
                                   </Button>
-                                )}
-                                {canDelete && (
-                                  <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                      <Button variant="ghost" size="icon" className="h-7 w-7"><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent>
-                                      <AlertDialogHeader>
-                                        <AlertDialogTitle>Excluir Documento</AlertDialogTitle>
-                                        <AlertDialogDescription>Excluir "{doc.name}"? Esta ação não pode ser desfeita.</AlertDialogDescription>
-                                      </AlertDialogHeader>
-                                      <AlertDialogFooter>
-                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                        <AlertDialogAction onClick={() => deleteDocMutation.mutate(doc.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Excluir</AlertDialogAction>
-                                      </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                  </AlertDialog>
-                                )}
-                              </div>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  {canEdit && (
+                                    <DropdownMenuItem onClick={() => { setEditingDoc(doc); setDocForm({ name: doc.name, observation: doc.observation || '', file_type: doc.file_type }); setIsDocDialogOpen(true); }}>
+                                      <Pencil className="w-4 h-4 mr-2" />
+                                      Editar
+                                    </DropdownMenuItem>
+                                  )}
+                                  {canDelete && (
+                                    <>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuItem
+                                        className="text-destructive focus:text-destructive"
+                                        onClick={() => setDeletingDoc(doc)}
+                                      >
+                                        <Trash2 className="w-4 h-4 mr-2" />
+                                        Excluir
+                                      </DropdownMenuItem>
+                                    </>
+                                  )}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -522,6 +587,48 @@ export default function CargosPage() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Confirmar exclusão de cargo */}
+      <AlertDialog open={!!deletingPosition} onOpenChange={(open) => !open && setDeletingPosition(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Cargo</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir "{deletingPosition?.name}"? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { if (deletingPosition) { deleteMutation.mutate(deletingPosition.id); setDeletingPosition(null); } }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirmar exclusão de documento */}
+      <AlertDialog open={!!deletingDoc} onOpenChange={(open) => !open && setDeletingDoc(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Documento</AlertDialogTitle>
+            <AlertDialogDescription>
+              Excluir "{deletingDoc?.name}"? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { if (deletingDoc) { deleteDocMutation.mutate(deletingDoc.id); setDeletingDoc(null); } }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PermissionGuard>
   );
 }

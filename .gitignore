@@ -31,3 +31,10 @@ supabase/.branches/
 *.njsproj
 *.sln
 *.sw?
+
+# Local Claude Code settings
+.claude/settings.local.json
+
+# Imports avulsos do sistema antigo (dados locais — não commitar)
+/Plano de Cargos.xlsx
+scripts/output/

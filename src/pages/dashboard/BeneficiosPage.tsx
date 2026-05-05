@@ -24,9 +24,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Gift, Plus, Pencil, Trash as Trash2 } from "@phosphor-icons/react";
+import { Gift, Plus, Pencil, Trash as Trash2, DotsThreeVertical } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import PermissionGuard from "@/components/dashboard/PermissionGuard";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import BenefitForm, { BENEFIT_CATEGORY_LABELS, type BenefitCategory } from "@/components/benefits/BenefitForm";
 import { formatCurrency } from "@/lib/formatters";
 import { DayAbbrev, dayLabels } from "@/lib/workingDays";
@@ -284,22 +291,27 @@ const BeneficiosPage = () => {
                         </TableCell>
                         {canManage && (
                           <TableCell>
-                            <div className="flex gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => setEditingBenefit(benefit)}
-                              >
-                                <Pencil className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => setDeletingBenefit(benefit)}
-                              >
-                                <Trash2 className="w-4 h-4 text-destructive" />
-                              </Button>
-                            </div>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <DotsThreeVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => setEditingBenefit(benefit)}>
+                                  <Pencil className="w-4 h-4 mr-2" />
+                                  Editar
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={() => setDeletingBenefit(benefit)}
+                                >
+                                  <Trash2 className="w-4 h-4 mr-2" />
+                                  Excluir
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </TableCell>
                         )}
                       </TableRow>

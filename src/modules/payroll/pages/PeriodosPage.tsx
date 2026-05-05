@@ -12,22 +12,45 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   CircleNotch as Loader2,
   Plus,
   Calendar,
+  Trash,
+  ArrowsClockwise,
+  DotsThreeVertical,
 } from "@phosphor-icons/react";
 import { usePayrollPeriods } from "../hooks/use-payroll";
 import { OpenPeriodDialog } from "../components/OpenPeriodDialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   PERIOD_STATUS_LABELS,
   PERIOD_STATUS_COLORS,
   formatPeriodLabel,
 } from "../types";
+import type { PayrollPeriodWithStats } from "../types";
 import type { OpenPeriodValues } from "../schemas/payroll.schema";
 
 export default function PeriodosPage() {
   const [isOpenDialogOpen, setIsOpenDialogOpen] = useState(false);
-  const { periods, isLoading, openPeriod } = usePayrollPeriods();
+  const [deletingPeriod, setDeletingPeriod] = useState<PayrollPeriodWithStats | null>(null);
+  const [repopulatingPeriod, setRepopulatingPeriod] = useState<PayrollPeriodWithStats | null>(null);
+  const { periods, isLoading, openPeriod, deletePeriod, repopulatePeriod } = usePayrollPeriods();
 
   const handleOpen = async (values: OpenPeriodValues) => {
     await openPeriod.mutateAsync(values);
@@ -108,9 +131,32 @@ export default function PeriodosPage() {
                         : "—"}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button asChild variant="ghost" size="sm">
-                        <Link to={`/dashboard/folha/${p.id}`}>Abrir</Link>
-                      </Button>
+                      <div className="flex items-center justify-end gap-1">
+                        <Button asChild variant="ghost" size="sm">
+                          <Link to={`/dashboard/folha/${p.id}`}>Abrir</Link>
+                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <DotsThreeVertical className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => setRepopulatingPeriod(p)}>
+                              <ArrowsClockwise className="w-4 h-4 mr-2" />
+                              Repopular
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onClick={() => setDeletingPeriod(p)}
+                            >
+                              <Trash className="w-4 h-4 mr-2" />
+                              Deletar
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -126,6 +172,70 @@ export default function PeriodosPage() {
         onSubmit={handleOpen}
         isSubmitting={openPeriod.isPending}
       />
+
+      {/* Confirmar exclusão de período */}
+      <AlertDialog
+        open={!!deletingPeriod}
+        onOpenChange={(open) => !open && setDeletingPeriod(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Deletar período?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O período <strong>{deletingPeriod ? formatPeriodLabel(deletingPeriod.reference_month) : ""}</strong> e todos os seus lançamentos serão removidos permanentemente. Essa ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletePeriod.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deletePeriod.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async () => {
+                if (!deletingPeriod) return;
+                await deletePeriod.mutateAsync({
+                  periodId: deletingPeriod.id,
+                  reference_month: deletingPeriod.reference_month,
+                });
+                setDeletingPeriod(null);
+              }}
+            >
+              {deletePeriod.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Deletar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirmar repopulação */}
+      <AlertDialog
+        open={!!repopulatingPeriod}
+        onOpenChange={(open) => !open && setRepopulatingPeriod(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Repopular período?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Serão adicionados apenas os lançamentos ainda ausentes (colaboradores ou benefícios que não constam neste período). Nenhum lançamento existente será alterado ou removido.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={repopulatePeriod.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={repopulatePeriod.isPending}
+              onClick={async () => {
+                if (!repopulatingPeriod) return;
+                await repopulatePeriod.mutateAsync({
+                  reference_month: repopulatingPeriod.reference_month,
+                });
+                setRepopulatingPeriod(null);
+              }}
+            >
+              {repopulatePeriod.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Repopular
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

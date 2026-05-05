@@ -288,10 +288,17 @@ export default function CalendarioFeriadosPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {Array.from({ length: 12 }, (_, i) => i).map((monthIdx) => (
+                {Array.from({ length: 12 }, (_, i) => i).map((monthIdx) => {
+                  const isCurrentMonth =
+                    year === today.getFullYear() && monthIdx === today.getMonth();
+                  return (
                   <div
                     key={monthIdx}
-                    className="border rounded-lg p-2 bg-muted/20"
+                    className={`border rounded-lg p-2 transition-colors ${
+                      isCurrentMonth
+                        ? "border-primary bg-primary/5 ring-1 ring-primary/40"
+                        : "bg-muted/20"
+                    }`}
                   >
                     <h3 className="text-sm font-semibold text-center mb-2">
                       {MONTHS[monthIdx]}
@@ -335,7 +342,8 @@ export default function CalendarioFeriadosPage() {
                       }}
                     />
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </CardContent>

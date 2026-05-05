@@ -224,7 +224,212 @@ export function usePayrollPeriods() {
     },
   });
 
-  return { periods, isLoading, openPeriod };
+  // ─────────────────────────────────────────────────────────────────────────
+  // Deleta período e todos os seus lançamentos
+  // ─────────────────────────────────────────────────────────────────────────
+  const deletePeriod = useMutation({
+    mutationFn: async ({
+      periodId,
+      reference_month,
+    }: {
+      periodId: string;
+      reference_month: string;
+    }) => {
+      if (!companyId) throw new Error("Empresa não encontrada");
+      const { month, year } = periodToMonthYear(reference_month);
+
+      // Remove entries primeiro (sem FK period_id → precisa filtrar por mês/ano)
+      await supabase
+        .from("payroll_entries")
+        .delete()
+        .eq("company_id", companyId)
+        .eq("month", month)
+        .eq("year", year);
+
+      const { error } = await supabase
+        .from("payroll_periods")
+        .delete()
+        .eq("id", periodId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["payroll-periods"] });
+      queryClient.invalidateQueries({ queryKey: ["payroll-entries"] });
+      toast.success("Período removido ✓");
+    },
+    onError: (err: Error) => {
+      toast.error("Não rolou. " + (err.message ?? "Tenta de novo?"));
+    },
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Repopula apenas o que ainda não foi lançado (colaboradores/benefícios novos)
+  // ─────────────────────────────────────────────────────────────────────────
+  const repopulatePeriod = useMutation({
+    mutationFn: async ({
+      reference_month,
+    }: {
+      reference_month: string;
+    }) => {
+      if (!companyId) throw new Error("Empresa não encontrada");
+      const { month, year } = periodToMonthYear(reference_month);
+
+      // Entries fixas já existentes → para deduplicar
+      const { data: existingEntries } = await supabase
+        .from("payroll_entries")
+        .select("collaborator_id, type, description")
+        .eq("company_id", companyId)
+        .eq("month", month)
+        .eq("year", year)
+        .eq("is_fixed", true);
+
+      const existingSalaries = new Set(
+        (existingEntries ?? [])
+          .filter((e) => e.type === "salario_base")
+          .map((e) => e.collaborator_id),
+      );
+      const existingBenefits = new Set(
+        (existingEntries ?? [])
+          .filter((e) => e.type === "beneficio")
+          .map((e) => `${e.collaborator_id}::${e.description}`),
+      );
+
+      // Salários
+      const { data: collaborators } = await supabase
+        .from("collaborators")
+        .select("id, store_id, position:positions(salary)")
+        .eq("company_id", companyId)
+        .eq("status", "ativo");
+
+      const newSalaryEntries = (collaborators ?? [])
+        .filter((c) => !existingSalaries.has(c.id))
+        .map((c) => {
+          const salary = (c.position as { salary?: number } | null)?.salary ?? 0;
+          if (salary <= 0) return null;
+          return {
+            company_id: companyId,
+            collaborator_id: c.id,
+            store_id: c.store_id,
+            type: "salario_base" as const,
+            description: "Salário base (auto)",
+            value: salary,
+            is_fixed: true,
+            month,
+            year,
+          };
+        })
+        .filter(Boolean) as PayrollEntry[];
+
+      if (newSalaryEntries.length > 0) {
+        await supabase.from("payroll_entries").insert(newSalaryEntries);
+      }
+
+      // Benefícios
+      const { data: assignments } = await supabase
+        .from("benefits_assignments")
+        .select(
+          "collaborator_id, benefit:benefits(name, value, value_type, applicable_days), collaborator:collaborators!inner(company_id, status, store_id, contracted_store_id)",
+        )
+        .eq("collaborator.company_id", companyId)
+        .eq("collaborator.status", "ativo");
+
+      const storeIds = Array.from(
+        new Set(
+          (assignments ?? [])
+            .map((a) => {
+              const c = a.collaborator as
+                | { store_id: string | null; contracted_store_id: string | null }
+                | null;
+              return c?.store_id || c?.contracted_store_id || null;
+            })
+            .filter((id): id is string => !!id),
+        ),
+      );
+
+      const holidaysByStore = new Map<string, string[]>();
+      if (storeIds.length > 0) {
+        const { data: hols } = await supabase
+          .from("store_holidays")
+          .select("store_id, date")
+          .in("store_id", storeIds)
+          .gte("date", `${year}-01-01`)
+          .lte("date", `${year}-12-31`);
+        for (const h of (hols ?? []) as Array<{ store_id: string; date: string }>) {
+          const arr = holidaysByStore.get(h.store_id) ?? [];
+          arr.push(h.date);
+          holidaysByStore.set(h.store_id, arr);
+        }
+      }
+
+      const newBenefitEntries = (assignments ?? [])
+        .map((a) => {
+          const benefit = a.benefit as
+            | {
+                name: string;
+                value: number;
+                value_type: "monthly" | "daily" | null;
+                applicable_days: string[] | null;
+              }
+            | null;
+          if (!benefit || benefit.value <= 0) return null;
+
+          const desc = `${benefit.name} (auto)`;
+          if (existingBenefits.has(`${a.collaborator_id}::${desc}`)) return null;
+
+          const collab = a.collaborator as
+            | { store_id: string | null; contracted_store_id: string | null }
+            | null;
+          const benefitStoreId = collab?.store_id || collab?.contracted_store_id || null;
+          const holidays = benefitStoreId ? (holidaysByStore.get(benefitStoreId) ?? []) : [];
+
+          const monthlyValue = calculateMonthlyBenefitValue(
+            benefit.value,
+            (benefit.value_type ?? "monthly") as "monthly" | "daily",
+            (benefit.applicable_days ?? ["mon", "tue", "wed", "thu", "fri"]) as DayAbbrev[],
+            month,
+            year,
+            holidays,
+          );
+          if (monthlyValue <= 0) return null;
+
+          return {
+            company_id: companyId,
+            collaborator_id: a.collaborator_id,
+            store_id: null,
+            type: "beneficio" as const,
+            description: desc,
+            value: monthlyValue,
+            is_fixed: true,
+            month,
+            year,
+          };
+        })
+        .filter(Boolean) as PayrollEntry[];
+
+      if (newBenefitEntries.length > 0) {
+        await supabase.from("payroll_entries").insert(newBenefitEntries);
+      }
+
+      return {
+        salariesAdded: newSalaryEntries.length,
+        benefitsAdded: newBenefitEntries.length,
+      };
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["payroll-entries"] });
+      const total = result.salariesAdded + result.benefitsAdded;
+      if (total === 0) {
+        toast.success("Tudo já populado — nenhum lançamento novo necessário.");
+      } else {
+        toast.success(`${total} lançamento(s) adicionado(s) ✓`);
+      }
+    },
+    onError: (err: Error) => {
+      toast.error(err.message ?? "Não rolou. Tenta de novo?");
+    },
+  });
+
+  return { periods, isLoading, openPeriod, deletePeriod, repopulatePeriod };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

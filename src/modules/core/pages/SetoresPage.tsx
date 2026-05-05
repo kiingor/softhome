@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Users, Pencil, Trash as Trash2, Copy } from "@phosphor-icons/react";
+import { Plus, Users, Pencil, Trash as Trash2, Copy, DotsThreeVertical } from "@phosphor-icons/react";
 import { supabase } from '@/integrations/supabase/client';
 import { useDashboard } from '@/contexts/DashboardContext';
 import PermissionGuard from '@/components/dashboard/PermissionGuard';
@@ -42,8 +42,14 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Select,
   SelectContent,
@@ -69,6 +75,7 @@ export default function SetoresPage() {
   const queryClient = useQueryClient();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
+  const [deletingTeam, setDeletingTeam] = useState<Team | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -324,53 +331,31 @@ export default function SetoresPage() {
                       <TableCell>{team.description || '-'}</TableCell>
                       <TableCell>{team.stores?.store_name || '-'}</TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Copiar ID"
-                            onClick={() => {
-                              navigator.clipboard.writeText(team.id);
-                              toast.success("ID copiado!");
-                            }}
-                          >
-                            <Copy className="h-4 w-4 text-muted-foreground" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleOpenDialog(team)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>
-                                  Excluir Setor
-                                </AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Tem certeza que deseja excluir o setor "
-                                  {team.name}"? Esta ação não pode ser desfeita.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => deleteMutation.mutate(team.id)}
-                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                >
-                                  Excluir
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <DotsThreeVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleOpenDialog(team)}>
+                              <Pencil className="w-4 h-4 mr-2" />
+                              Editar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => { navigator.clipboard.writeText(team.id); toast.success("ID copiado!"); }}>
+                              <Copy className="w-4 h-4 mr-2" />
+                              Copiar ID
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onClick={() => setDeletingTeam(team)}
+                            >
+                              <Trash2 className="w-4 h-4 mr-2" />
+                              Excluir
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -380,6 +365,26 @@ export default function SetoresPage() {
           </CardContent>
         </Card>
       </div>
+
+      <AlertDialog open={!!deletingTeam} onOpenChange={(open) => !open && setDeletingTeam(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Setor</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir o setor "{deletingTeam?.name}"? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { if (deletingTeam) { deleteMutation.mutate(deletingTeam.id); setDeletingTeam(null); } }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PermissionGuard>
   );
 }
