@@ -31,6 +31,56 @@ export const EXAM_TYPE_LABELS: Record<string, string> = {
   avulso: "Avulso",
 };
 
+// Exames específicos exigidos no admissional por grupo de risco (NR-7/PCMSO).
+// Lista padrão — RH pode customizar se quiser via cadastro do cargo (futuro).
+export interface RiskGroupExam {
+  slug: string;
+  label: string;
+}
+
+export const EXAMS_BY_RISK_GROUP: Record<string, RiskGroupExam[]> = {
+  GR1: [
+    { slug: "avaliacao_clinica", label: "Avaliação clínica ocupacional" },
+  ],
+  GR2: [
+    { slug: "avaliacao_clinica", label: "Avaliação clínica ocupacional" },
+    { slug: "audiometria", label: "Audiometria" },
+    { slug: "acuidade_visual", label: "Acuidade visual" },
+  ],
+  GR3: [
+    { slug: "avaliacao_clinica", label: "Avaliação clínica ocupacional" },
+    { slug: "audiometria", label: "Audiometria" },
+    { slug: "acuidade_visual", label: "Acuidade visual" },
+    { slug: "espirometria", label: "Espirometria" },
+    { slug: "hemograma", label: "Hemograma completo" },
+  ],
+  GR4: [
+    { slug: "avaliacao_clinica", label: "Avaliação clínica ocupacional" },
+    { slug: "audiometria", label: "Audiometria" },
+    { slug: "acuidade_visual", label: "Acuidade visual" },
+    { slug: "espirometria", label: "Espirometria" },
+    { slug: "raio_x_torax", label: "Raio-X de tórax" },
+    { slug: "hemograma", label: "Hemograma completo" },
+    { slug: "psicossocial", label: "Avaliação psicossocial" },
+  ],
+  GR5: [
+    { slug: "avaliacao_clinica", label: "Avaliação clínica ocupacional" },
+    { slug: "audiometria", label: "Audiometria" },
+    { slug: "acuidade_visual", label: "Acuidade visual" },
+    { slug: "espirometria", label: "Espirometria" },
+    { slug: "raio_x_torax", label: "Raio-X de tórax" },
+    { slug: "hemograma", label: "Hemograma completo" },
+    { slug: "psicossocial", label: "Avaliação psicossocial" },
+    { slug: "toxicologico", label: "Exame toxicológico" },
+    { slug: "eletrocardiograma", label: "Eletrocardiograma" },
+  ],
+};
+
+export function getExamsForRiskGroup(riskGroup: string | null): RiskGroupExam[] {
+  if (!riskGroup) return [];
+  return EXAMS_BY_RISK_GROUP[riskGroup] ?? [];
+}
+
 export const EXAM_STATUS_LABELS: Record<string, string> = {
   pendente: "Pendente",
   agendado: "Agendado",

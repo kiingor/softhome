@@ -107,6 +107,52 @@ export const REQUIRED_DOCS_BY_REGIME: Record<CollaboratorRegime, DocumentType[]>
   ],
 };
 
+// Tipo de resposta esperada do candidato pra esse doc. Determinado pelo
+// prefixo em notes:
+//   "[TEXTO] " → resposta de texto livre (textarea)
+//   "[SIM_NAO] " → escolha sim/não (radio)
+//   sem prefixo → upload de arquivo
+export type DocResponseType = "file" | "text" | "yes_no";
+
+export function getDocResponseType(doc: {
+  notes?: string | null;
+}): DocResponseType {
+  if (doc.notes?.startsWith("[TEXTO] ")) return "text";
+  if (doc.notes?.startsWith("[SIM_NAO] ")) return "yes_no";
+  return "file";
+}
+
+export function isTextResponseDoc(doc: { notes?: string | null }): boolean {
+  return getDocResponseType(doc) !== "file";
+}
+
+// Pra docs vindos de position_documents que não bateram com nenhum tipo conhecido,
+// gravamos doc_type='outro' e armazenamos o nome real em notes no formato
+// "Nome real" ou "Nome real — observação". Pra exames específicos do grupo
+// de risco (atestado_exame), usamos "EXAM:slug — Label do exame" em notes.
+// Pra docs de texto, prefixo "[TEXTO] " seguido do nome.
+// Esse helper extrai o que mostrar.
+export function getDocumentDisplayLabel(doc: {
+  doc_type: string;
+  notes?: string | null;
+}): string {
+  let n = doc.notes;
+  if (n && n.startsWith("[TEXTO] ")) {
+    n = n.slice("[TEXTO] ".length);
+  } else if (n && n.startsWith("[SIM_NAO] ")) {
+    n = n.slice("[SIM_NAO] ".length);
+  }
+  if (doc.doc_type === "outro" && n) {
+    return n.split(" — ")[0];
+  }
+  if (doc.doc_type === "atestado_exame" && n?.startsWith("EXAM:")) {
+    const rest = n.slice("EXAM:".length);
+    const sep = rest.indexOf(" — ");
+    return sep === -1 ? rest : rest.slice(sep + 3);
+  }
+  return DOCUMENT_TYPE_LABELS[doc.doc_type as DocumentType] ?? doc.doc_type;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // AI validation result shape (stored in admission_documents.ai_validation_result jsonb)
 // Decisão Q2: validação forte — Claude verifica legibilidade + tipo + extração

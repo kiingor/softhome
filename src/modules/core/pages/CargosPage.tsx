@@ -256,7 +256,23 @@ export default function CargosPage() {
     }
   };
 
-  const fileTypeLabels: Record<string, string> = { pdf: 'PDF', image: 'Imagem', doc: 'Documento (DOC)' };
+  const fileTypeLabels: Record<string, string> = {
+    pdf: 'PDF',
+    image: 'Imagem',
+    doc: 'DOC',
+    texto: 'Texto',
+    pdf_image: 'PDF/Imagem',
+    sim_nao: 'Sim/Não',
+  };
+
+  const fileTypeColors: Record<string, string> = {
+    pdf: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900/60',
+    image: 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-900/60',
+    doc: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900/60',
+    pdf_image: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/60',
+    texto: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/60',
+    sim_nao: 'bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-300 dark:border-cyan-900/60',
+  };
 
   return (
     <PermissionGuard module="cargos">
@@ -508,7 +524,14 @@ export default function CargosPage() {
                             <TableCell className="font-medium">{doc.name}</TableCell>
                             <TableCell className="text-muted-foreground text-sm">{doc.observation || '-'}</TableCell>
                             <TableCell>
-                              <Badge variant="outline" className="text-xs">{fileTypeLabels[doc.file_type] || doc.file_type}</Badge>
+                              <span
+                                className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border whitespace-nowrap ${
+                                  fileTypeColors[doc.file_type] ??
+                                  'bg-muted text-muted-foreground border-border'
+                                }`}
+                              >
+                                {fileTypeLabels[doc.file_type] || doc.file_type}
+                              </span>
                             </TableCell>
                             <TableCell>
                               <DropdownMenu>
@@ -574,7 +597,10 @@ export default function CargosPage() {
                     <SelectContent>
                       <SelectItem value="pdf">PDF</SelectItem>
                       <SelectItem value="image">Imagem (JPG, PNG)</SelectItem>
+                      <SelectItem value="pdf_image">PDF ou Imagem</SelectItem>
                       <SelectItem value="doc">Documento (DOC, DOCX)</SelectItem>
+                      <SelectItem value="texto">Texto (resposta digitada)</SelectItem>
+                      <SelectItem value="sim_nao">Sim/Não</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

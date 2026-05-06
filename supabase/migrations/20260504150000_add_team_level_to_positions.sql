@@ -4,10 +4,10 @@
 BEGIN;
 
 ALTER TABLE public.positions
-  ADD COLUMN team_id uuid REFERENCES public.teams(id) ON DELETE SET NULL,
-  ADD COLUMN level smallint CHECK (level >= 1 AND level <= 12);
+  ADD COLUMN IF NOT EXISTS team_id uuid REFERENCES public.teams(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS level smallint CHECK (level >= 1 AND level <= 12);
 
-CREATE INDEX idx_positions_team_id ON public.positions(team_id);
+CREATE INDEX IF NOT EXISTS idx_positions_team_id ON public.positions(team_id);
 
 COMMIT;
 

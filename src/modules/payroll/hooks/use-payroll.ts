@@ -121,7 +121,7 @@ export function usePayrollPeriods() {
         const { data: assignments } = await supabase
           .from("benefits_assignments")
           .select(
-            "collaborator_id, benefit:benefits(name, value, value_type, applicable_days), collaborator:collaborators!inner(company_id, status, store_id, contracted_store_id)",
+            "collaborator_id, custom_value, benefit:benefits(name, value, value_type, applicable_days), collaborator:collaborators!inner(company_id, status, store_id, contracted_store_id)",
           )
           .eq("collaborator.company_id", companyId)
           .eq("collaborator.status", "ativo");
@@ -177,9 +177,15 @@ export function usePayrollPeriods() {
                 ? holidaysByStore.get(benefitStoreId) ?? []
                 : [];
 
+              const valueType = (benefit.value_type ?? "monthly") as "monthly" | "daily";
+              const customValue = (a as { custom_value?: number | null }).custom_value;
+              const baseValue =
+                valueType === "monthly" && customValue != null
+                  ? Number(customValue)
+                  : benefit.value;
               const monthlyValue = calculateMonthlyBenefitValue(
-                benefit.value,
-                (benefit.value_type ?? "monthly") as "monthly" | "daily",
+                baseValue,
+                valueType,
                 (benefit.applicable_days ?? [
                   "mon",
                   "tue",

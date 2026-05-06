@@ -27,6 +27,7 @@ import {
 } from "../services/public-application.service";
 import { REGIME_LABELS } from "../types";
 import { formatCPFInput, formatPhoneInput } from "@/lib/validators";
+import { SoftHouseLogo } from "@/components/branding/SoftHouseLogo";
 
 interface PublicJob {
   id: string;
@@ -169,11 +170,7 @@ export default function AplicarPage() {
         {/* Header SoftHouse */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2 mb-2">
-            <div className="w-10 h-10 rounded-xl gradient-hero flex items-center justify-center shadow-soft">
-              <span className="text-primary-foreground font-extrabold text-lg">
-                S
-              </span>
-            </div>
+            <SoftHouseLogo size="md" />
             <span className="text-lg font-extrabold tracking-tight text-foreground">
               SoftHouse
             </span>

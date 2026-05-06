@@ -1,6 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useDashboard } from "@/contexts/DashboardContext";
 import {
   Sheet,
   SheetContent,
@@ -27,16 +30,35 @@ import {
 } from "../schemas/admission.schema";
 import {
   REGIME_LABELS,
+  DOCUMENT_TYPE_LABELS,
+  REQUIRED_DOCS_BY_REGIME,
   type CollaboratorRegime,
+  type DocumentType,
 } from "../types";
-import { listRequiredDocs } from "../hooks/use-admission-journeys";
 import { formatCPFInput } from "@/lib/validators";
+import {
+  RISK_GROUP_PERIODICITY_LABELS,
+} from "@/lib/riskGroupDefaults";
 
 interface NewAdmissionFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (values: NewAdmissionValues) => Promise<void> | void;
   isSubmitting?: boolean;
+  initialValues?: Partial<NewAdmissionValues>;
+}
+
+interface CargoOption {
+  id: string;
+  name: string;
+  risk_group: string | null;
+  exam_periodicity_months: number | null;
+}
+
+interface PositionDocOption {
+  id: string;
+  name: string;
+  observation: string | null;
 }
 
 const DEFAULTS: NewAdmissionValues = {
@@ -54,17 +76,73 @@ export function NewAdmissionForm({
   onOpenChange,
   onSubmit,
   isSubmitting,
+  initialValues,
 }: NewAdmissionFormProps) {
+  const { currentCompany } = useDashboard();
   const form = useForm<NewAdmissionValues>({
     resolver: zodResolver(newAdmissionSchema),
     defaultValues: DEFAULTS,
   });
 
+  // Reseta o form APENAS quando abre (transição closed → open). Se a gente
+  // dependesse de `initialValues`, o objeto recriado a cada render do parent
+  // faria o reset em loop, sobrescrevendo o que o user digitou.
+  const wasOpen = useRef(false);
   useEffect(() => {
-    if (open) form.reset(DEFAULTS);
-  }, [open, form]);
+    if (open && !wasOpen.current) {
+      form.reset({ ...DEFAULTS, ...(initialValues ?? {}) });
+    }
+    wasOpen.current = open;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // Cargos da empresa atual
+  const { data: cargos = [] } = useQuery({
+    queryKey: ["positions-for-admission", currentCompany?.id],
+    queryFn: async () => {
+      if (!currentCompany?.id) return [];
+      const { data, error } = await supabase
+        .from("positions")
+        .select("id, name, risk_group, exam_periodicity_months")
+        .eq("company_id", currentCompany.id)
+        .order("name");
+      if (error) throw error;
+      return (data ?? []) as CargoOption[];
+    },
+    enabled: !!currentCompany?.id && open,
+  });
+
+  const positionId = form.watch("position_id");
+  const selectedCargo = cargos.find((c) => c.id === positionId);
+
+  // Documentos do cargo selecionado — sempre busca dados frescos pra refletir
+  // mudanças feitas no Cargos sem precisar reload.
+  const { data: cargoDocs = [] } = useQuery({
+    queryKey: ["position-documents", positionId],
+    queryFn: async () => {
+      if (!positionId) return [];
+      const { data, error } = await supabase
+        .from("position_documents")
+        .select("id, name, observation")
+        .eq("position_id", positionId)
+        .order("name");
+      if (error) throw error;
+      return (data ?? []) as PositionDocOption[];
+    },
+    enabled: !!positionId && open,
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
 
   const regime = form.watch("regime");
+
+  // Documentos a mostrar: do cargo se houver, senão default do regime
+  const docsToShow: { label: string; observation?: string | null }[] =
+    cargoDocs.length > 0
+      ? cargoDocs.map((d) => ({ label: d.name, observation: d.observation }))
+      : REQUIRED_DOCS_BY_REGIME[regime].map((d) => ({
+          label: DOCUMENT_TYPE_LABELS[d as DocumentType] ?? d,
+        }));
 
   const handleSubmit = form.handleSubmit(async (values) => {
     await onSubmit({
@@ -142,6 +220,38 @@ export function NewAdmissionForm({
           </div>
 
           <div className="space-y-2">
+            <Label htmlFor="position_id">Cargo</Label>
+            <Select
+              value={form.watch("position_id") || "_none"}
+              onValueChange={(v) =>
+                form.setValue("position_id", v === "_none" ? "" : v)
+              }
+            >
+              <SelectTrigger id="position_id">
+                <SelectValue placeholder="Sem cargo definido" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_none">Sem cargo definido</SelectItem>
+                {cargos.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                    {c.risk_group && (
+                      <span className="text-muted-foreground text-xs ml-2">
+                        · {c.risk_group}
+                      </span>
+                    )}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              O cargo define os documentos exigidos (cadastrados em{" "}
+              <strong>Cargos</strong>) e o exame admissional pelo grupo de
+              risco.
+            </p>
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="regime">Regime</Label>
             <Select
               value={regime}
@@ -156,9 +266,54 @@ export function NewAdmissionForm({
                 <SelectItem value="estagiario">{REGIME_LABELS.estagiario}</SelectItem>
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground">
-              Documentos requeridos: {listRequiredDocs(regime)}.
-            </p>
+          </div>
+
+          {/* Preview do que será pedido */}
+          <div className="rounded-lg border border-dashed p-3 space-y-3 bg-muted/30">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Documentos que vão ser pedidos
+              </p>
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {docsToShow.map((d, i) => (
+                  <span
+                    key={i}
+                    title={d.observation ?? undefined}
+                    className="inline-flex items-center px-2 py-0.5 rounded text-xs border bg-background"
+                  >
+                    {d.label}
+                  </span>
+                ))}
+                {docsToShow.length === 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    Cargo sem docs cadastrados.
+                  </span>
+                )}
+              </div>
+              {selectedCargo && cargoDocs.length === 0 && (
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Cargo sem documentos cadastrados — usando padrão do regime.
+                  Pra customizar, edita o cargo em <strong>Cargos</strong>.
+                </p>
+              )}
+            </div>
+
+            {selectedCargo?.risk_group && (
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Exame ocupacional
+                </p>
+                <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs border bg-background">
+                    Admissional
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    Grupo {selectedCargo.risk_group} ·{" "}
+                    {RISK_GROUP_PERIODICITY_LABELS[selectedCargo.risk_group]}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">

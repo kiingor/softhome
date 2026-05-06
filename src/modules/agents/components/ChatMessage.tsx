@@ -32,20 +32,22 @@ export function ChatMessage({ message, children }: ChatMessageProps) {
 
       <div
         className={cn(
-          "max-w-[80%] flex-1",
-          isUser ? "items-end text-right" : "items-start"
+          "flex flex-col min-w-0 max-w-[80%]",
+          isUser ? "items-end" : "items-start"
         )}
       >
         <Card
           className={cn(
-            "inline-block max-w-full",
+            "max-w-full",
             isUser
               ? "bg-primary text-primary-foreground border-primary"
               : "bg-card"
           )}
         >
           <CardContent className="p-3">
-            <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+            <p className="text-sm whitespace-pre-wrap break-words">
+              {message.content}
+            </p>
           </CardContent>
         </Card>
 

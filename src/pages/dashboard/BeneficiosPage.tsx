@@ -24,7 +24,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Gift, Plus, Pencil, Trash as Trash2, DotsThreeVertical } from "@phosphor-icons/react";
+import { Gift, Plus, Pencil, Trash as Trash2, DotsThreeVertical, MagnifyingGlass } from "@phosphor-icons/react";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import PermissionGuard from "@/components/dashboard/PermissionGuard";
 import {
@@ -42,6 +43,7 @@ const BeneficiosPage = () => {
   const { currentCompany } = useDashboard();
   const queryClient = useQueryClient();
   const [benefitFormOpen, setBenefitFormOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [editingBenefit, setEditingBenefit] = useState<any>(null);
   const [deletingBenefit, setDeletingBenefit] = useState<any>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -63,6 +65,16 @@ const BeneficiosPage = () => {
       return data;
     },
     enabled: !!currentCompany?.id,
+  });
+
+  const filteredBenefits = benefits.filter((b: any) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      (b.name || "").toLowerCase().includes(q) ||
+      (b.description || "").toLowerCase().includes(q) ||
+      (BENEFIT_CATEGORY_LABELS[b.category as BenefitCategory] || "").toLowerCase().includes(q)
+    );
   });
 
   // Fetch assignments count per benefit
@@ -218,14 +230,30 @@ const BeneficiosPage = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Tipos de Benefício</CardTitle>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <CardTitle className="text-lg">Tipos de Benefício</CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {filteredBenefits.length} de {benefits.length} benefício(s)
+                </p>
+              </div>
+              <div className="relative">
+                <MagnifyingGlass className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por nome ou categoria..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-8 w-64"
+                />
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             {loadingBenefits ? (
               <div className="text-center py-8 text-muted-foreground">
                 Carregando...
               </div>
-            ) : benefits.length === 0 ? (
+            ) : filteredBenefits.length === 0 && !searchQuery.trim() ? (
               <div className="text-center py-12">
                 <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
                   <Gift className="w-8 h-8 text-muted-foreground" />
@@ -243,6 +271,12 @@ const BeneficiosPage = () => {
                   </Button>
                 )}
               </div>
+            ) : filteredBenefits.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <Gift className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p>Nenhum benefício encontrado</p>
+                <p className="text-sm">Tente outro termo de busca</p>
+              </div>
             ) : (
               <Table>
                 <TableHeader>
@@ -258,7 +292,7 @@ const BeneficiosPage = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {benefits.map((benefit) => {
+                  {filteredBenefits.map((benefit: any) => {
                     const assignmentCount = assignmentCounts[benefit.id] || 0;
                     return (
                       <TableRow key={benefit.id}>

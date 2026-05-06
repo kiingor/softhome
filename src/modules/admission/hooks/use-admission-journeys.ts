@@ -10,6 +10,7 @@ import type {
 } from "../types";
 import type { NewAdmissionValues } from "../schemas/admission.schema";
 import { REQUIRED_DOCS_BY_REGIME, DOCUMENT_TYPE_LABELS } from "../types";
+import { getExamsForRiskGroup } from "@/lib/riskGroupDefaults";
 
 interface UseAdmissionJourneysOptions {
   status?: AdmissionJourneyStatus | "all";
@@ -20,6 +21,32 @@ interface UseAdmissionJourneysOptions {
 function generateAccessToken(): string {
   const a = crypto.randomUUID().replace(/-/g, "");
   return `adm_${a}`;
+}
+
+// Tenta casar nome livre do position_document com enum DocumentType.
+// Match heurístico — normaliza pra lowercase + remove acentos.
+const DOC_NAME_PATTERNS: Array<{ pattern: RegExp; type: string }> = [
+  { pattern: /\bctps\b|carteira.*trabalho/, type: "ctps" },
+  { pattern: /\brg\b|identidade/, type: "rg" },
+  { pattern: /\bcpf\b/, type: "cpf" },
+  { pattern: /comprovante.*endere|residencia/, type: "comprovante_endereco" },
+  { pattern: /foto.*3.*4|3x4/, type: "foto_3x4" },
+  { pattern: /atestado.*exame|admissional|aso/, type: "atestado_exame" },
+  { pattern: /contrato.*social/, type: "contrato_social" },
+  { pattern: /cnpj/, type: "cnpj_doc" },
+  { pattern: /matr[ií]cula/, type: "comprovante_matricula" },
+  { pattern: /\btce\b|termo.*compromisso/, type: "tce" },
+];
+
+function matchDocTypeFromName(name: string): string | null {
+  const normalized = name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "");
+  for (const { pattern, type } of DOC_NAME_PATTERNS) {
+    if (pattern.test(normalized)) return type;
+  }
+  return null;
 }
 
 // Decisão Q7: TTL de 30 dias com regenerar
@@ -55,8 +82,10 @@ export function useAdmissionJourneys(options: UseAdmissionJourneysOptions = {}) 
   });
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Cria nova journey + auto-popula admission_documents conforme regime
-  // (decisão Q1: tabela default de docs por regime)
+  // Cria nova journey + auto-popula admission_documents.
+  // Se tem cargo (position_id) com documentos cadastrados em position_documents,
+  // usa esses. Caso contrário, fallback pro default por regime.
+  // Exame ocupacional é definido pelo risk_group do cargo (mecânica existente).
   // ─────────────────────────────────────────────────────────────────────────
   const createJourney = useMutation({
     mutationFn: async (values: NewAdmissionValues) => {
@@ -64,6 +93,34 @@ export function useAdmissionJourneys(options: UseAdmissionJourneysOptions = {}) 
 
       const { data: userData } = await supabase.auth.getUser();
       const accessToken = generateAccessToken();
+
+      // 0. Se tem cargo vinculado, busca os documentos cadastrados nele.
+      let positionDocs: {
+        name: string;
+        observation: string | null;
+        file_type: string;
+      }[] = [];
+      let positionRiskGroup: string | null = null;
+      if (values.position_id) {
+        const [docsRes, posRes] = await Promise.all([
+          supabase
+            .from("position_documents")
+            .select("name, observation, file_type")
+            .eq("position_id", values.position_id),
+          supabase
+            .from("positions")
+            .select("risk_group")
+            .eq("id", values.position_id)
+            .maybeSingle(),
+        ]);
+        positionDocs = (docsRes.data ?? []) as typeof positionDocs;
+        positionRiskGroup =
+          (posRes.data as { risk_group: string | null } | null)?.risk_group ??
+          null;
+      }
+
+      // 0b. Exames padrão pelo grupo de risco
+      const requiredExams = getExamsForRiskGroup(positionRiskGroup);
 
       // 1. Cria journey
       const { data: journey, error: journeyError } = await supabase
@@ -88,15 +145,39 @@ export function useAdmissionJourneys(options: UseAdmissionJourneysOptions = {}) 
       if (journeyError) throw journeyError;
       if (!journey) throw new Error("Falha ao criar admissão");
 
-      // 2. Popula docs requeridos por regime
-      const requiredDocs = REQUIRED_DOCS_BY_REGIME[values.regime];
-      const docsToInsert = requiredDocs.map((docType) => ({
-        company_id: companyId,
-        journey_id: journey.id,
-        doc_type: docType,
-        required: true,
-        status: "pending" as const,
-      }));
+      // 2. Popula docs:
+      //    - Se cargo tem position_documents, usa esses (mapeando nome → enum
+      //      DocumentType quando possível, senão "outro").
+      //    - Senão, fallback pro default do regime.
+      const docsToInsert =
+        positionDocs.length > 0
+          ? positionDocs.map((d) => {
+              const isText = d.file_type === "texto";
+              const isYesNo = d.file_type === "sim_nao";
+              // Docs com tipo de resposta especial (texto/sim_nao) sempre vão
+              // como 'outro' e marcam o tipo via prefixo em notes pra UI saber.
+              const useOutro = isText || isYesNo;
+              const mapped = useOutro ? null : matchDocTypeFromName(d.name);
+              const baseNotes = mapped
+                ? d.observation
+                : `${d.name}${d.observation ? ` — ${d.observation}` : ""}`;
+              const prefix = isText ? "[TEXTO] " : isYesNo ? "[SIM_NAO] " : "";
+              return {
+                company_id: companyId,
+                journey_id: journey.id,
+                doc_type: mapped ?? ("outro" as const),
+                required: true,
+                status: "pending" as const,
+                notes: prefix + (baseNotes ?? ""),
+              };
+            })
+          : REQUIRED_DOCS_BY_REGIME[values.regime].map((docType) => ({
+              company_id: companyId,
+              journey_id: journey.id,
+              doc_type: docType,
+              required: true,
+              status: "pending" as const,
+            }));
 
       const { error: docsError } = await supabase
         .from("admission_documents")
@@ -104,13 +185,34 @@ export function useAdmissionJourneys(options: UseAdmissionJourneysOptions = {}) 
 
       if (docsError) throw docsError;
 
+      // 2b. Cria 1 admission_document por exame exigido (doc_type='atestado_exame',
+      //     notes guardam o slug + label do exame). Diferenciamos do "atestado
+      //     único" pelo formato `EXAM:slug — label` em notes.
+      if (requiredExams.length > 0) {
+        const examEntries = requiredExams.map((exam) => ({
+          company_id: companyId,
+          journey_id: journey.id,
+          doc_type: "atestado_exame" as const,
+          required: true,
+          status: "pending" as const,
+          notes: `EXAM:${exam.slug} — ${exam.label}`,
+        }));
+        const { error: examErr } = await supabase
+          .from("admission_documents")
+          .insert(examEntries);
+        if (examErr) console.warn("[admission] falha ao gerar exames:", examErr);
+      }
+
       // 3. Evento na timeline
+      const examLine = positionRiskGroup
+        ? ` · Exame admissional (Grupo ${positionRiskGroup})`
+        : "";
       const { error: eventError } = await supabase.from("admission_events").insert({
         company_id: companyId,
         journey_id: journey.id,
         kind: "created",
         actor_id: userData?.user?.id ?? null,
-        message: `Admissão criada para ${values.candidate_name} (${values.regime.toUpperCase()})`,
+        message: `Admissão criada para ${values.candidate_name} (${values.regime.toUpperCase()})${examLine}`,
       });
 
       if (eventError) console.error("Erro ao registrar evento:", eventError);
@@ -130,6 +232,22 @@ export function useAdmissionJourneys(options: UseAdmissionJourneysOptions = {}) 
         }
       }
 
+      // 5. Auto-envio do link por WhatsApp se tem telefone.
+      //    Edge function admission-send-whatsapp precisa estar deployada.
+      //    Falha silenciosa: RH pode reenviar manualmente.
+      if (values.candidate_phone) {
+        try {
+          await supabase.functions.invoke("admission-send-whatsapp", {
+            body: {
+              journey_id: journey.id,
+              public_url_origin: window.location.origin,
+            },
+          });
+        } catch (err) {
+          console.warn("[admission] auto-send do whatsapp falhou:", err);
+        }
+      }
+
       return journey;
     },
     onSuccess: () => {
@@ -139,6 +257,47 @@ export function useAdmissionJourneys(options: UseAdmissionJourneysOptions = {}) 
     },
     onError: (err: Error) => {
       toast.error("Não rolou. " + (err.message ?? "Tenta de novo?"));
+    },
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Reenvia link por WhatsApp (botão "Enviar por WhatsApp" no detail)
+  // ─────────────────────────────────────────────────────────────────────────
+  const sendTokenWhatsApp = useMutation({
+    mutationFn: async (journeyId: string) => {
+      const { data, error } = await supabase.functions.invoke<{
+        success: boolean;
+        sent_to: string;
+        channel: string;
+      }>("admission-send-whatsapp", {
+        body: {
+          journey_id: journeyId,
+          public_url_origin: window.location.origin,
+        },
+      });
+
+      if (error) {
+        let msg = error.message;
+        const ctx = (error as { context?: { json?: () => Promise<{ error?: string; details?: string }> } }).context;
+        if (ctx?.json) {
+          try {
+            const body = await ctx.json();
+            if (body?.error) msg = body.error + (body.details ? ` — ${body.details}` : "");
+          } catch {
+            // ignore
+          }
+        }
+        throw new Error(msg);
+      }
+      if (!data) throw new Error("Resposta vazia");
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["admission-events"] });
+      toast.success(`WhatsApp enviado pra ${data.sent_to} ✓`);
+    },
+    onError: (err: Error) => {
+      toast.error("Não rolou enviar. " + (err.message ?? "Tenta de novo?"));
     },
   });
 
@@ -280,6 +439,27 @@ export function useAdmissionJourneys(options: UseAdmissionJourneysOptions = {}) 
     },
   });
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // Exclui a journey (cascade ON DELETE remove documents + events)
+  // ─────────────────────────────────────────────────────────────────────────
+  const deleteJourney = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("admission_journeys")
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admission-journeys"] });
+      queryClient.invalidateQueries({ queryKey: ["admission-journey"] });
+      toast.success("Admissão removida ✓");
+    },
+    onError: (err: Error) => {
+      toast.error("Não rolou. " + (err.message ?? "Tenta de novo?"));
+    },
+  });
+
   return {
     journeys,
     isLoading,
@@ -287,6 +467,8 @@ export function useAdmissionJourneys(options: UseAdmissionJourneysOptions = {}) 
     updateStatus,
     regenerateToken,
     sendTokenEmail,
+    sendTokenWhatsApp,
+    deleteJourney,
   };
 }
 

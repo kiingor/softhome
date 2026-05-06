@@ -17,7 +17,9 @@ export type InterviewFeedback =
   Database["public"]["Tables"]["interview_feedbacks"]["Row"];
 
 export type JobOpeningStatus = Database["public"]["Enums"]["job_opening_status"];
-export type ApplicationStage = Database["public"]["Enums"]["application_stage"];
+// stage agora é text livre (migration 20260505170000) — vaga define seus stages.
+// Os defaults abaixo (DEFAULT_STAGES) são os que vêm com toda vaga nova.
+export type ApplicationStage = string;
 export type CollaboratorRegime = Database["public"]["Enums"]["collaborator_regime"];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -40,7 +42,8 @@ export const JOB_STATUS_COLORS: Record<JobOpeningStatus, string> = {
   cancelled: "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300",
 };
 
-export const STAGE_LABELS: Record<ApplicationStage, string> = {
+// Labels conhecidos pros stages padrão. Stages custom usam o slug como label.
+const KNOWN_STAGE_LABELS: Record<string, string> = {
   new: "Inscritos",
   screening: "Triagem",
   interview_hr: "Entrevista RH",
@@ -51,7 +54,23 @@ export const STAGE_LABELS: Record<ApplicationStage, string> = {
   withdrawn: "Desistiu",
 };
 
-export const STAGE_COLORS: Record<ApplicationStage, string> = {
+// Acesso compatível com código existente que usa STAGE_LABELS[stage].
+// Pra stages custom, gera label a partir do slug ("custom_stage" → "Custom stage").
+export const STAGE_LABELS = new Proxy({} as Record<string, string>, {
+  get(_target, key: string) {
+    if (key in KNOWN_STAGE_LABELS) return KNOWN_STAGE_LABELS[key];
+    return key
+      .split("_")
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ");
+  },
+});
+
+export function stageLabel(stage: string): string {
+  return STAGE_LABELS[stage];
+}
+
+const KNOWN_STAGE_COLORS: Record<string, string> = {
   new: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
   screening: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
   interview_hr: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
@@ -63,7 +82,26 @@ export const STAGE_COLORS: Record<ApplicationStage, string> = {
   withdrawn: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
 };
 
-// Estágios em ordem (decisão Q1: 8 estágios completos)
+export const STAGE_COLORS = new Proxy({} as Record<string, string>, {
+  get(_t, key: string) {
+    return (
+      KNOWN_STAGE_COLORS[key] ??
+      "bg-muted text-muted-foreground dark:bg-muted/40"
+    );
+  },
+});
+
+// Defaults pro pipeline_stages quando vaga não tem nenhum (fallback compat).
+export const DEFAULT_STAGES: ApplicationStage[] = [
+  "new",
+  "screening",
+  "interview_hr",
+  "interview_manager",
+  "offer",
+  "accepted",
+];
+
+// Mantidos por compatibilidade.
 export const PIPELINE_STAGES: ApplicationStage[] = [
   "new",
   "screening",
@@ -75,16 +113,7 @@ export const PIPELINE_STAGES: ApplicationStage[] = [
   "withdrawn",
 ];
 
-// Estágios que aparecem como colunas do kanban "ativo" (todos exceto rejeitados/desistentes)
-// Decisão UX: rejected/withdrawn ficam em accordion separado pra não poluir
-export const ACTIVE_STAGES: ApplicationStage[] = [
-  "new",
-  "screening",
-  "interview_hr",
-  "interview_manager",
-  "offer",
-  "accepted",
-];
+export const ACTIVE_STAGES: ApplicationStage[] = DEFAULT_STAGES;
 
 export const TERMINAL_STAGES: ApplicationStage[] = ["accepted", "rejected", "withdrawn"];
 

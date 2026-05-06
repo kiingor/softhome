@@ -23,12 +23,34 @@ import {
   Plus,
   MagnifyingGlass as Search,
   UserPlus,
+  DotsThreeVertical,
+  Trash,
+  Eye,
 } from "@phosphor-icons/react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useNavigate } from "react-router-dom";
 import { useAdmissionJourneys } from "../hooks/use-admission-journeys";
 import { NewAdmissionForm } from "../components/NewAdmissionForm";
 import { AdmissionStatusBadge } from "../components/AdmissionStatusBadge";
 import {
   REGIME_LABELS,
+  type AdmissionJourney,
   type AdmissionJourneyStatus,
   type CollaboratorRegime,
 } from "../types";
@@ -41,8 +63,10 @@ export default function AdmissoesPage() {
   const [regimeFilter, setRegimeFilter] = useState<CollaboratorRegime | "all">("all");
   const [search, setSearch] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [deletingJourney, setDeletingJourney] = useState<AdmissionJourney | null>(null);
+  const navigate = useNavigate();
 
-  const { journeys, isLoading, createJourney } = useAdmissionJourneys({
+  const { journeys, isLoading, createJourney, deleteJourney } = useAdmissionJourneys({
     status: statusFilter,
     regime: regimeFilter,
   });
@@ -194,9 +218,29 @@ export default function AdmissoesPage() {
                       {new Date(j.created_at).toLocaleDateString("pt-BR")}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button asChild variant="ghost" size="sm">
-                        <Link to={`/dashboard/admissoes/${j.id}`}>Ver</Link>
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <DotsThreeVertical className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => navigate(`/dashboard/admissoes/${j.id}`)}
+                          >
+                            <Eye className="w-4 h-4 mr-2" />
+                            Ver detalhes
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => setDeletingJourney(j)}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            <Trash className="w-4 h-4 mr-2" />
+                            Excluir admissão
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -212,6 +256,36 @@ export default function AdmissoesPage() {
         onSubmit={handleSubmit}
         isSubmitting={createJourney.isPending}
       />
+
+      <AlertDialog
+        open={!!deletingJourney}
+        onOpenChange={(o) => !o && setDeletingJourney(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir admissão?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Isso remove a admissão de{" "}
+              <strong>{deletingJourney?.candidate_name}</strong> e todos os
+              documentos enviados. O link público vira inválido. Não dá pra
+              desfazer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                if (!deletingJourney) return;
+                await deleteJourney.mutateAsync(deletingJourney.id);
+                setDeletingJourney(null);
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

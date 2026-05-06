@@ -38,10 +38,37 @@ export const ACTIVE_ENTRY_TYPES = [
   "beneficio",
   "adiantamento",
   "bonificacao",
+  "gratificacao",
   "desconto",
 ] as const;
 
 export type ActiveEntryType = (typeof ACTIVE_ENTRY_TYPES)[number];
+
+// Cores sutis por tipo pro tag/badge na folha. A ideia é só diferenciar
+// visualmente, sem competir com os valores numéricos.
+export const ENTRY_TYPE_COLORS: Record<string, string> = {
+  salario_base:
+    "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900/60",
+  hora_extra:
+    "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/60",
+  beneficio:
+    "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/60",
+  bonificacao:
+    "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-900/60",
+  gratificacao:
+    "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-900/60",
+  atestado:
+    "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-900/60 dark:text-slate-300 dark:border-slate-700",
+  adiantamento:
+    "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-900/60",
+  falta:
+    "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900/60",
+  desconto:
+    "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900/60",
+  inss: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/60",
+  irpf: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/60",
+  fgts: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/60",
+};
 
 export const ENTRY_TYPE_LABELS: Record<string, string> = {
   salario_base: "Salário base",
@@ -51,6 +78,7 @@ export const ENTRY_TYPE_LABELS: Record<string, string> = {
   beneficio: "Benefício",
   adiantamento: "Adiantamento",
   bonificacao: "Bonificação",
+  gratificacao: "Gratificação",
   desconto: "Desconto",
   // Legacy (orphans)
   custo: "Custo (legacy)",
@@ -66,6 +94,7 @@ export const EARNINGS_TYPES = [
   "hora_extra",
   "beneficio",
   "bonificacao",
+  "gratificacao",
   "atestado",
 ] as const;
 

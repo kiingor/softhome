@@ -17,6 +17,21 @@ const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const VALID_STATES = new Set(BRAZIL_STATES);
 
+/**
+ * Confere se a string YYYY-MM-DD representa uma data real (sem rollover).
+ */
+const isValidIsoDate = (s: string): boolean => {
+  if (!DATE_REGEX.test(s)) return false;
+  const [y, mo, d] = s.split("-").map((n) => parseInt(n, 10));
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return false;
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  return (
+    dt.getUTCFullYear() === y &&
+    dt.getUTCMonth() === mo - 1 &&
+    dt.getUTCDate() === d
+  );
+};
+
 export function validateRow(
   row: ImportRow,
   rowIndex: number,
@@ -82,14 +97,18 @@ export function validateRow(
     hasWarning = true;
   }
 
-  if (row.birth_date && !DATE_REGEX.test(row.birth_date)) {
-    issues.push("Data de nascimento deve ser AAAA-MM-DD");
-    hasWarning = true;
+  if (row.birth_date && !isValidIsoDate(row.birth_date)) {
+    issues.push(
+      `Data de nascimento inválida: "${row.birth_date}" — use AAAA-MM-DD ou DD/MM/AAAA`,
+    );
+    hasError = true;
   }
 
-  if (row.admission_date && !DATE_REGEX.test(row.admission_date)) {
-    issues.push("Data de admissão deve ser AAAA-MM-DD");
-    hasWarning = true;
+  if (row.admission_date && !isValidIsoDate(row.admission_date)) {
+    issues.push(
+      `Data de admissão inválida: "${row.admission_date}" — use AAAA-MM-DD ou DD/MM/AAAA`,
+    );
+    hasError = true;
   }
 
   let severity: Severity = "ok";

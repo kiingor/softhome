@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Users, Pencil, Trash as Trash2, Copy, DotsThreeVertical } from "@phosphor-icons/react";
+import { Plus, Users, Pencil, Trash as Trash2, Copy, DotsThreeVertical, MagnifyingGlass } from "@phosphor-icons/react";
 import { supabase } from '@/integrations/supabase/client';
 import { useDashboard } from '@/contexts/DashboardContext';
 import PermissionGuard from '@/components/dashboard/PermissionGuard';
@@ -76,6 +76,7 @@ export default function SetoresPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
   const [deletingTeam, setDeletingTeam] = useState<Team | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -95,6 +96,16 @@ export default function SetoresPage() {
       return data as Team[];
     },
     enabled: !!selectedCompanyId,
+  });
+
+  const filteredTeams = teams.filter((t) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      t.name.toLowerCase().includes(q) ||
+      (t.description || '').toLowerCase().includes(q) ||
+      (t.stores?.store_name || '').toLowerCase().includes(q)
+    );
   });
 
   const createMutation = useMutation({
@@ -297,22 +308,44 @@ export default function SetoresPage() {
 
         <Card className="animate-scale-in">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              Lista de Setores
-            </CardTitle>
-            <CardDescription>
-              {teams.length} setor(es) cadastrado(s)
-            </CardDescription>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Lista de Setores
+                </CardTitle>
+                <CardDescription>
+                  {filteredTeams.length} de {teams.length} setor(es)
+                </CardDescription>
+              </div>
+              <div className="relative">
+                <MagnifyingGlass className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por nome ou descrição..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-8 w-64"
+                />
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             {isLoading ? (
               <TableSkeleton columns={4} rows={4} />
-            ) : teams.length === 0 ? (
+            ) : filteredTeams.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>Nenhum setor cadastrado</p>
-                <p className="text-sm">Clique em "Novo Setor" para começar</p>
+                {searchQuery.trim() ? (
+                  <>
+                    <p>Nenhum setor encontrado</p>
+                    <p className="text-sm">Tente outro termo de busca</p>
+                  </>
+                ) : (
+                  <>
+                    <p>Nenhum setor cadastrado</p>
+                    <p className="text-sm">Clique em "Novo Setor" para começar</p>
+                  </>
+                )}
               </div>
             ) : (
               <Table>
@@ -325,7 +358,7 @@ export default function SetoresPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody className="stagger-animation">
-                  {teams.map((team) => (
+                  {filteredTeams.map((team) => (
                     <TableRow key={team.id} className="table-row-animate">
                       <TableCell className="font-medium">{team.name}</TableCell>
                       <TableCell>{team.description || '-'}</TableCell>

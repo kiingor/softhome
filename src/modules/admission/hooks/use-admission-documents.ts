@@ -109,11 +109,29 @@ export function useAdmissionDocuments(journeyId: string | undefined) {
           message: `"${doc?.doc_type}" precisa de ajuste: ${values.rejection_reason}`,
         });
       }
+
+      // Avisa o candidato via WhatsApp se ele tem telefone cadastrado.
+      // Falha silenciosa — RH pode reenviar manualmente do detail.
+      if (journeyId) {
+        try {
+          await supabase.functions.invoke("admission-send-whatsapp", {
+            body: {
+              journey_id: journeyId,
+              public_url_origin: window.location.origin,
+              context: "needs_adjustment",
+              doc_label: doc?.doc_type,
+              reason: values.rejection_reason,
+            },
+          });
+        } catch (err) {
+          console.warn("[admission] notify whatsapp falhou:", err);
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admission-documents"] });
       queryClient.invalidateQueries({ queryKey: ["admission-events"] });
-      toast.success("Ajuste solicitado.");
+      toast.success("Ajuste solicitado. Candidato será avisado.");
     },
     onError: (err: Error) => {
       toast.error("Não rolou. " + (err.message ?? "Tenta de novo?"));
@@ -152,11 +170,95 @@ export function useAdmissionDocuments(journeyId: string | undefined) {
     },
   });
 
+  // Cria um admission_document de exame on-demand (usado quando o RH precisa
+  // anexar exame em admissão antiga, antes da feature de auto-geração).
+  const createExamDoc = useMutation({
+    mutationFn: async ({
+      slug,
+      label,
+    }: {
+      slug: string;
+      label: string;
+    }) => {
+      if (!journeyId || !companyId) throw new Error("Faltam ids");
+      const { data, error } = await supabase
+        .from("admission_documents")
+        .insert({
+          company_id: companyId,
+          journey_id: journeyId,
+          doc_type: "atestado_exame",
+          required: true,
+          status: "pending",
+          notes: `EXAM:${slug} — ${label}`,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return data as AdmissionDocument;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admission-documents"] });
+    },
+  });
+
+  // Upload manual de arquivo pra um doc existente (ex: RH recebe atestado
+  // por outro canal). Path no bucket: <company_id>/<journey_id>/<doc_id>.<ext>
+  const uploadDocFile = useMutation({
+    mutationFn: async ({
+      documentId,
+      file,
+    }: {
+      documentId: string;
+      file: File;
+    }) => {
+      if (!journeyId || !companyId) throw new Error("Faltam ids");
+
+      const ext = file.name.split(".").pop()?.toLowerCase() ?? "bin";
+      const path = `${companyId}/${journeyId}/${documentId}.${ext}`;
+
+      const { error: upErr } = await supabase.storage
+        .from("admission-docs")
+        .upload(path, file, { upsert: true, contentType: file.type });
+      if (upErr) throw upErr;
+
+      const { data: userData } = await supabase.auth.getUser();
+      const { error: updErr } = await supabase
+        .from("admission_documents")
+        .update({
+          status: "submitted",
+          file_url: path,
+          file_name: file.name,
+          uploaded_at: new Date().toISOString(),
+        })
+        .eq("id", documentId);
+      if (updErr) throw updErr;
+
+      await supabase.from("admission_events").insert({
+        company_id: companyId,
+        journey_id: journeyId,
+        kind: "docs_submitted",
+        actor_id: userData?.user?.id ?? null,
+        document_id: documentId,
+        message: `RH anexou arquivo: ${file.name}`,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admission-documents"] });
+      queryClient.invalidateQueries({ queryKey: ["admission-events"] });
+      toast.success("Arquivo enviado ✓");
+    },
+    onError: (err: Error) => {
+      toast.error("Não rolou. " + (err.message ?? "Tenta de novo?"));
+    },
+  });
+
   return {
     documents,
     isLoading,
     approveDocument,
     rejectDocument,
     validateDocument,
+    uploadDocFile,
+    createExamDoc,
   };
 }

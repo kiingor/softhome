@@ -182,6 +182,21 @@ export async function runDocumentValidation(
   }
 
   const mimeType = inferMimeFromPath(doc.file_url);
+
+  // Claude tem limite de payload (~10MB). Após base64 encoding o tamanho
+  // cresce ~33%, então rejeita arquivos originais > 7MB cedo com mensagem
+  // amigável em vez de deixar a API retornar 413.
+  const MAX_BYTES_BEFORE_BASE64 = 7 * 1024 * 1024;
+  if (buffer.byteLength > MAX_BYTES_BEFORE_BASE64) {
+    await sbAdmin
+      .from("admission_documents")
+      .update({ status: "submitted" })
+      .eq("id", documentId);
+    throw new Error(
+      `Arquivo grande demais pra IA validar (${(buffer.byteLength / 1024 / 1024).toFixed(1)}MB). Aprove ou rejeite manualmente.`,
+    );
+  }
+
   const base64 = arrayBufferToBase64(buffer);
 
   // 4. Bloco pro Claude (PDF vai como document, imagem como image)

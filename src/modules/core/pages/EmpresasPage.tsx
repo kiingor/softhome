@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Buildings as Building2, Pencil, Trash as Trash2, Copy, CalendarBlank, DotsThreeVertical } from "@phosphor-icons/react";
+import { Plus, Buildings as Building2, Pencil, Trash as Trash2, Copy, CalendarBlank, DotsThreeVertical, MagnifyingGlass } from "@phosphor-icons/react";
 import { useNavigate } from "react-router-dom";
 import {
   DropdownMenu,
@@ -70,6 +70,7 @@ export default function EmpresasPage() {
   const navigate = useNavigate();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingStore, setEditingStore] = useState<Store | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [formData, setFormData] = useState({
     store_name: '',
     store_code: '',
@@ -90,6 +91,17 @@ export default function EmpresasPage() {
       return data as Store[];
     },
     enabled: !!selectedCompanyId,
+  });
+
+  const filteredStores = stores.filter((s) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      s.store_name.toLowerCase().includes(q) ||
+      (s.cnpj || '').toLowerCase().includes(q) ||
+      (s.store_code || '').toLowerCase().includes(q) ||
+      (s.address || '').toLowerCase().includes(q)
+    );
   });
 
   const createMutation = useMutation({
@@ -305,24 +317,44 @@ export default function EmpresasPage() {
 
         <Card className="animate-scale-in">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5" />
-              Lista de Empresas
-            </CardTitle>
-            <CardDescription>
-              {stores.length} empresa(s) cadastrada(s)
-            </CardDescription>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Building2 className="h-5 w-5" />
+                  Lista de Empresas
+                </CardTitle>
+                <CardDescription>
+                  {filteredStores.length} de {stores.length} empresa(s)
+                </CardDescription>
+              </div>
+              <div className="relative">
+                <MagnifyingGlass className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por nome ou CNPJ..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-8 w-64"
+                />
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             {isLoading ? (
               <TableSkeleton columns={5} rows={4} />
-            ) : stores.length === 0 ? (
+            ) : filteredStores.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Building2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>Nenhuma empresa cadastrada</p>
-                <p className="text-sm">
-                  Clique em "Nova Empresa" para começar
-                </p>
+                {searchQuery.trim() ? (
+                  <>
+                    <p>Nenhuma empresa encontrada</p>
+                    <p className="text-sm">Tente outro termo de busca</p>
+                  </>
+                ) : (
+                  <>
+                    <p>Nenhuma empresa cadastrada</p>
+                    <p className="text-sm">Clique em "Nova Empresa" para começar</p>
+                  </>
+                )}
               </div>
             ) : (
               <Table>
@@ -336,7 +368,7 @@ export default function EmpresasPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {stores.map((store) => (
+                  {filteredStores.map((store) => (
                     <TableRow key={store.id}>
                       <TableCell className="font-medium">
                         {store.store_name}

@@ -6,6 +6,16 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   PaperPlaneRight,
   Plus,
   CircleNotch as Loader2,
@@ -30,6 +40,7 @@ export default function RecrutadorPage() {
   const queryClient = useQueryClient();
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollEndRef = useRef<HTMLDivElement>(null);
 
@@ -144,9 +155,11 @@ export default function RecrutadorPage() {
     }
   };
 
-  const handleArchive = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleConfirmDelete = async () => {
+    if (!deletingSessionId) return;
+    const id = deletingSessionId;
     await archiveSession.mutateAsync(id);
+    setDeletingSessionId(null);
     if (activeSessionId === id) {
       setActiveSessionId(null);
       queryClient.invalidateQueries({ queryKey: ["agent-messages"] });
@@ -181,32 +194,49 @@ export default function RecrutadorPage() {
             ) : (
               <ScrollArea className="h-[calc(100vh-15rem)]">
                 <ul className="space-y-1">
-                  {sessions.map((s) => (
-                    <li key={s.id}>
-                      <button
-                        type="button"
-                        onClick={() => setActiveSessionId(s.id)}
-                        className={`w-full text-left text-sm rounded-md px-2 py-2 transition-colors group flex items-center gap-2 ${
+                  {sessions.map((s) => {
+                    const ts = new Date(s.updated_at);
+                    const date = ts.toLocaleDateString("pt-BR", {
+                      day: "2-digit",
+                      month: "2-digit",
+                    });
+                    const time = ts.toLocaleTimeString("pt-BR", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    });
+                    return (
+                      <li
+                        key={s.id}
+                        className={`text-sm rounded-md transition-colors flex items-center gap-1 pr-1 ${
                           s.id === activeSessionId
                             ? "bg-primary/10 text-primary"
                             : "hover:bg-muted text-foreground"
                         }`}
                       >
-                        <ChatCircle className="w-4 h-4 shrink-0" />
-                        <span className="truncate flex-1">
-                          {s.title ?? "(sem título)"}
-                        </span>
                         <button
                           type="button"
-                          onClick={(e) => handleArchive(s.id, e)}
-                          className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition"
-                          title="Arquivar"
+                          onClick={() => setActiveSessionId(s.id)}
+                          className="flex-1 min-w-0 text-left px-2 py-2 flex items-center gap-2"
                         >
-                          <Trash className="w-3 h-3" />
+                          <ChatCircle className="w-4 h-4 shrink-0" />
+                          <span className="text-xs tabular-nums">
+                            {date} · {time}
+                          </span>
                         </button>
-                      </button>
-                    </li>
-                  ))}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeletingSessionId(s.id);
+                          }}
+                          className="shrink-0 p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition"
+                          title="Excluir conversa"
+                        >
+                          <Trash className="w-3.5 h-3.5" />
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ul>
               </ScrollArea>
             )}
@@ -216,13 +246,15 @@ export default function RecrutadorPage() {
 
       {/* Chat */}
       <div className="flex-1 flex flex-col min-w-0">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-            <Robot className="w-5 h-5 text-primary" />
+        <div className="flex items-center gap-3 mb-3 h-10">
+          <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+            <Robot className="w-4 h-4 text-primary" />
           </div>
-          <div>
-            <h1 className="text-xl font-bold text-foreground">Recrutador</h1>
-            <p className="text-xs text-muted-foreground">
+          <div className="min-w-0">
+            <h1 className="text-base font-semibold text-foreground leading-tight">
+              Recrutador
+            </h1>
+            <p className="text-xs text-muted-foreground leading-tight">
               Descreve a vaga e eu busco no banco de talentos.
             </p>
           </div>
@@ -304,6 +336,29 @@ export default function RecrutadorPage() {
           </div>
         </Card>
       </div>
+
+      <AlertDialog
+        open={!!deletingSessionId}
+        onOpenChange={(open) => !open && setDeletingSessionId(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir conversa?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Isso remove a conversa e o histórico de mensagens. Não dá pra desfazer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -190,7 +190,7 @@ export default function CandidatosPage() {
                   <TableHead>Candidato</TableHead>
                   <TableHead>CPF</TableHead>
                   <TableHead>Fonte</TableHead>
-                  <TableHead>Cadastro</TableHead>
+                  <TableHead>Recebido em</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
@@ -230,7 +230,15 @@ export default function CandidatosPage() {
                       {c.source ?? "—"}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {new Date(c.created_at).toLocaleDateString("pt-BR")}
+                      <div>
+                        {new Date(c.created_at).toLocaleDateString("pt-BR")}
+                      </div>
+                      <div className="text-xs">
+                        {new Date(c.created_at).toLocaleTimeString("pt-BR", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </div>
                     </TableCell>
                     <TableCell className="text-right">
                       <CandidateActionsMenu

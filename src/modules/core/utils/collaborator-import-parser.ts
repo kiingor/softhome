@@ -90,41 +90,94 @@ export const normalizeCPF = (v: string | null | undefined): string => {
 };
 
 /**
+ * Verifica se y/m/d formam uma data real (sem rollover do Date).
+ * Ex: 2020-02-31 → false; 2020-13-01 → false.
+ */
+const isRealDate = (y: number, mo: number, d: number): boolean => {
+  if (mo < 1 || mo > 12) return false;
+  if (d < 1 || d > 31) return false;
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  return (
+    dt.getUTCFullYear() === y &&
+    dt.getUTCMonth() === mo - 1 &&
+    dt.getUTCDate() === d
+  );
+};
+
+const fmt = (y: number, mo: number, d: number): string =>
+  `${String(y).padStart(4, "0")}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+
+/**
+ * Resolve uma data formada por (y, a, b) tentando as duas ordens (a=mês,b=dia)
+ * e (a=dia,b=mês). Retorna a string YYYY-MM-DD se exatamente uma for válida,
+ * ou null se ambas forem ambíguas ou nenhuma servir.
+ */
+const tryResolveYMD = (y: number, a: number, b: number): string | null => {
+  const asMD = isRealDate(y, a, b); // a=mês, b=dia
+  const asDM = isRealDate(y, b, a); // a=dia, b=mês
+  if (asMD && asDM) {
+    // Ambíguo só se a !== b. Quando iguais, qualquer ordem dá o mesmo resultado.
+    if (a === b) return fmt(y, a, b);
+    return null;
+  }
+  if (asMD) return fmt(y, a, b);
+  if (asDM) return fmt(y, b, a);
+  return null;
+};
+
+/**
  * Aceita as variações comuns de planilha e devolve YYYY-MM-DD.
- * Se não conseguir interpretar, retorna a string original (validador vai sinalizar).
+ * Detecta dia/mês trocados quando uma das interpretações é impossível.
+ * Retorna a string original quando não consegue reconhecer nenhum padrão
+ * (validador sinaliza como erro).
  */
 export const normalizeDate = (v: string | null | undefined): string | null => {
   if (v === null || v === undefined) return null;
   const s = String(v).trim();
   if (!s) return null;
 
-  // Já em YYYY-MM-DD ou YYYY/MM/DD
-  let m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+  // ISO com hora (toISOString do Excel cellDates) — pega só a parte da data
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})T/);
   if (m) {
-    const [, y, mo, d] = m;
-    return `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`;
+    const y = parseInt(m[1], 10);
+    const mo = parseInt(m[2], 10);
+    const d = parseInt(m[3], 10);
+    if (isRealDate(y, mo, d)) return fmt(y, mo, d);
+    return s;
   }
 
-  // DD/MM/YYYY ou DD-MM-YYYY ou DD.MM.YYYY (BR)
+  // YYYY-MM-DD / YYYY/MM/DD — pode vir com mês/dia trocados de alguma origem
+  m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+  if (m) {
+    const y = parseInt(m[1], 10);
+    const a = parseInt(m[2], 10);
+    const b = parseInt(m[3], 10);
+    return tryResolveYMD(y, a, b) ?? s;
+  }
+
+  // DD/MM/YYYY ou DD-MM-YYYY ou DD.MM.YYYY (BR) — também tenta MM/DD se DD inválido
   m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
   if (m) {
-    const [, d, mo, y] = m;
-    return `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`;
+    const a = parseInt(m[1], 10);
+    const b = parseInt(m[2], 10);
+    const y = parseInt(m[3], 10);
+    // Convencional BR: a=dia, b=mês
+    if (isRealDate(y, b, a)) return fmt(y, b, a);
+    // Se inválido, tenta MM/DD (US) — só aceita se realmente fizer sentido
+    if (isRealDate(y, a, b)) return fmt(y, a, b);
+    return s;
   }
 
-  // DD/MM/YY (interpreta YY 00-69 como 20YY, 70-99 como 19YY)
+  // DD/MM/YY (YY 00-69 → 20YY, 70-99 → 19YY)
   m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2})$/);
   if (m) {
-    const [, d, mo, yy] = m;
-    const yyN = parseInt(yy, 10);
-    const y = yyN < 70 ? 2000 + yyN : 1900 + yyN;
-    return `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`;
-  }
-
-  // ISO com hora (toISOString do Excel cellDates) — pega só a parte da data
-  m = s.match(/^(\d{4})-(\d{2})-(\d{2})T/);
-  if (m) {
-    return `${m[1]}-${m[2]}-${m[3]}`;
+    const a = parseInt(m[1], 10);
+    const b = parseInt(m[2], 10);
+    const yy = parseInt(m[3], 10);
+    const y = yy < 70 ? 2000 + yy : 1900 + yy;
+    if (isRealDate(y, b, a)) return fmt(y, b, a);
+    if (isRealDate(y, a, b)) return fmt(y, a, b);
+    return s;
   }
 
   return s;

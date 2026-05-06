@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { z } from "zod";
 import { Eye, EyeSlash as EyeOff } from "@phosphor-icons/react";
+import { SoftHouseLogo } from "@/components/branding/SoftHouseLogo";
 const loginSchema = z.object({
   email: z.string().email("Email inválido"),
   password: z.string().min(1, "Senha é obrigatória"),
@@ -95,9 +96,7 @@ const Login = () => {
         <div className="bg-card rounded-2xl shadow-card p-8 border border-border">
           <div className="text-center mb-8">
             <div className="inline-flex items-center gap-2 mb-4">
-              <div className="w-12 h-12 rounded-xl gradient-hero flex items-center justify-center shadow-soft">
-                <span className="text-primary-foreground font-extrabold text-xl">S</span>
-              </div>
+              <SoftHouseLogo size="lg" />
             </div>
             <h1 className="text-2xl font-bold text-foreground">Bem-vindo de volta</h1>
             <p className="text-muted-foreground mt-2">

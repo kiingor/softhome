@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,7 +28,17 @@ import {
   Lock,
   LockOpen,
   Download,
+  CaretRight,
+  CaretDown,
+  Info,
 } from "@phosphor-icons/react";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PaymentsTab } from "../components/PaymentsTab";
 import { toast } from "sonner";
 import { useDashboard } from "@/contexts/DashboardContext";
 import {
@@ -40,6 +50,7 @@ import {
   PERIOD_STATUS_LABELS,
   PERIOD_STATUS_COLORS,
   ENTRY_TYPE_LABELS,
+  ENTRY_TYPE_COLORS,
   ALERT_KIND_LABELS,
   ALERT_SEVERITY_COLORS,
   formatPeriodLabel,
@@ -73,6 +84,128 @@ export default function PeriodDetailPage() {
   );
   const [reversingEntry, setReversingEntry] = useState<string | null>(null);
   const [reverseReason, setReverseReason] = useState("");
+  const [expandedCollabs, setExpandedCollabs] = useState<Set<string>>(new Set());
+
+  const toggleCollab = (id: string) => {
+    setExpandedCollabs((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  // Tipos de imposto que são absorvidos pelo "Salário base" no display
+  // (INSS/IRPF/FGTS aparecem na exportação pro contador, mas na UI ficam
+  // somados dentro da linha de salário pra ficar menos confuso).
+  const TAX_TYPES = new Set(["inss", "irpf", "fgts"]);
+
+  const groupedByCollab = useMemo(() => {
+    type DisplayEntry = (typeof entries)[number] & {
+      _adjustedValue?: number;
+      _taxesApplied?: { inss?: number; irpf?: number; fgts?: number };
+    };
+    type Group = {
+      id: string;
+      name: string;
+      entries: DisplayEntry[];
+      taxBreakdown: { inss: number; irpf: number; fgts: number };
+      net: number;
+    };
+    const map = new Map<string, Group>();
+    for (const e of entries) {
+      const collabId = e.collaborator_id ?? "_orphan";
+      if (!map.has(collabId)) {
+        map.set(collabId, {
+          id: collabId,
+          name: e.collaborator?.name ?? "(sem nome)",
+          entries: [],
+          taxBreakdown: { inss: 0, irpf: 0, fgts: 0 },
+          net: 0,
+        });
+      }
+      const g = map.get(collabId)!;
+      const v = Number(e.value);
+      if (TAX_TYPES.has(e.type)) {
+        g.taxBreakdown[e.type as "inss" | "irpf" | "fgts"] += v;
+        g.net -= v;
+      } else {
+        g.entries.push(e);
+        g.net += isEarning(e.type) ? v : -v;
+      }
+    }
+    // Ajusta valores exibidos:
+    // - Salário base absorve INSS + FGTS sempre, e a parte do IRPF que cabe a ele.
+    // - Gratificação absorve só a parte do IRPF que cabe a ela (regra do user:
+    //   gratificação só desconta IRPF).
+    // - IRPF é distribuído proporcionalmente entre salário base + gratificações
+    //   pelo valor bruto de cada um.
+    for (const g of map.values()) {
+      const { inss, irpf, fgts } = g.taxBreakdown;
+      const salaryEntry = g.entries.find((e) => e.type === "salario_base");
+      const gratEntries = g.entries.filter((e) => e.type === "gratificacao");
+
+      const irpfBase =
+        (salaryEntry ? Number(salaryEntry.value) : 0) +
+        gratEntries.reduce((s, e) => s + Number(e.value), 0);
+
+      // Aloca IRPF proporcionalmente; resto vai pra última entrada pra fechar contas.
+      const targets: Array<{ entry: DisplayEntry; gross: number }> = [];
+      if (salaryEntry)
+        targets.push({ entry: salaryEntry, gross: Number(salaryEntry.value) });
+      for (const e of gratEntries)
+        targets.push({ entry: e, gross: Number(e.value) });
+
+      const irpfShares = new Map<string, number>();
+      if (irpf > 0 && irpfBase > 0) {
+        let allocated = 0;
+        targets.forEach((t, i) => {
+          const share =
+            i === targets.length - 1
+              ? irpf - allocated
+              : Math.round(((irpf * t.gross) / irpfBase) * 100) / 100;
+          allocated += share;
+          irpfShares.set(t.entry.id, share);
+        });
+      }
+
+      // Aplica deduções
+      if (salaryEntry) {
+        const irpfPart = irpfShares.get(salaryEntry.id) ?? 0;
+        const total = inss + fgts + irpfPart;
+        if (total > 0) {
+          salaryEntry._adjustedValue = Number(salaryEntry.value) - total;
+          salaryEntry._taxesApplied = {
+            inss: inss || undefined,
+            irpf: irpfPart || undefined,
+            fgts: fgts || undefined,
+          };
+        }
+      }
+      for (const e of gratEntries) {
+        const irpfPart = irpfShares.get(e.id) ?? 0;
+        if (irpfPart > 0) {
+          e._adjustedValue = Number(e.value) - irpfPart;
+          e._taxesApplied = { irpf: irpfPart };
+        }
+      }
+    }
+    return [...map.values()].sort((a, b) =>
+      a.name.localeCompare(b.name, "pt-BR"),
+    );
+  }, [entries]);
+
+  const allExpanded =
+    groupedByCollab.length > 0 &&
+    groupedByCollab.every((g) => expandedCollabs.has(g.id));
+
+  const toggleAll = () => {
+    if (allExpanded) {
+      setExpandedCollabs(new Set());
+    } else {
+      setExpandedCollabs(new Set(groupedByCollab.map((g) => g.id)));
+    }
+  };
 
   const stats = useMemo(() => {
     let earnings = 0;
@@ -261,6 +394,34 @@ export default function PeriodDetailPage() {
         </Card>
       )}
 
+      {/* Tabs: Lançamentos (RH) / Pagamentos (Financeiro) */}
+      <Tabs defaultValue="lancamentos" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="lancamentos">Lançamentos</TabsTrigger>
+          <TabsTrigger value="pagamentos">Pagamentos</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="pagamentos">
+          <Card>
+            <CardHeader>
+              <CardTitle>Pagamentos</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Cada lançamento de provento aparece separado pra ir marcando o
+                que já foi pago. Descontos e FGTS não entram aqui.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <PaymentsTab
+                periodId={period.id}
+                entries={entries}
+                canManage={canManage}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="lancamentos">
+
       {/* Lançamentos */}
       <Card>
         <CardHeader className="flex-row items-center justify-between">
@@ -280,67 +441,185 @@ export default function PeriodDetailPage() {
               )}
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Colaborador</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Descrição</TableHead>
-                  <TableHead className="text-right">Valor</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {entries.map((e) => {
-                  const earning = isEarning(e.type);
-                  const value = Number(e.value);
-                  return (
-                    <TableRow key={e.id} className="hover:bg-muted/50">
-                      <TableCell>
-                        <span className="text-sm text-foreground">
-                          {e.collaborator?.name ?? "(sem nome)"}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-sm">
-                          {ENTRY_TYPE_LABELS[e.type] ?? e.type}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
-                        {e.description ?? "—"}
-                      </TableCell>
-                      <TableCell
-                        className={`text-right text-sm font-mono ${
-                          value < 0
-                            ? "text-rose-700 dark:text-rose-300"
-                            : earning
-                            ? "text-orange-700 dark:text-orange-300"
-                            : "text-foreground"
-                        }`}
-                      >
-                        {value < 0 ? "" : earning ? "+ " : "- "}
-                        {formatCurrency(Math.abs(value))}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {canManage && isClosed && value > 0 && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setReversingEntry(e.id)}
-                            className="text-xs"
+            <>
+              <div className="flex items-center justify-between mb-2 px-1">
+                <p className="text-xs text-muted-foreground">
+                  {groupedByCollab.length} colaborador
+                  {groupedByCollab.length === 1 ? "" : "es"} · {entries.length}{" "}
+                  lançamento{entries.length === 1 ? "" : "s"}
+                </p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={toggleAll}
+                  className="text-xs h-7"
+                >
+                  {allExpanded ? "Recolher todos" : "Expandir todos"}
+                </Button>
+              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[40%]">Colaborador</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Descrição</TableHead>
+                    <TableHead className="text-right">Valor</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {groupedByCollab.map((g) => {
+                    const isOpen = expandedCollabs.has(g.id);
+                    return (
+                      <Fragment key={g.id}>
+                        <TableRow
+                          className="hover:bg-muted/50 cursor-pointer bg-muted/20"
+                          onClick={() => toggleCollab(g.id)}
+                        >
+                          <TableCell>
+                            <div className="flex items-center gap-2 font-medium">
+                              {isOpen ? (
+                                <CaretDown className="w-4 h-4 text-muted-foreground" />
+                              ) : (
+                                <CaretRight className="w-4 h-4 text-muted-foreground" />
+                              )}
+                              <span>{g.name}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell
+                            colSpan={2}
+                            className="text-xs text-muted-foreground"
                           >
-                            Estornar
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                            {g.entries.length} lançamento
+                            {g.entries.length === 1 ? "" : "s"}
+                          </TableCell>
+                          <TableCell
+                            className={`text-right text-sm font-mono font-semibold ${
+                              g.net >= 0
+                                ? "text-orange-700 dark:text-orange-300"
+                                : "text-rose-700 dark:text-rose-300"
+                            }`}
+                          >
+                            {g.net >= 0 ? "+ " : "- "}
+                            {formatCurrency(Math.abs(g.net))}
+                          </TableCell>
+                        </TableRow>
+                        {isOpen &&
+                          g.entries.map((e) => {
+                            const earning = isEarning(e.type);
+                            const isAdjusted = e._adjustedValue !== undefined;
+                            const value = isAdjusted
+                              ? e._adjustedValue!
+                              : Number(e.value);
+                            const taxes = e._taxesApplied;
+                            const deductions: Array<{
+                              label: string;
+                              value: number;
+                            }> = [];
+                            if (isAdjusted && taxes) {
+                              if (taxes.inss)
+                                deductions.push({ label: "INSS", value: taxes.inss });
+                              if (taxes.irpf)
+                                deductions.push({ label: "IRPF", value: taxes.irpf });
+                              if (taxes.fgts)
+                                deductions.push({ label: "FGTS", value: taxes.fgts });
+                            }
+                            return (
+                              <TableRow
+                                key={e.id}
+                                className="hover:bg-muted/30"
+                              >
+                                <TableCell className="pl-10 text-xs text-muted-foreground">
+                                  ↳
+                                </TableCell>
+                                <TableCell>
+                                  <span
+                                    className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${
+                                      ENTRY_TYPE_COLORS[e.type] ??
+                                      "bg-muted text-muted-foreground border-border"
+                                    }`}
+                                  >
+                                    {ENTRY_TYPE_LABELS[e.type] ?? e.type}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-sm text-muted-foreground max-w-xs">
+                                  <div className="flex items-center gap-1.5 truncate">
+                                    <span className="truncate">
+                                      {e.description ?? "—"}
+                                    </span>
+                                    {isAdjusted && deductions.length > 0 && (
+                                      <HoverCard openDelay={150} closeDelay={100}>
+                                        <HoverCardTrigger asChild>
+                                          <button
+                                            type="button"
+                                            className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-full text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900/30 transition focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                                            aria-label="Ver detalhes do líquido"
+                                            onClick={(ev) => ev.stopPropagation()}
+                                          >
+                                            <Info className="w-3.5 h-3.5" weight="fill" />
+                                          </button>
+                                        </HoverCardTrigger>
+                                        <HoverCardContent
+                                          align="start"
+                                          className="w-64 text-xs"
+                                        >
+                                          <div className="space-y-1.5">
+                                            <div className="flex items-center justify-between gap-2 text-foreground">
+                                              <span className="text-muted-foreground">
+                                                Bruto
+                                              </span>
+                                              <span className="font-mono">
+                                                {formatCurrency(Number(e.value))}
+                                              </span>
+                                            </div>
+                                            {deductions.map((d) => (
+                                              <div
+                                                key={d.label}
+                                                className="flex items-center justify-between gap-2 text-rose-700 dark:text-rose-300"
+                                              >
+                                                <span>− {d.label}</span>
+                                                <span className="font-mono">
+                                                  {formatCurrency(d.value)}
+                                                </span>
+                                              </div>
+                                            ))}
+                                            <div className="border-t border-border pt-1.5 flex items-center justify-between gap-2 font-medium">
+                                              <span>Líquido</span>
+                                              <span className="font-mono text-orange-700 dark:text-orange-300">
+                                                {formatCurrency(value)}
+                                              </span>
+                                            </div>
+                                          </div>
+                                        </HoverCardContent>
+                                      </HoverCard>
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell
+                                  className={`text-right text-sm font-mono ${
+                                    value < 0
+                                      ? "text-rose-700 dark:text-rose-300"
+                                      : earning
+                                      ? "text-orange-700 dark:text-orange-300"
+                                      : "text-foreground"
+                                  }`}
+                                >
+                                  {value < 0 ? "" : earning ? "+ " : "- "}
+                                  {formatCurrency(Math.abs(value))}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                      </Fragment>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </>
           )}
         </CardContent>
       </Card>
+        </TabsContent>
+      </Tabs>
 
       <NewEntryDialog
         open={isNewEntryOpen}

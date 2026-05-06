@@ -45,7 +45,7 @@ serve(async (req) => {
   const { data: journey, error } = await sbAdmin
     .from("admission_journeys")
     .select(
-      "id, company_id, candidate_name, candidate_email, candidate_phone, candidate_cpf, regime, status, token_expires_at, position_id",
+      "id, company_id, candidate_name, candidate_email, candidate_phone, candidate_cpf, candidate_birth_date, candidate_rg, candidate_zip, candidate_address, candidate_address_number, candidate_address_complement, candidate_neighborhood, candidate_city, candidate_state, regime, status, token_expires_at, position_id",
     )
     .eq("access_token", token)
     .single();
@@ -73,11 +73,89 @@ serve(async (req) => {
     }, 410);
   }
 
+  // Backfill defensivo: pra admissões criadas antes da feature de exames
+  // automáticos, gera os rows de admission_documents pros exames esperados
+  // do grupo de risco do cargo. Idempotente — pula slugs já existentes.
+  if (journey.position_id) {
+    const { data: pos } = await sbAdmin
+      .from("positions")
+      .select("risk_group")
+      .eq("id", journey.position_id)
+      .maybeSingle();
+    const riskGroup = (pos as { risk_group: string | null } | null)?.risk_group;
+
+    const EXAMS_BY_RISK_GROUP: Record<string, Array<{ slug: string; label: string }>> = {
+      GR1: [{ slug: "avaliacao_clinica", label: "Avaliação clínica ocupacional" }],
+      GR2: [
+        { slug: "avaliacao_clinica", label: "Avaliação clínica ocupacional" },
+        { slug: "audiometria", label: "Audiometria" },
+        { slug: "acuidade_visual", label: "Acuidade visual" },
+      ],
+      GR3: [
+        { slug: "avaliacao_clinica", label: "Avaliação clínica ocupacional" },
+        { slug: "audiometria", label: "Audiometria" },
+        { slug: "acuidade_visual", label: "Acuidade visual" },
+        { slug: "espirometria", label: "Espirometria" },
+        { slug: "hemograma", label: "Hemograma completo" },
+      ],
+      GR4: [
+        { slug: "avaliacao_clinica", label: "Avaliação clínica ocupacional" },
+        { slug: "audiometria", label: "Audiometria" },
+        { slug: "acuidade_visual", label: "Acuidade visual" },
+        { slug: "espirometria", label: "Espirometria" },
+        { slug: "raio_x_torax", label: "Raio-X de tórax" },
+        { slug: "hemograma", label: "Hemograma completo" },
+        { slug: "psicossocial", label: "Avaliação psicossocial" },
+      ],
+      GR5: [
+        { slug: "avaliacao_clinica", label: "Avaliação clínica ocupacional" },
+        { slug: "audiometria", label: "Audiometria" },
+        { slug: "acuidade_visual", label: "Acuidade visual" },
+        { slug: "espirometria", label: "Espirometria" },
+        { slug: "raio_x_torax", label: "Raio-X de tórax" },
+        { slug: "hemograma", label: "Hemograma completo" },
+        { slug: "psicossocial", label: "Avaliação psicossocial" },
+        { slug: "toxicologico", label: "Exame toxicológico" },
+        { slug: "eletrocardiograma", label: "Eletrocardiograma" },
+      ],
+    };
+
+    const expected = riskGroup ? (EXAMS_BY_RISK_GROUP[riskGroup] ?? []) : [];
+    if (expected.length > 0) {
+      const { data: existingExams } = await sbAdmin
+        .from("admission_documents")
+        .select("notes")
+        .eq("journey_id", journey.id)
+        .eq("doc_type", "atestado_exame");
+
+      const existingSlugs = new Set<string>();
+      for (const e of (existingExams ?? []) as Array<{ notes: string | null }>) {
+        if (e.notes?.startsWith("EXAM:")) {
+          const slug = e.notes.slice("EXAM:".length).split(" — ")[0];
+          existingSlugs.add(slug);
+        }
+      }
+      const missing = expected.filter((e) => !existingSlugs.has(e.slug));
+      if (missing.length > 0) {
+        await sbAdmin.from("admission_documents").insert(
+          missing.map((e) => ({
+            company_id: journey.company_id,
+            journey_id: journey.id,
+            doc_type: "atestado_exame",
+            required: true,
+            status: "pending",
+            notes: `EXAM:${e.slug} — ${e.label}`,
+          })),
+        );
+      }
+    }
+  }
+
   // Busca docs requeridos
   const { data: docs } = await sbAdmin
     .from("admission_documents")
     .select(
-      "id, doc_type, required, status, file_url, file_name, rejection_reason, uploaded_at",
+      "id, doc_type, required, status, file_url, file_name, rejection_reason, uploaded_at, notes, text_response",
     )
     .eq("journey_id", journey.id)
     .order("doc_type");
@@ -97,6 +175,15 @@ serve(async (req) => {
       candidate_email: journey.candidate_email,
       candidate_phone: journey.candidate_phone,
       candidate_cpf: journey.candidate_cpf,
+      candidate_birth_date: journey.candidate_birth_date,
+      candidate_rg: journey.candidate_rg,
+      candidate_zip: journey.candidate_zip,
+      candidate_address: journey.candidate_address,
+      candidate_address_number: journey.candidate_address_number,
+      candidate_address_complement: journey.candidate_address_complement,
+      candidate_neighborhood: journey.candidate_neighborhood,
+      candidate_city: journey.candidate_city,
+      candidate_state: journey.candidate_state,
       regime: journey.regime,
       status: journey.status,
       token_expires_at: journey.token_expires_at,

@@ -8,12 +8,36 @@ import type {
   CollaboratorRegime,
 } from "../types";
 
+export interface CandidateDataInput {
+  phone?: string;
+  cpf?: string;
+  email?: string;
+  birth_date?: string;
+  rg?: string;
+  zip?: string;
+  address?: string;
+  address_number?: string;
+  address_complement?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+}
+
 export interface PublicJourneyInfo {
   id: string;
   candidate_name: string;
   candidate_email: string | null;
   candidate_phone: string | null;
   candidate_cpf: string | null;
+  candidate_birth_date: string | null;
+  candidate_rg: string | null;
+  candidate_zip: string | null;
+  candidate_address: string | null;
+  candidate_address_number: string | null;
+  candidate_address_complement: string | null;
+  candidate_neighborhood: string | null;
+  candidate_city: string | null;
+  candidate_state: string | null;
   regime: CollaboratorRegime;
   status: AdmissionJourneyStatus;
   token_expires_at: string | null;
@@ -29,6 +53,8 @@ export interface PublicDocumentInfo {
   file_name: string | null;
   rejection_reason: string | null;
   uploaded_at: string | null;
+  notes: string | null;
+  text_response: string | null;
 }
 
 export interface GetByTokenResult {
@@ -40,6 +66,11 @@ export interface GetByTokenResult {
 export interface SubmitDocFile {
   doc_id: string;
   file: File;
+}
+
+export interface SubmitDocText {
+  doc_id: string;
+  text: string;
 }
 
 export interface SubmitResult {
@@ -82,8 +113,9 @@ export async function getAdmissionByToken(
 
 export async function submitAdmissionDocs(input: {
   token: string;
-  candidate_data?: { phone?: string; cpf?: string };
+  candidate_data?: CandidateDataInput;
   documents: SubmitDocFile[];
+  text_responses?: SubmitDocText[];
 }): Promise<SubmitResult> {
   // Valida tamanhos antes de mandar
   for (const d of input.documents) {
@@ -111,6 +143,7 @@ export async function submitAdmissionDocs(input: {
         token: input.token,
         candidate_data: input.candidate_data,
         documents: docsPayload,
+        text_responses: input.text_responses ?? [],
       },
     },
   );

@@ -68,18 +68,76 @@ export const UsersAccessTab = () => {
   const [resendConfirmPassword, setResendConfirmPassword] = useState("");
   const [showResendPassword, setShowResendPassword] = useState(false);
 
-  // Fetch company users
+  // Fetch company users — exclui colaboradores (eles acessam pelo Portal,
+  // não pelo dashboard). Aqui ficam só os usuários cadastrados via Configurações
+  // + o owner da empresa (que pode não estar em company_users).
   const { data: companyUsers, isLoading: isLoadingUsers } = useQuery({
-    queryKey: ["company-users", currentCompany?.id],
+    queryKey: ["company-users", currentCompany?.id, user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("company_users")
-        .select("*")
-        .eq("company_id", currentCompany!.id)
-        .order("created_at", { ascending: false });
+      const [usersRes, collabsRes, companyRes] = await Promise.all([
+        supabase
+          .from("company_users")
+          .select("*")
+          .eq("company_id", currentCompany!.id)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("collaborators")
+          .select("user_id")
+          .eq("company_id", currentCompany!.id)
+          .not("user_id", "is", null),
+        supabase
+          .from("companies")
+          .select("owner_id")
+          .eq("id", currentCompany!.id)
+          .maybeSingle(),
+      ]);
 
-      if (error) throw error;
-      return data as CompanyUser[];
+      if (usersRes.error) throw usersRes.error;
+      if (collabsRes.error) throw collabsRes.error;
+
+      const collabUserIds = new Set(
+        (collabsRes.data ?? [])
+          .map((c) => (c as { user_id: string | null }).user_id)
+          .filter((id): id is string => !!id),
+      );
+
+      const filtered = (usersRes.data as CompanyUser[]).filter(
+        (u) => !u.user_id || !collabUserIds.has(u.user_id),
+      );
+
+      // Garante que o owner da empresa apareça mesmo se não estiver em company_users
+      const ownerId = (companyRes.data as { owner_id: string | null } | null)
+        ?.owner_id;
+      const ownerInList = ownerId
+        ? filtered.some((u) => u.user_id === ownerId)
+        : true;
+
+      if (ownerId && !ownerInList) {
+        // Busca dados do owner via profiles (full_name); email vem do auth
+        // context se for o próprio admin logado
+        const { data: ownerProfile } = await supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("user_id", ownerId)
+          .maybeSingle();
+
+        const ownerEmail =
+          user?.id === ownerId ? user?.email ?? "" : "";
+
+        const ownerEntry: CompanyUser = {
+          id: `owner:${ownerId}`,
+          email: ownerEmail || "(sem email cadastrado)",
+          full_name:
+            (ownerProfile as { full_name: string | null } | null)?.full_name ??
+            null,
+          user_id: ownerId,
+          is_active: true,
+          accepted_at: null,
+        };
+        filtered.unshift(ownerEntry);
+      }
+
+      return filtered;
     },
     enabled: !!currentCompany?.id,
   });
@@ -525,20 +583,33 @@ export const UsersAccessTab = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {companyUsers?.map((companyUser) => (
+                {companyUsers?.map((companyUser) => {
+                  const isOwner = companyUser.id.startsWith("owner:");
+                  return (
                   <TableRow
                     key={companyUser.id}
                     className={`cursor-pointer ${
                       selectedUser?.id === companyUser.id ? "bg-muted" : ""
                     }`}
-                    onClick={() => setSelectedUser(companyUser)}
+                    onClick={() => !isOwner && setSelectedUser(companyUser)}
                   >
                     <TableCell className="font-medium">
-                      {companyUser.full_name || "-"}
+                      <div className="flex items-center gap-2">
+                        {companyUser.full_name || "-"}
+                        {isOwner && (
+                          <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+                            Proprietário
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>{companyUser.email}</TableCell>
                     <TableCell>
-                      {companyUser.accepted_at ? (
+                      {isOwner ? (
+                        <Badge variant="default" className="bg-orange-500">
+                          Admin
+                        </Badge>
+                      ) : companyUser.accepted_at ? (
                         <Badge variant="default" className="bg-green-500">
                           Ativo
                         </Badge>
@@ -548,7 +619,7 @@ export const UsersAccessTab = () => {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
-                        {companyUser.user_id && (
+                        {!isOwner && companyUser.user_id && (
                           <Button
                             variant="ghost"
                             size="icon"
@@ -561,20 +632,23 @@ export const UsersAccessTab = () => {
                             <Mail className="w-4 h-4" />
                           </Button>
                         )}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setUserToDelete(companyUser);
-                          }}
-                        >
-                          <Trash2 className="w-4 h-4 text-destructive" />
-                        </Button>
+                        {!isOwner && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setUserToDelete(companyUser);
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           )}

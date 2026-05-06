@@ -19,11 +19,33 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   CircleNotch as Loader2,
   Plus,
   MagnifyingGlass as Search,
   Briefcase,
+  Trash,
+  DotsThreeVertical,
+  Eye,
+  Pencil,
 } from "@phosphor-icons/react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useNavigate } from "react-router-dom";
 import { useJobOpenings } from "../hooks/use-job-openings";
 import { JobOpeningForm } from "../components/JobOpeningForm";
 import { JobStatusBadge } from "../components/JobStatusBadge";
@@ -39,8 +61,11 @@ export default function VagasPage() {
   const [search, setSearch] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<JobOpening | null>(null);
+  const [deletingJob, setDeletingJob] = useState<JobOpening | null>(null);
 
-  const { jobs, isLoading, createJob, updateJob } = useJobOpenings({
+  const navigate = useNavigate();
+
+  const { jobs, isLoading, createJob, updateJob, deleteJob } = useJobOpenings({
     status: statusFilter,
   });
 
@@ -182,17 +207,34 @@ export default function VagasPage() {
                     <TableCell className="text-sm text-muted-foreground">
                       {j.vacancies_count}
                     </TableCell>
-                    <TableCell className="text-right">
-                      <Button asChild variant="ghost" size="sm">
-                        <Link to={`/dashboard/vagas/${j.id}`}>Pipeline</Link>
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openEdit(j)}
-                      >
-                        Editar
-                      </Button>
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <DotsThreeVertical className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => navigate(`/dashboard/vagas/${j.id}`)}
+                          >
+                            <Eye className="w-4 h-4 mr-2" />
+                            Ver pipeline
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openEdit(j)}>
+                            <Pencil className="w-4 h-4 mr-2" />
+                            Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => setDeletingJob(j)}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            <Trash className="w-4 h-4 mr-2" />
+                            Excluir vaga
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -209,6 +251,35 @@ export default function VagasPage() {
         onSubmit={handleSubmit}
         isSubmitting={createJob.isPending || updateJob.isPending}
       />
+
+      <AlertDialog
+        open={!!deletingJob}
+        onOpenChange={(o) => !o && setDeletingJob(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir vaga?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Isso remove a vaga "{deletingJob?.title}" e todas as candidaturas
+              vinculadas a ela. As admissões já criadas dessa vaga não são
+              apagadas, mas perdem o vínculo. Não dá pra desfazer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                if (!deletingJob) return;
+                await deleteJob.mutateAsync(deletingJob.id);
+                setDeletingJob(null);
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

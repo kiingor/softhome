@@ -6,6 +6,8 @@ import { useDashboard } from "@/contexts/DashboardContext";
 import { useVacationRequests, useVacationPeriods, useUpdateVacationRequest, useDeleteVacationRequest, vacationRequestStatusLabels, vacationRequestStatusColors, vacationPeriodStatusLabels, vacationPeriodStatusColors, VacationRequest, VacationPeriod } from "@/hooks/useVacations";
 import VacationRequestModal from "@/components/ferias/VacationRequestModal";
 import VacationCalendar from "@/components/ferias/VacationCalendar";
+import { VacationBalanceBulkImportDialog } from "@/modules/core/components/ferias/VacationBalanceBulkImportDialog";
+import { VacationPeriodAdjustDialog } from "@/modules/core/components/collaborators/VacationPeriodAdjustDialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,9 +17,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Plus, Clock, Users, CalendarCheck, Warning as AlertTriangle, MagnifyingGlass as Search, Check, X, CircleNotch as Loader2, Calendar, Trash as Trash2, Eye, UserCheck } from "@phosphor-icons/react";
+import { Plus, Clock, Users, CalendarCheck, Warning as AlertTriangle, MagnifyingGlass as Search, Check, X, CircleNotch as Loader2, Calendar, Trash as Trash2, Eye, UserCheck, UploadSimple, DotsThreeVertical, Pencil } from "@phosphor-icons/react";
 import { format, parseISO, isAfter, addDays } from "date-fns";
 import { toast } from "sonner";
 
@@ -56,6 +59,8 @@ const FeriasPage = () => {
   const [rejectionReason, setRejectionReason] = useState("");
   const [deletingRequest, setDeletingRequest] = useState<VacationRequest | null>(null);
   const [viewingRequest, setViewingRequest] = useState<VacationRequest | null>(null);
+  const [bulkImportOpen, setBulkImportOpen] = useState(false);
+  const [adjustingPeriod, setAdjustingPeriod] = useState<VacationPeriod | null>(null);
 
   // Summary cards
   const pendingCount = useMemo(() => requests.filter(r => r.status === "pending").length, [requests]);
@@ -166,10 +171,18 @@ const FeriasPage = () => {
               {canManage ? "Gerencie solicitações de férias dos colaboradores" : "Acompanhe suas férias e ausências"}
             </p>
           </div>
-          <Button variant="hero" onClick={() => { setRequestModalCollaboratorId(undefined); setRequestModalOpen(true); }}>
-            <Plus className="w-4 h-4 mr-2" />
-            {canManage ? "Nova Solicitação" : "Solicitar Férias"}
-          </Button>
+          <div className="flex items-center gap-2">
+            {canManage && (
+              <Button variant="outline" onClick={() => setBulkImportOpen(true)}>
+                <UploadSimple className="w-4 h-4 mr-2" />
+                Importar saldos
+              </Button>
+            )}
+            <Button variant="hero" onClick={() => { setRequestModalCollaboratorId(undefined); setRequestModalOpen(true); }}>
+              <Plus className="w-4 h-4 mr-2" />
+              {canManage ? "Nova Solicitação" : "Solicitar Férias"}
+            </Button>
+          </div>
         </div>
 
         {/* Summary Cards */}
@@ -253,7 +266,6 @@ const FeriasPage = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Colaborador</TableHead>
-                      <TableHead>Cargo</TableHead>
                       <TableHead>Admissão</TableHead>
                       <TableHead>Período Atual</TableHead>
                       <TableHead className="text-center">Saldo (dias)</TableHead>
@@ -291,7 +303,6 @@ const FeriasPage = () => {
                       return (
                         <TableRow key={c.id} className="table-row-animate">
                           <TableCell className="font-medium">{c.name}</TableCell>
-                          <TableCell className="text-muted-foreground">{c.position || "—"}</TableCell>
                           <TableCell>
                             {c.admission_date ? format(parseISO(c.admission_date), "dd/MM/yyyy") : <span className="text-muted-foreground italic">Não informada</span>}
                           </TableCell>
@@ -315,19 +326,38 @@ const FeriasPage = () => {
                           </TableCell>
                           {canManage && (
                             <TableCell className="text-right">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-8 text-xs"
-                                disabled={!c.admission_date}
-                                onClick={() => {
-                                  setRequestModalCollaboratorId(c.id);
-                                  setRequestModalOpen(true);
-                                }}
-                              >
-                                <Plus className="w-3 h-3 mr-1" />
-                                Solicitar
-                              </Button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    disabled={!c.admission_date}
+                                  >
+                                    <DotsThreeVertical className="w-4 h-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      setRequestModalCollaboratorId(c.id);
+                                      setRequestModalOpen(true);
+                                    }}
+                                  >
+                                    <Plus className="w-4 h-4 mr-2" />
+                                    Solicitar férias
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    disabled={!c.currentPeriod}
+                                    onClick={() => {
+                                      if (c.currentPeriod) setAdjustingPeriod(c.currentPeriod);
+                                    }}
+                                  >
+                                    <Pencil className="w-4 h-4 mr-2" />
+                                    Ajustar saldo
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </TableCell>
                           )}
                         </TableRow>
@@ -516,6 +546,16 @@ const FeriasPage = () => {
 
         {/* Request Modal */}
         <VacationRequestModal open={requestModalOpen} onOpenChange={setRequestModalOpen} preSelectedCollaboratorId={requestModalCollaboratorId} />
+
+        {/* Bulk Import Saldos */}
+        <VacationBalanceBulkImportDialog open={bulkImportOpen} onOpenChange={setBulkImportOpen} />
+
+        {/* Manual Adjust Period */}
+        <VacationPeriodAdjustDialog
+          open={!!adjustingPeriod}
+          onOpenChange={(v) => !v && setAdjustingPeriod(null)}
+          period={adjustingPeriod}
+        />
 
         {/* Reject Dialog */}
         <Dialog open={!!rejectingRequest} onOpenChange={() => setRejectingRequest(null)}>

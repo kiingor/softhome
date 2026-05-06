@@ -53,6 +53,7 @@ interface Collaborator {
   email: string | null;
   phone: string | null;
   position: string | null;
+  position_id: string | null;
   status: "ativo" | "inativo" | "aguardando_documentacao" | "validacao_pendente" | "reprovado";
   is_temp: boolean;
   store_id: string | null;
@@ -70,6 +71,11 @@ interface Team {
   name: string;
 }
 
+interface Position {
+  id: string;
+  name: string;
+}
+
 const ColaboradoresPage = () => {
   const { currentCompany } = useDashboard();
   const { toast } = useToast();
@@ -78,6 +84,7 @@ const ColaboradoresPage = () => {
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
+  const [positions, setPositions] = useState<Position[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
@@ -135,7 +142,7 @@ const ColaboradoresPage = () => {
   }, [searchTerm]);
 
   const loadData = async () => {
-    await Promise.all([loadCollaborators(), loadTeams(), loadStores()]);
+    await Promise.all([loadCollaborators(), loadTeams(), loadStores(), loadPositions()]);
   };
 
   const loadCollaborators = async () => {
@@ -222,6 +229,23 @@ const ColaboradoresPage = () => {
     }
   };
 
+  const loadPositions = async () => {
+    if (!currentCompany) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("positions")
+        .select("id, name")
+        .eq("company_id", currentCompany.id)
+        .order("name");
+
+      if (error) throw error;
+      setPositions(data || []);
+    } catch (error) {
+      console.error("Error loading positions:", error);
+    }
+  };
+
   const handleNewCollaborator = () => {
     setEditingId(null);
     setModalOpen(true);
@@ -246,16 +270,22 @@ const ColaboradoresPage = () => {
 
     setIsDeleting(true);
     try {
-      const { error } = await supabase
-        .from("collaborators")
-        .delete()
-        .eq("id", collaboratorToDelete.id);
+      const { data, error } = await supabase.functions.invoke<{
+        success?: boolean;
+        deletedAuthUser?: boolean;
+        error?: string;
+      }>("delete-collaborator", {
+        body: { collaboratorId: collaboratorToDelete.id },
+      });
 
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
       toast({
         title: "Colaborador excluído",
-        description: `${collaboratorToDelete.name} foi removido.`,
+        description: data?.deletedAuthUser
+          ? `${collaboratorToDelete.name} foi removido (login também desativado).`
+          : `${collaboratorToDelete.name} foi removido.`,
       });
 
       loadCollaborators();
@@ -280,6 +310,14 @@ const ColaboradoresPage = () => {
   const getTeamName = (teamId: string | null) => {
     if (!teamId) return "-";
     return teams.find((t) => t.id === teamId)?.name || "-";
+  };
+
+  const getPositionName = (collaborator: Collaborator) => {
+    if (collaborator.position_id) {
+      const match = positions.find((p) => p.id === collaborator.position_id);
+      if (match) return match.name;
+    }
+    return collaborator.position || "-";
   };
 
   const handleReenviarDocumentacao = async (collaborator: Collaborator) => {
@@ -453,11 +491,11 @@ const ColaboradoresPage = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nome</TableHead>
-                    <TableHead>CPF</TableHead>
+                    <TableHead className="w-[140px]">CPF</TableHead>
                     <TableHead>Cargo</TableHead>
-                    <TableHead>Empresa</TableHead>
-                    <TableHead>Setor</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead className="hidden md:table-cell">Empresa</TableHead>
+                    <TableHead className="hidden lg:table-cell">Setor</TableHead>
+                    <TableHead className="w-[100px]">Status</TableHead>
                     <TableHead className="w-12"></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -478,23 +516,54 @@ const ColaboradoresPage = () => {
                         className="table-row-animate cursor-pointer hover:bg-muted/50"
                         onClick={() => handleEdit(collaborator)}
                       >
-                        <TableCell>
+                        <TableCell className="max-w-[280px]">
                           <div className="flex items-center gap-2">
-                            <span className="font-medium">{collaborator.name}</span>
+                            <span
+                              className="font-medium text-sm capitalize truncate"
+                              title={collaborator.name}
+                            >
+                              {collaborator.name.toLowerCase()}
+                            </span>
                             {collaborator.is_temp && (
-                              <Badge variant="secondary" className="text-xs">Avulso</Badge>
+                              <Badge variant="secondary" className="text-[10px] h-5 px-1.5 shrink-0">
+                                Avulso
+                              </Badge>
                             )}
                           </div>
                           {collaborator.email && (
-                            <div className="text-sm text-muted-foreground">{collaborator.email}</div>
+                            <div
+                              className="text-xs text-muted-foreground truncate"
+                              title={collaborator.email}
+                            >
+                              {collaborator.email}
+                            </div>
                           )}
                         </TableCell>
-                        <TableCell className="font-mono text-sm">{formatCPF(collaborator.cpf)}</TableCell>
-                        <TableCell>{collaborator.position || "-"}</TableCell>
-                        <TableCell>{getStoreName(collaborator.store_id)}</TableCell>
-                        <TableCell>{getTeamName(collaborator.team_id)}</TableCell>
+                        <TableCell className="font-mono text-xs text-muted-foreground tabular-nums">
+                          {formatCPF(collaborator.cpf)}
+                        </TableCell>
+                        <TableCell className="text-sm max-w-[220px]">
+                          <span className="truncate block" title={getPositionName(collaborator)}>
+                            {getPositionName(collaborator)}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-sm hidden md:table-cell max-w-[160px]">
+                          <span className="truncate block" title={getStoreName(collaborator.store_id)}>
+                            {getStoreName(collaborator.store_id)}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-sm hidden lg:table-cell max-w-[160px]">
+                          <span className="truncate block" title={getTeamName(collaborator.team_id)}>
+                            {getTeamName(collaborator.team_id)}
+                          </span>
+                        </TableCell>
                         <TableCell>
-                          <Badge variant="secondary" className={sc.className}>{sc.label}</Badge>
+                          <Badge
+                            variant="secondary"
+                            className={`${sc.className} text-[11px] font-normal h-5 px-2`}
+                          >
+                            {sc.label}
+                          </Badge>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>

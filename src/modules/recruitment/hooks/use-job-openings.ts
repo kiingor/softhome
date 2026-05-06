@@ -113,7 +113,49 @@ export function useJobOpenings(options: UseJobOpeningsOptions = {}) {
     },
   });
 
-  return { jobs, isLoading, createJob, updateJob };
+  const deleteJob = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("job_openings")
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["job-openings"] });
+      queryClient.invalidateQueries({ queryKey: ["job-opening"] });
+      toast.success("Vaga removida ✓");
+    },
+    onError: (err: Error) => {
+      toast.error("Não rolou. " + (err.message ?? "Tenta de novo?"));
+    },
+  });
+
+  const updateJobStages = useMutation({
+    mutationFn: async ({
+      id,
+      stages,
+    }: {
+      id: string;
+      stages: string[];
+    }) => {
+      if (stages.length === 0) throw new Error("Pelo menos uma etapa.");
+      const { error } = await supabase
+        .from("job_openings")
+        .update({ pipeline_stages: stages })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["job-opening"] });
+      toast.success("Pipeline atualizado ✓");
+    },
+    onError: (err: Error) => {
+      toast.error("Não rolou. " + (err.message ?? "Tenta de novo?"));
+    },
+  });
+
+  return { jobs, isLoading, createJob, updateJob, updateJobStages, deleteJob };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -222,6 +264,42 @@ export function useJobApplications(jobId: string | undefined) {
 // Hook: dispara criação de admission_journey a partir de uma application
 // que está no estágio 'accepted' (decisão Q7: manual via botão)
 // ─────────────────────────────────────────────────────────────────────────────
+
+// Liga uma journey já criada (via NewAdmissionForm) a uma application
+// + marca a application como 'accepted'. Diferente de useStartAdmissionFromApplication,
+// que cria a journey direto sem passar pelo form.
+export function useCreateJourneyFromApplication() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      journeyId,
+      applicationId,
+    }: {
+      journeyId: string;
+      applicationId: string;
+    }) => {
+      const { error: updateJourneyErr } = await supabase
+        .from("admission_journeys")
+        .update({ application_id: applicationId })
+        .eq("id", journeyId);
+      if (updateJourneyErr) throw updateJourneyErr;
+
+      const { error: updateAppErr } = await supabase
+        .from("candidate_applications")
+        .update({ stage: "accepted" })
+        .eq("id", applicationId);
+      if (updateAppErr) throw updateAppErr;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["job-applications"] });
+      queryClient.invalidateQueries({ queryKey: ["admission-journeys"] });
+    },
+    onError: (err: Error) => {
+      toast.error("Não rolou ligar admissão à candidatura. " + err.message);
+    },
+  });
+}
 
 export function useStartAdmissionFromApplication() {
   const queryClient = useQueryClient();

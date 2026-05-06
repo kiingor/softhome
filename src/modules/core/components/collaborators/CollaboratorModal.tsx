@@ -12,6 +12,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -42,6 +44,8 @@ import { useStoreHolidays } from "@/modules/payroll/hooks/use-store-holidays";
 import CollaboratorValidationTab from "./CollaboratorValidationTab";
 import { PositionChangeDialog } from "@/components/exames/PositionChangeDialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { VacationPeriodAdjustDialog } from "./VacationPeriodAdjustDialog";
+import { Pencil } from "@phosphor-icons/react";
 
 interface PendingEntry {
   id: string;
@@ -62,17 +66,36 @@ interface PendingBenefit {
   monthly_value: number;
 }
 
+export interface CollaboratorPrefill {
+  name?: string;
+  cpf?: string;
+  rg?: string;
+  email?: string;
+  phone?: string;
+  birth_date?: string;
+  position_id?: string;
+  regime?: "clt" | "pj" | "estagiario";
+  address?: string;
+  district?: string;
+  city?: string;
+  state?: string;
+  postal_code?: string;
+  notes?: string;
+}
+
 interface CollaboratorModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   collaboratorId?: string | null;
-  onSuccess?: () => void;
+  prefill?: CollaboratorPrefill;
+  onSuccess?: (collaboratorId?: string) => void;
 }
 
 const CollaboratorModal = ({
   open,
   onOpenChange,
   collaboratorId,
+  prefill,
   onSuccess,
 }: CollaboratorModalProps) => {
   const queryClient = useQueryClient();
@@ -114,6 +137,7 @@ const CollaboratorModal = ({
   const [confirmDeactivate, setConfirmDeactivate] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [previousPositionId, setPreviousPositionId] = useState<string | null>(null);
+  const [adjustingPeriod, setAdjustingPeriod] = useState<any | null>(null);
 
   // Pending entries/benefits for new collaborators
   const [pendingEntries, setPendingEntries] = useState<PendingEntry[]>([]);
@@ -124,6 +148,11 @@ const CollaboratorModal = ({
   const [addBenefitOpen, setAddBenefitOpen] = useState(false);
   const [deletingEntry, setDeletingEntry] = useState<any>(null);
   const [deletingAssignment, setDeletingAssignment] = useState<any>(null);
+  const [editingAssignmentValue, setEditingAssignmentValue] = useState<{
+    assignment: any;
+    inputValue: string;
+  } | null>(null);
+  const [savingCustomValue, setSavingCustomValue] = useState(false);
   const [createStoreOpen, setCreateStoreOpen] = useState(false);
   const [createTeamOpen, setCreateTeamOpen] = useState(false);
   const [newStoreName, setNewStoreName] = useState("");
@@ -345,29 +374,33 @@ const CollaboratorModal = ({
         });
         setShowPasswordField(!c.user_id);
       } else {
+        // Modal de "novo colaborador" — usa prefill se existir (vindo da
+        // tela de admissão, p.ex.) pra deixar tudo preenchido.
         setFormData({
-          name: "",
-          cpf: "",
-          rg: "",
-          email: "",
-          phone: "",
-          birth_date: "",
-          position_id: "",
+          name: prefill?.name ?? "",
+          cpf: prefill?.cpf ?? "",
+          rg: prefill?.rg ?? "",
+          email: prefill?.email ?? "",
+          phone: prefill?.phone ?? "",
+          birth_date: prefill?.birth_date ?? "",
+          position_id: prefill?.position_id ?? "",
           store_id: "",
           contracted_store_id: "",
           team_id: "",
           admission_date: "",
-          regime: "clt",
+          regime: prefill?.regime ?? "clt",
           status: "ativo",
           is_temp: false,
           is_pcd: false,
           is_apprentice: false,
-          address: "",
-          district: "",
-          city: "",
-          state: "",
-          postal_code: "",
-          notes: "",
+          address: prefill?.address ?? "",
+          district: prefill?.district ?? "",
+          city: prefill?.city ?? "",
+          state: prefill?.state ?? "",
+          postal_code: prefill?.postal_code
+            ? formatCEPInput(prefill.postal_code)
+            : "",
+          notes: prefill?.notes ?? "",
           password: "",
         });
         setShowPasswordField(false);
@@ -375,6 +408,7 @@ const CollaboratorModal = ({
         setPendingBenefits([]);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, collaborator]);
 
   // When position changes, update pending salary entry (for new collaborators)
@@ -666,6 +700,7 @@ const CollaboratorModal = ({
     }
 
     setIsSaving(true);
+    let savedCollabId: string | undefined;
     try {
       let userId: string | null = null;
 
@@ -750,6 +785,8 @@ const CollaboratorModal = ({
           throw error;
         }
 
+        savedCollabId = newCollab.id;
+
         if (pendingEntries.length > 0) {
           const entriesToCreate = pendingEntries.map((e) => ({
             collaborator_id: newCollab.id,
@@ -809,7 +846,7 @@ const CollaboratorModal = ({
       }
 
       queryClient.invalidateQueries({ queryKey: ["collaborators"] });
-      onSuccess?.();
+      onSuccess?.(savedCollabId ?? collaboratorId ?? undefined);
       onOpenChange(false);
     } catch (error: any) {
       toast.error("Erro ao salvar: " + error.message);
@@ -950,18 +987,24 @@ const CollaboratorModal = ({
           });
         }
 
-        await supabase.from("payroll_entries").insert(entriesToCreate);
+        const { error: instErr } = await supabase
+          .from("payroll_entries")
+          .insert(entriesToCreate);
+        if (instErr) throw instErr;
       } else {
-        await supabase.from("payroll_entries").insert({
-          collaborator_id: collaboratorId,
-          company_id: currentCompany!.id,
-          type: entryForm.type,
-          value: numericValue,
-          description: entryForm.description || null,
-          month: entryForm.month,
-          year: entryForm.year,
-          is_fixed: entryForm.is_fixed,
-        });
+        const { error: insErr } = await supabase
+          .from("payroll_entries")
+          .insert({
+            collaborator_id: collaboratorId,
+            company_id: currentCompany!.id,
+            type: entryForm.type,
+            value: numericValue,
+            description: entryForm.description || null,
+            month: entryForm.month,
+            year: entryForm.year,
+            is_fixed: entryForm.is_fixed,
+          });
+        if (insErr) throw insErr;
       }
 
       refetchEntries();
@@ -969,7 +1012,11 @@ const CollaboratorModal = ({
       setEntryForm({ type: "hora_extra", description: "", value: "", is_fixed: false, month: currentMonth, year: currentYear, is_installment: false, installment_count: 2 });
       toast.success("Lançamento adicionado!");
     } catch (error) {
-      toast.error("Erro ao adicionar lançamento");
+      const msg =
+        error instanceof Error
+          ? error.message
+          : "Erro ao adicionar lançamento";
+      toast.error(msg);
     }
   };
 
@@ -1083,6 +1130,37 @@ const CollaboratorModal = ({
     }
   };
 
+  // Save custom monthly value override for an assignment
+  const handleSaveCustomValue = async () => {
+    if (!editingAssignmentValue) return;
+    const parsed = parseCurrencyInput(editingAssignmentValue.inputValue);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      toast.error("Valor inválido.");
+      return;
+    }
+    setSavingCustomValue(true);
+    try {
+      const defaultValue =
+        Number(editingAssignmentValue.assignment.benefit?.value ?? 0);
+      // Se o valor digitado for o mesmo do default, limpa custom_value
+      // pra deixar a vinculação reagir a futuras mudanças do benefício.
+      const newCustom = parsed === defaultValue ? null : parsed;
+      const { error } = await supabase
+        .from("benefits_assignments")
+        .update({ custom_value: newCustom })
+        .eq("id", editingAssignmentValue.assignment.id);
+      if (error) throw error;
+      await refetchAssignments();
+      setEditingAssignmentValue(null);
+      toast.success("Valor atualizado ✓");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Erro ao salvar valor";
+      toast.error(msg);
+    } finally {
+      setSavingCustomValue(false);
+    }
+  };
+
   // Calculate totals
   const calculateTotalCost = () => {
     let entriesTotal = 0;
@@ -1114,9 +1192,14 @@ const CollaboratorModal = ({
       }, 0);
       benefitsTotal = benefitAssignments.reduce((sum, a: any) => {
         if (!a.benefit) return sum;
+        const valueType = a.benefit.value_type || "monthly";
+        const baseValue =
+          valueType === "monthly" && a.custom_value != null
+            ? Number(a.custom_value)
+            : a.benefit.value || 0;
         const value = calculateMonthlyBenefitValue(
-          a.benefit.value || 0,
-          a.benefit.value_type || "monthly",
+          baseValue,
+          valueType,
           (a.benefit.applicable_days || ["mon", "tue", "wed", "thu", "fri"]) as DayAbbrev[],
           currentMonth,
           currentYear,
@@ -1134,6 +1217,16 @@ const CollaboratorModal = ({
   // Get entry type label
   const getEntryTypeLabel = (type: string) => {
     const labels: Record<string, string> = {
+      salario_base: "Salário base",
+      hora_extra: "Hora extra",
+      falta: "Falta",
+      atestado: "Atestado",
+      beneficio: "Benefício",
+      adiantamento: "Adiantamento",
+      bonificacao: "Bonificação",
+      gratificacao: "Gratificação",
+      desconto: "Desconto",
+      // Legacy
       salario: "Salário",
       adicional: "Adicional",
       custo: "Custo",
@@ -1148,9 +1241,9 @@ const CollaboratorModal = ({
 
   // Get entry type color
   const getEntryTypeVariant = (type: string): "default" | "secondary" | "destructive" | "outline" => {
-    if (type === "custo" || type === "despesa" || type === "inss" || type === "irpf" || type === "beneficio") return "destructive";
+    if (type === "custo" || type === "despesa" || type === "inss" || type === "irpf") return "destructive";
     if (type === "salario_base") return "default";
-    if (type === "fgts") return "outline";
+    if (type === "fgts" || type === "beneficio") return "outline";
     return "secondary";
   };
 
@@ -1618,13 +1711,21 @@ const CollaboratorModal = ({
                         )}
                       </div>
                       
-                      {(isNew ? pendingEntries : payrollEntries).length === 0 ? (
-                        <div className="text-sm text-muted-foreground text-center py-6 bg-background rounded-lg border border-dashed">
-                          {isNew ? "Selecione um cargo para adicionar o salário" : "Nenhum lançamento no mês atual"}
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          {(isNew ? pendingEntries : payrollEntries).map((entry: any) => (
+                      {(() => {
+                        const allEntries = isNew ? pendingEntries : payrollEntries;
+                        const visibleEntries = allEntries.filter(
+                          (e: any) => e.type !== "beneficio",
+                        );
+                        if (visibleEntries.length === 0) {
+                          return (
+                            <div className="text-sm text-muted-foreground text-center py-6 bg-background rounded-lg border border-dashed">
+                              {isNew ? "Selecione um cargo para adicionar o salário" : "Nenhum lançamento no mês atual"}
+                            </div>
+                          );
+                        }
+                        return (
+                          <div className="space-y-2">
+                            {visibleEntries.map((entry: any) => (
                             <div
                               key={entry.id}
                               className="p-3 rounded-lg bg-background border hover:border-primary/30 transition-colors"
@@ -1636,11 +1737,11 @@ const CollaboratorModal = ({
                                       {entry.description || getEntryTypeLabel(entry.type)}
                                     </span>
                                     <span className={`font-mono text-sm font-semibold shrink-0 ${
-                                      ["inss", "irpf", "despesa", "beneficio", "custo", "fgts"].includes(entry.type) 
-                                        ? "text-destructive" 
+                                      ["inss", "irpf", "despesa", "custo", "fgts"].includes(entry.type)
+                                        ? "text-destructive"
                                         : "text-green-600"
                                     }`}>
-                                      {["inss", "irpf", "despesa", "beneficio", "custo", "fgts"].includes(entry.type) ? "- " : "+ "}
+                                      {["inss", "irpf", "despesa", "custo", "fgts"].includes(entry.type) ? "- " : "+ "}
                                       {formatCurrency(entry.value)}
                                     </span>
                                   </div>
@@ -1671,8 +1772,9 @@ const CollaboratorModal = ({
                               </div>
                             </div>
                           ))}
-                        </div>
-                      )}
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* Benefits */}
@@ -1739,17 +1841,24 @@ const CollaboratorModal = ({
                                 const benefit = assignment.benefit;
                                 if (!benefit) return null;
 
+                                const valueType = benefit.value_type || "monthly";
+                                const isMonthly = valueType === "monthly";
+                                const hasCustom = isMonthly && assignment.custom_value != null;
+                                const baseValue = hasCustom
+                                  ? Number(assignment.custom_value)
+                                  : benefit.value || 0;
+
                                 const monthlyValue = calculateMonthlyBenefitValue(
-                                  benefit.value || 0,
-                                  benefit.value_type || "monthly",
+                                  baseValue,
+                                  valueType,
                                   (benefit.applicable_days || ["mon", "tue", "wed", "thu", "fri"]) as DayAbbrev[],
                                   currentMonth,
                                   currentYear,
                                   holidayDates,
                                 );
                                 const description = getBenefitCalculationDescription(
-                                  benefit.value || 0,
-                                  benefit.value_type || "monthly",
+                                  baseValue,
+                                  valueType,
                                   (benefit.applicable_days || ["mon", "tue", "wed", "thu", "fri"]) as DayAbbrev[],
                                   currentMonth,
                                   currentYear,
@@ -1764,7 +1873,14 @@ const CollaboratorModal = ({
                                     <div className="flex items-start justify-between gap-2">
                                       <div className="flex-1 min-w-0">
                                         <div className="flex items-center justify-between mb-1">
-                                          <span className="text-sm font-medium truncate pr-2">{benefit.name}</span>
+                                          <span className="text-sm font-medium truncate pr-2">
+                                            {benefit.name}
+                                            {hasCustom && (
+                                              <span className="ml-1.5 text-[10px] uppercase tracking-wide text-amber-600">
+                                                · custom
+                                              </span>
+                                            )}
+                                          </span>
                                           <span className="font-mono text-sm font-semibold shrink-0">
                                             {formatCurrency(monthlyValue)}
                                           </span>
@@ -1772,14 +1888,32 @@ const CollaboratorModal = ({
                                         <p className="text-xs text-muted-foreground">{description}</p>
                                       </div>
                                       {canManage && (
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
-                                          onClick={() => setDeletingAssignment(assignment)}
-                                        >
-                                          <X className="w-3 h-3" />
-                                        </Button>
+                                        <div className="flex items-center gap-0.5 shrink-0">
+                                          {isMonthly && (
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              className="h-6 w-6 text-muted-foreground hover:text-primary"
+                                              title="Editar valor pra esse colaborador"
+                                              onClick={() =>
+                                                setEditingAssignmentValue({
+                                                  assignment,
+                                                  inputValue: formatCurrencyForInput(baseValue),
+                                                })
+                                              }
+                                            >
+                                              <Pencil className="w-3 h-3" />
+                                            </Button>
+                                          )}
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                                            onClick={() => setDeletingAssignment(assignment)}
+                                          >
+                                            <X className="w-3 h-3" />
+                                          </Button>
+                                        </div>
                                       )}
                                     </div>
                                   </div>
@@ -1805,17 +1939,30 @@ const CollaboratorModal = ({
                             <p className="text-xs text-muted-foreground mb-2">Saldo de Períodos Aquisitivos</p>
                             <div className="space-y-1.5">
                               {vacationPeriods.slice(0, 3).map((period: any) => (
-                                <div key={period.id} className="flex items-center justify-between text-sm">
-                                  <span className="text-muted-foreground">
+                                <div key={period.id} className="flex items-center justify-between text-sm gap-2">
+                                  <span className="text-muted-foreground flex-1 min-w-0 truncate">
                                     {new Date(period.start_date).toLocaleDateString("pt-BR")} - {new Date(period.end_date).toLocaleDateString("pt-BR")}
+                                    {period.manual_adjustment_at && (
+                                      <span className="ml-1 text-[10px] uppercase tracking-wide text-amber-600">· ajuste manual</span>
+                                    )}
                                   </span>
                                   <Badge variant={
                                     period.status === "available" ? "default" :
                                     period.status === "partially_used" ? "secondary" :
                                     period.status === "used" ? "outline" : "destructive"
-                                  } className="text-xs h-5 px-1.5">
+                                  } className="text-xs h-5 px-1.5 shrink-0">
                                     {period.days_remaining}d restantes
                                   </Badge>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 shrink-0"
+                                    onClick={() => setAdjustingPeriod(period)}
+                                    title="Ajustar saldo manualmente"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </Button>
                                 </div>
                               ))}
                             </div>
@@ -2063,6 +2210,7 @@ const CollaboratorModal = ({
                   <SelectItem value="hora_extra">Hora extra</SelectItem>
                   <SelectItem value="beneficio">Benefício</SelectItem>
                   <SelectItem value="bonificacao">Bonificação</SelectItem>
+                  <SelectItem value="gratificacao">Gratificação</SelectItem>
                   <SelectItem value="atestado">Atestado</SelectItem>
                   <SelectItem value="adiantamento">Adiantamento</SelectItem>
                   <SelectItem value="desconto">Desconto</SelectItem>
@@ -2279,6 +2427,67 @@ const CollaboratorModal = ({
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Edit Custom Benefit Value */}
+      <Dialog
+        open={!!editingAssignmentValue}
+        onOpenChange={(open) => !open && !savingCustomValue && setEditingAssignmentValue(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Editar valor do benefício
+              {editingAssignmentValue?.assignment?.benefit?.name
+                ? ` — ${editingAssignmentValue.assignment.benefit.name}`
+                : ""}
+            </DialogTitle>
+            <DialogDescription>
+              Valor mensal específico pra esse colaborador. Pra voltar ao
+              padrão do benefício, digite o mesmo valor cadastrado em
+              Benefícios.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Valor mensal (R$)</Label>
+            <Input
+              autoFocus
+              value={editingAssignmentValue?.inputValue ?? ""}
+              onChange={(e) =>
+                setEditingAssignmentValue((prev) =>
+                  prev ? { ...prev, inputValue: formatCurrencyForInput(e.target.value) } : prev,
+                )
+              }
+              placeholder="0,00"
+            />
+            {editingAssignmentValue?.assignment?.benefit && (
+              <p className="text-xs text-muted-foreground">
+                Padrão do benefício:{" "}
+                {formatCurrency(
+                  Number(editingAssignmentValue.assignment.benefit.value ?? 0),
+                )}
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              type="button"
+              onClick={() => setEditingAssignmentValue(null)}
+              disabled={savingCustomValue}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSaveCustomValue}
+              disabled={savingCustomValue}
+            >
+              {savingCustomValue && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Position Change Dialog */}
       <PositionChangeDialog
         open={positionChangeOpen}
@@ -2286,6 +2495,13 @@ const CollaboratorModal = ({
         currentPosition={positions.find((p) => p.id === formData.position_id) || null}
         positions={positions}
         onConfirm={handlePositionChange}
+      />
+
+      {/* Vacation Period Manual Adjustment */}
+      <VacationPeriodAdjustDialog
+        open={!!adjustingPeriod}
+        onOpenChange={(v) => !v && setAdjustingPeriod(null)}
+        period={adjustingPeriod}
       />
     </>
   );

@@ -74,11 +74,24 @@ serve(async (req) => {
   let body: SubmitBody;
   try {
     body = await req.json();
-    if (!body.token || !body.documents || !Array.isArray(body.documents)) {
+    if (!body.token) {
       throw new Error("missing required fields");
     }
-    if (body.documents.length === 0) {
-      throw new Error("Pelo menos um documento é obrigatório");
+    // Documents é opcional; pode vir só text_responses (resposta digitada/sim-não).
+    if (!Array.isArray(body.documents)) {
+      (body as unknown as { documents: [] }).documents = [];
+    }
+    const textResponses = (body as unknown as {
+      text_responses?: unknown[];
+    }).text_responses;
+    const hasFile = body.documents.length > 0;
+    const hasText = Array.isArray(textResponses) && textResponses.length > 0;
+    const hasCandidateData =
+      body.candidate_data && Object.keys(body.candidate_data).length > 0;
+    if (!hasFile && !hasText && !hasCandidateData) {
+      throw new Error(
+        "Pelo menos um documento, resposta ou dado pessoal é obrigatório",
+      );
     }
   } catch (err) {
     return jsonResponse(
@@ -210,14 +223,70 @@ serve(async (req) => {
     uploaded.push({ doc_id: submitted.doc_id, doc_type: doc.doc_type });
   }
 
-  // 4. Atualiza candidate_data confirmado (phone, cpf)
-  if (body.candidate_data?.phone || body.candidate_data?.cpf) {
+  // 3b. Processa text_responses (docs do tipo texto)
+  const textResponses = (body as unknown as {
+    text_responses?: Array<{ doc_id: string; text: string }>;
+  }).text_responses ?? [];
+
+  for (const tr of textResponses) {
+    const doc = docMap.get(tr.doc_id);
+    if (!doc) {
+      errors.push({ doc_id: tr.doc_id, error: "Doc id não pertence a essa admissão" });
+      continue;
+    }
+    if (doc.status === "approved") {
+      errors.push({ doc_id: tr.doc_id, error: "Documento já aprovado" });
+      continue;
+    }
+    const text = (tr.text ?? "").trim();
+    if (text.length === 0) {
+      errors.push({ doc_id: tr.doc_id, error: "Resposta vazia" });
+      continue;
+    }
+    if (text.length > 10000) {
+      errors.push({ doc_id: tr.doc_id, error: "Resposta muito longa (máx 10k caracteres)" });
+      continue;
+    }
+    const { error: trErr } = await sbAdmin
+      .from("admission_documents")
+      .update({
+        status: "submitted",
+        text_response: text,
+        uploaded_at: new Date().toISOString(),
+        rejection_reason: null,
+      })
+      .eq("id", tr.doc_id);
+
+    if (trErr) {
+      errors.push({ doc_id: tr.doc_id, error: "DB update: " + trErr.message });
+      continue;
+    }
+    uploaded.push({ doc_id: tr.doc_id, doc_type: doc.doc_type });
+  }
+
+  // 4. Atualiza candidate_data confirmado (campos pessoais + endereço)
+  if (body.candidate_data) {
+    const cd = body.candidate_data as Record<string, string | undefined>;
     const updates: Record<string, string | null> = {};
-    if (body.candidate_data.phone) updates.candidate_phone = body.candidate_data.phone;
-    if (body.candidate_data.cpf) {
-      const cleanCpf = body.candidate_data.cpf.replace(/\D/g, "");
+    if (cd.phone) updates.candidate_phone = cd.phone;
+    if (cd.cpf) {
+      const cleanCpf = cd.cpf.replace(/\D/g, "");
       if (cleanCpf.length === 11) updates.candidate_cpf = cleanCpf;
     }
+    if (cd.email !== undefined) updates.candidate_email = cd.email || null;
+    if (cd.birth_date !== undefined)
+      updates.candidate_birth_date = cd.birth_date || null;
+    if (cd.rg !== undefined) updates.candidate_rg = cd.rg || null;
+    if (cd.zip !== undefined) updates.candidate_zip = cd.zip || null;
+    if (cd.address !== undefined) updates.candidate_address = cd.address || null;
+    if (cd.address_number !== undefined)
+      updates.candidate_address_number = cd.address_number || null;
+    if (cd.address_complement !== undefined)
+      updates.candidate_address_complement = cd.address_complement || null;
+    if (cd.neighborhood !== undefined)
+      updates.candidate_neighborhood = cd.neighborhood || null;
+    if (cd.city !== undefined) updates.candidate_city = cd.city || null;
+    if (cd.state !== undefined) updates.candidate_state = cd.state || null;
     if (Object.keys(updates).length > 0) {
       await sbAdmin
         .from("admission_journeys")

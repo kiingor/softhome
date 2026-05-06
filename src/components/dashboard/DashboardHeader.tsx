@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { SignOut as LogOut, User, Gear as Settings, MagnifyingGlass } from "@phosphor-icons/react";
+import { SignOut as LogOut, Gear as Settings, MagnifyingGlass } from "@phosphor-icons/react";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { NotificationBell } from "./NotificationBell";
@@ -101,10 +101,6 @@ const DashboardHeader = ({ onOpenSearch }: DashboardHeaderProps = {}) => {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => navigate("/dashboard/perfil")}>
-              <User className="w-4 h-4 mr-2" />
-              Meu Perfil
-            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => navigate("/dashboard/configuracoes")}>
               <Settings className="w-4 h-4 mr-2" />
               Configurações

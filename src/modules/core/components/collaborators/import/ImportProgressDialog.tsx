@@ -9,7 +9,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 
 export type ImportRunResult = {
@@ -49,7 +48,7 @@ export function ImportProgressDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && !isRunning && onClose()}>
-      <DialogContent className="max-w-xl">
+      <DialogContent className="max-w-xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>
             {isRunning ? "Importando colaboradores…" : "Importação concluída"}
@@ -61,7 +60,7 @@ export function ImportProgressDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
+        <div className="space-y-4 py-2 flex-1 min-h-0 overflow-hidden flex flex-col">
           <Progress value={pct} />
 
           {isRunning && (
@@ -87,11 +86,11 @@ export function ImportProgressDialog({
           )}
 
           {!isRunning && errors.length > 0 && (
-            <div className="border rounded-md">
-              <div className="px-3 py-2 bg-muted text-xs font-medium border-b">
-                Erros por linha
+            <div className="border rounded-md flex-1 min-h-0 flex flex-col overflow-hidden">
+              <div className="px-3 py-2 bg-muted text-xs font-medium border-b shrink-0">
+                Erros por linha ({errors.length})
               </div>
-              <ScrollArea className="max-h-60">
+              <div className="flex-1 min-h-0 overflow-y-auto">
                 <ul className="divide-y">
                   {errors.map((e) => (
                     <li
@@ -102,7 +101,9 @@ export function ImportProgressDialog({
                         <p className="font-medium truncate">
                           Linha {e.row_index + 1}: {e.row_label}
                         </p>
-                        <p className="text-xs text-destructive mt-0.5">{e.error}</p>
+                        <p className="text-xs text-destructive mt-0.5 break-words">
+                          {e.error}
+                        </p>
                       </div>
                       {onOpenRowFromError && (
                         <Button
@@ -117,7 +118,7 @@ export function ImportProgressDialog({
                     </li>
                   ))}
                 </ul>
-              </ScrollArea>
+              </div>
             </div>
           )}
         </div>

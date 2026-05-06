@@ -9,11 +9,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Buildings as Building2, CircleNotch as Loader2, FloppyDisk as Save, Users, Upload, Trash as Trash2, Image as ImageIcon, ChatCircle as MessageSquare } from "@phosphor-icons/react";
+import { Buildings as Building2, CircleNotch as Loader2, FloppyDisk as Save, Users, Upload, Trash as Trash2, Image as ImageIcon, ChatCircle as MessageSquare, ShieldCheck } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { UsersAccessTab } from "@/components/dashboard/UsersAccessTab";
 import { useIsCompanyAdmin, usePermissions } from "@/hooks/usePermissions";
 import WhatsAppConfigTab from "@/components/whatsapp/WhatsAppConfigTab";
+import AuditoriaTab from "@/modules/audit/pages/AuditoriaTab";
 
 const ConfiguracoesPage = () => {
   const { currentCompany } = useDashboard();
@@ -30,7 +31,7 @@ const ConfiguracoesPage = () => {
   // Handle tab from URL params
   useEffect(() => {
     const tab = searchParams.get("tab");
-    if (tab && ["conta", "usuarios", "whatsapp"].includes(tab)) {
+    if (tab && ["conta", "usuarios", "whatsapp", "auditoria"].includes(tab)) {
       setActiveTab(tab);
     }
   }, [searchParams]);
@@ -236,6 +237,12 @@ const ConfiguracoesPage = () => {
               <MessageSquare className="w-4 h-4" />
               Notificações WhatsApp
             </TabsTrigger>
+            {isAdmin && (
+              <TabsTrigger value="auditoria" className="gap-2">
+                <ShieldCheck className="w-4 h-4" />
+                Auditoria
+              </TabsTrigger>
+            )}
           </TabsList>
 
           {/* Tab: Dados da Conta */}
@@ -438,6 +445,13 @@ const ConfiguracoesPage = () => {
           <TabsContent value="whatsapp">
             <WhatsAppConfigTab />
           </TabsContent>
+
+          {/* Tab: Auditoria (admin-only) */}
+          {isAdmin && (
+            <TabsContent value="auditoria">
+              <AuditoriaTab />
+            </TabsContent>
+          )}
 
         </Tabs>
       </div>
