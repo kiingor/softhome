@@ -16,7 +16,7 @@ export function SoftHouseLogo({ size = "md", className, pulse = false }: Props) 
   const s = SIZES[size];
   return (
     <div
-      className={`${s.box} gradient-hero flex items-center justify-center shadow-soft ${
+      className={`${s.box} shrink-0 aspect-square gradient-hero flex items-center justify-center shadow-soft ${
         pulse ? "animate-pulse" : ""
       } ${className ?? ""}`}
     >

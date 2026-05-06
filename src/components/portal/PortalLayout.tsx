@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/sheet";
 import { House as Home, FileText, Gift, Download, SignOut as LogOut, List as Menu, TreePalm as Palmtree, ClipboardText as ClipboardCheck } from "@phosphor-icons/react";
 import { useState } from "react";
+import { SoftHouseLogo } from "@/components/branding/SoftHouseLogo";
 
 interface PortalLayoutProps {
   children: ReactNode;
@@ -72,16 +73,18 @@ const PortalLayout = ({ children }: PortalLayoutProps) => {
     <div className="min-h-screen bg-muted/30">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-background border-b border-border">
-        <div className="max-w-5xl mx-auto px-4">
-          <div className="flex items-center justify-between h-16">
+        <div className="max-w-6xl mx-auto px-4">
+          <div className="flex items-center justify-between gap-4 h-16">
             {/* Mobile: User Avatar on left | Desktop: Logo */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 shrink-0">
               {/* Desktop Logo */}
-              <Link to="/colaborador" className="hidden md:flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg gradient-hero flex items-center justify-center">
-                  <span className="text-primary-foreground font-bold">R</span>
-                </div>
-                <span className="font-bold text-foreground">
+              <Link
+                to="/colaborador"
+                className="hidden md:flex items-center gap-2.5 shrink-0"
+                aria-label="Portal do Colaborador"
+              >
+                <SoftHouseLogo size="sm" />
+                <span className="font-bold text-foreground whitespace-nowrap hidden xl:inline">
                   Portal do Colaborador
                 </span>
               </Link>
@@ -114,35 +117,36 @@ const PortalLayout = ({ children }: PortalLayoutProps) => {
             </div>
 
             {/* Desktop Navigation */}
-            <nav className="hidden md:flex items-center gap-1">
+            <nav className="hidden md:flex items-center gap-0.5 min-w-0">
               {navItems.map((item) => (
                 <Link
                   key={item.url}
                   to={item.url}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  title={item.title}
+                  className={`flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
                     isActive(item.url)
                       ? "bg-primary/10 text-primary"
                       : "text-muted-foreground hover:text-foreground hover:bg-muted"
                   }`}
                 >
-                  <item.icon className="w-4 h-4" />
+                  <item.icon className="w-4 h-4 shrink-0" />
                   {item.title}
                 </Link>
               ))}
             </nav>
 
             {/* Desktop: User Menu | Mobile: Hamburger */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               {/* Desktop User Menu */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild className="hidden md:flex">
-                  <Button variant="ghost" className="flex items-center gap-2">
-                    <Avatar className="w-8 h-8">
+                  <Button variant="ghost" className="flex items-center gap-2 shrink-0">
+                    <Avatar className="w-8 h-8 shrink-0">
                       <AvatarFallback className="bg-primary/10 text-primary text-sm">
                         {collaborator?.name ? getInitials(collaborator.name) : "?"}
                       </AvatarFallback>
                     </Avatar>
-                    <span className="text-sm font-medium max-w-[120px] truncate">
+                    <span className="hidden lg:inline text-sm font-medium max-w-[140px] truncate whitespace-nowrap">
                       {collaborator?.name || "Colaborador"}
                     </span>
                   </Button>
@@ -172,9 +176,7 @@ const PortalLayout = ({ children }: PortalLayoutProps) => {
                 <SheetContent side="right" className="w-72">
                   <SheetHeader className="border-b border-border pb-4 mb-4">
                     <SheetTitle className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-lg gradient-hero flex items-center justify-center">
-                        <span className="text-primary-foreground font-bold">R</span>
-                      </div>
+                      <SoftHouseLogo size="sm" />
                       <span className="font-bold text-foreground">
                         Portal do Colaborador
                       </span>

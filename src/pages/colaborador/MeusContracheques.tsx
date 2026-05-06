@@ -6,20 +6,22 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Download, FileText, CaretLeft as ChevronLeft, CaretRight as ChevronRight, File } from "@phosphor-icons/react";
+  DownloadSimple,
+  FileText,
+  CaretLeft as ChevronLeft,
+  CaretRight as ChevronRight,
+  FilePdf,
+  Calendar,
+} from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { getMonthName } from "@/lib/formatters";
+
+const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
 
 const MeusContracheques = () => {
   const { collaborator } = usePortal();
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const currentYear = new Date().getFullYear();
 
   const { data: payslips = [], isLoading } = useQuery({
     queryKey: ["my-payslips", collaborator?.id, selectedYear],
@@ -45,11 +47,11 @@ const MeusContracheques = () => {
 
       if (error) throw error;
 
-      // Create download link
       const url = URL.createObjectURL(data);
       const a = document.createElement("a");
       a.href = url;
-      a.download = payslip.file_name || `contracheque_${payslip.month}_${payslip.year}.pdf`;
+      a.download =
+        payslip.file_name || `contracheque_${payslip.month}_${payslip.year}.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -66,96 +68,153 @@ const MeusContracheques = () => {
     setSelectedYear(direction === "prev" ? selectedYear - 1 : selectedYear + 1);
   };
 
+  const payslipByMonth = new Map<number, (typeof payslips)[number]>();
+  for (const p of payslips) payslipByMonth.set(p.month, p);
+
+  const availableCount = payslips.length;
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Meus Contracheques</h1>
-        <p className="text-muted-foreground">
-          Baixe seus contracheques disponibilizados pelo RH
-        </p>
+      {/* Header */}
+      <div className="flex items-start gap-4">
+        <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+          <FileText className="w-6 h-6 text-primary" weight="duotone" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Meus Contracheques</h1>
+          <p className="text-muted-foreground">
+            Baixe seus contracheques disponibilizados pelo RH
+          </p>
+        </div>
       </div>
 
       {/* Year Selector */}
       <Card>
         <CardContent className="p-4">
-          <div className="flex items-center justify-center gap-4">
-            <Button variant="outline" size="icon" onClick={() => navigateYear("prev")}>
+          <div className="flex items-center justify-between gap-4">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => navigateYear("prev")}
+              aria-label="Ano anterior"
+            >
               <ChevronLeft className="w-4 h-4" />
             </Button>
-            <div className="text-center min-w-[100px]">
-              <p className="font-semibold text-lg">{selectedYear}</p>
+
+            <div className="flex items-center gap-3">
+              <Calendar className="w-5 h-5 text-muted-foreground" />
+              <p className="font-semibold text-xl tabular-nums">{selectedYear}</p>
+              {!isLoading && availableCount > 0 && (
+                <Badge variant="secondary" className="font-normal">
+                  {availableCount}{" "}
+                  {availableCount === 1 ? "disponível" : "disponíveis"}
+                </Badge>
+              )}
             </div>
-            <Button variant="outline" size="icon" onClick={() => navigateYear("next")}>
+
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => navigateYear("next")}
+              disabled={selectedYear >= currentYear}
+              aria-label="Próximo ano"
+            >
               <ChevronRight className="w-4 h-4" />
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Payslips List */}
+      {/* Payslips Grid */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
-            <FileText className="w-5 h-5" />
+            <FileText className="w-5 h-5 text-primary" />
             Contracheques de {selectedYear}
           </CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="text-center py-8 text-muted-foreground">
-              Carregando...
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-28 rounded-lg bg-muted/50 animate-pulse"
+                />
+              ))}
             </div>
-          ) : payslips.length === 0 ? (
+          ) : availableCount === 0 ? (
             <div className="text-center py-12">
-              <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
-                <File className="w-8 h-8 text-muted-foreground" />
+              <div className="w-20 h-20 rounded-2xl bg-muted/60 flex items-center justify-center mx-auto mb-4">
+                <FilePdf
+                  className="w-10 h-10 text-muted-foreground"
+                  weight="duotone"
+                />
               </div>
-              <h3 className="font-medium text-foreground mb-2">
-                Nenhum contracheque disponível
+              <h3 className="font-semibold text-foreground mb-1">
+                Ainda não há contracheques por aqui
               </h3>
-              <p className="text-muted-foreground text-sm">
-                Não há contracheques disponíveis para {selectedYear}.
+              <p className="text-muted-foreground text-sm max-w-sm mx-auto">
+                Quando o RH publicar seus contracheques de {selectedYear}, eles
+                aparecerão aqui pra você baixar.
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Competência</TableHead>
-                    <TableHead>Arquivo</TableHead>
-                    <TableHead>Data Upload</TableHead>
-                    <TableHead className="text-right">Ação</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {payslips.map((payslip) => (
-                    <TableRow key={payslip.id}>
-                      <TableCell>
-                        <Badge variant="outline">
-                          {getMonthName(payslip.month)}/{payslip.year}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {payslip.file_name}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {new Date(payslip.uploaded_at).toLocaleDateString("pt-BR")}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDownload(payslip)}
-                        >
-                          <Download className="w-4 h-4 mr-2" />
-                          Baixar
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {MONTHS.map((m) => {
+                const payslip = payslipByMonth.get(m);
+                const monthName = getMonthName(m);
+                const available = !!payslip;
+
+                return (
+                  <div
+                    key={m}
+                    className={`group rounded-lg border p-4 flex flex-col gap-3 transition-colors ${
+                      available
+                        ? "bg-card hover:border-primary/40 hover:bg-accent/30"
+                        : "bg-muted/30 border-dashed"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-semibold capitalize text-foreground">
+                          {monthName}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {selectedYear}
+                        </p>
+                      </div>
+                      {available ? (
+                        <FilePdf
+                          className="w-5 h-5 text-primary shrink-0"
+                          weight="duotone"
+                        />
+                      ) : (
+                        <FilePdf
+                          className="w-5 h-5 text-muted-foreground/40 shrink-0"
+                          weight="duotone"
+                        />
+                      )}
+                    </div>
+
+                    {available ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full mt-auto group-hover:border-primary/40"
+                        onClick={() => handleDownload(payslip)}
+                      >
+                        <DownloadSimple className="w-4 h-4 mr-1.5" />
+                        Baixar
+                      </Button>
+                    ) : (
+                      <p className="text-xs text-muted-foreground mt-auto">
+                        Indisponível
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </CardContent>

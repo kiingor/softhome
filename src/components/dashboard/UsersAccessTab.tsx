@@ -11,9 +11,34 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Plus, Trash as Trash2, CircleNotch as Loader2, UserPlus, Envelope as Mail, Eye, EyeSlash as EyeOff, ShieldCheck } from "@phosphor-icons/react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Plus,
+  Trash as Trash2,
+  CircleNotch as Loader2,
+  UserPlus,
+  Envelope as Mail,
+  Eye,
+  EyeSlash as EyeOff,
+  ShieldCheck,
+  DotsThree as MoreHorizontal,
+  LockKey,
+  WarningCircle,
+} from "@phosphor-icons/react";
 import { toast } from "sonner";
-import { MODULE_LABELS, type ModuleType, usePermissions } from "@/hooks/usePermissions";
+import {
+  ALL_MODULES,
+  MODULE_GROUPS,
+  MODULE_LABELS,
+  type ModuleType,
+  usePermissions,
+} from "@/hooks/usePermissions";
 import { Switch } from "@/components/ui/switch";
 
 interface CompanyUser {
@@ -33,18 +58,7 @@ interface UserPermission {
   can_delete: boolean;
 }
 
-const MODULES: ModuleType[] = [
-  "colaboradores",
-  "setores",
-  "cargos",
-  "empresas",
-  "beneficios",
-  "ferias",
-  "financeiro",
-  "relatorios",
-  "contabilidade",
-  "permissoes",
-];
+const MODULES: ModuleType[] = ALL_MODULES;
 
 export const UsersAccessTab = () => {
   const { currentCompany, user } = useDashboard();
@@ -52,6 +66,7 @@ export const UsersAccessTab = () => {
   const { canView: canViewPermissions, canEdit: canEditPermissions, isAdmin } = usePermissions("permissoes");
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<CompanyUser | null>(null);
+  const [permissionsDialogOpen, setPermissionsDialogOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<CompanyUser | null>(null);
   const [inviteForm, setInviteForm] = useState({ 
     email: "", 
@@ -579,74 +594,82 @@ export const UsersAccessTab = () => {
                   <TableHead>Nome</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="w-[120px]">Ações</TableHead>
+                  <TableHead className="w-12 text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {companyUsers?.map((companyUser) => {
                   const isOwner = companyUser.id.startsWith("owner:");
+                  const canManage = isAdmin || canEditPermissions;
                   return (
-                  <TableRow
-                    key={companyUser.id}
-                    className={`cursor-pointer ${
-                      selectedUser?.id === companyUser.id ? "bg-muted" : ""
-                    }`}
-                    onClick={() => !isOwner && setSelectedUser(companyUser)}
-                  >
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
-                        {companyUser.full_name || "-"}
-                        {isOwner && (
-                          <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
-                            Proprietário
+                    <TableRow key={companyUser.id}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          {companyUser.full_name || "-"}
+                          {isOwner && (
+                            <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+                              Proprietário
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>{companyUser.email}</TableCell>
+                      <TableCell>
+                        {isOwner ? (
+                          <Badge variant="default" className="bg-orange-500">
+                            Admin
                           </Badge>
+                        ) : companyUser.accepted_at ? (
+                          <Badge variant="default" className="bg-green-500">
+                            Ativo
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary">Pendente</Badge>
                         )}
-                      </div>
-                    </TableCell>
-                    <TableCell>{companyUser.email}</TableCell>
-                    <TableCell>
-                      {isOwner ? (
-                        <Badge variant="default" className="bg-orange-500">
-                          Admin
-                        </Badge>
-                      ) : companyUser.accepted_at ? (
-                        <Badge variant="default" className="bg-green-500">
-                          Ativo
-                        </Badge>
-                      ) : (
-                        <Badge variant="secondary">Pendente</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        {!isOwner && companyUser.user_id && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Reenviar dados de acesso"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setResendUser(companyUser);
-                            }}
-                          >
-                            <Mail className="w-4 h-4" />
-                          </Button>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {!isOwner ? (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreHorizontal className="w-4 h-4" />
+                                <span className="sr-only">Ações</span>
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-56">
+                              {canManage && companyUser.user_id && (
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setSelectedUser(companyUser);
+                                    setPermissionsDialogOpen(true);
+                                  }}
+                                  disabled={!companyUser.accepted_at}
+                                >
+                                  <LockKey className="w-4 h-4 mr-2" />
+                                  Permissões
+                                </DropdownMenuItem>
+                              )}
+                              {companyUser.user_id && (
+                                <DropdownMenuItem onClick={() => setResendUser(companyUser)}>
+                                  <Mail className="w-4 h-4 mr-2" />
+                                  Reenviar dados de acesso
+                                </DropdownMenuItem>
+                              )}
+                              {(canManage || companyUser.user_id) && <DropdownMenuSeparator />}
+                              <DropdownMenuItem
+                                onClick={() => setUserToDelete(companyUser)}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Excluir
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        ) : (
+                          <span className="text-xs text-muted-foreground pr-2">—</span>
                         )}
-                        {!isOwner && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setUserToDelete(companyUser);
-                            }}
-                          >
-                            <Trash2 className="w-4 h-4 text-destructive" />
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
               </TableBody>
@@ -655,37 +678,45 @@ export const UsersAccessTab = () => {
         </CardContent>
       </Card>
 
-      {/* Permissions Card */}
-      {selectedUser && (isAdmin || canViewPermissions) && (
-        <Card>
-          <CardHeader className="pb-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+      {/* Permissions Dialog */}
+      <Dialog
+        open={permissionsDialogOpen}
+        onOpenChange={(open) => {
+          setPermissionsDialogOpen(open);
+          if (!open) setSelectedUser(null);
+        }}
+      >
+        <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="px-6 pt-6 pb-4 border-b">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-11 h-11 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                   <span className="text-primary font-semibold">
-                    {(selectedUser.full_name || selectedUser.email)[0].toUpperCase()}
+                    {selectedUser
+                      ? (selectedUser.full_name || selectedUser.email)[0].toUpperCase()
+                      : "?"}
                   </span>
                 </div>
-                <div>
-                  <CardTitle className="text-lg">
-                    Permissões de {selectedUser.full_name || selectedUser.email}
-                  </CardTitle>
-                  <CardDescription>
-                    {selectedUser.accepted_at
-                      ? "Configure o que este usuário pode fazer em cada módulo"
+                <div className="min-w-0">
+                  <DialogTitle className="truncate">
+                    Permissões de {selectedUser?.full_name || selectedUser?.email}
+                  </DialogTitle>
+                  <DialogDescription className="truncate">
+                    {selectedUser?.accepted_at
+                      ? "Defina o que este usuário pode fazer em cada módulo"
                       : "Este usuário ainda não ativou a conta"}
-                  </CardDescription>
+                  </DialogDescription>
                 </div>
               </div>
-              {selectedUser.accepted_at && (isAdmin || canEditPermissions) && (
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-primary/5 border border-primary/20">
+              {selectedUser?.accepted_at && (isAdmin || canEditPermissions) && (
+                <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/5 border border-primary/20 shrink-0">
                   <ShieldCheck className="w-5 h-5 text-primary" />
                   <div className="flex flex-col">
-                    <Label htmlFor="admin-toggle" className="text-sm font-medium">
-                      Acesso Total
+                    <Label htmlFor="admin-toggle" className="text-sm font-medium leading-tight">
+                      Acesso total
                     </Label>
-                    <span className="text-xs text-muted-foreground">
-                      Marcar todas as permissões
+                    <span className="text-[11px] text-muted-foreground leading-tight">
+                      Marcar tudo
                     </span>
                   </div>
                   <Switch
@@ -697,77 +728,103 @@ export const UsersAccessTab = () => {
                 </div>
               )}
             </div>
-          </CardHeader>
-          <CardContent>
-            {!selectedUser.accepted_at ? (
-              <div className="text-center py-8 text-muted-foreground">
-                As permissões só podem ser configuradas após o usuário ativar a conta.
+          </DialogHeader>
+
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
+            {!selectedUser ? null : !selectedUser.accepted_at ? (
+              <div className="flex flex-col items-center text-center py-10 gap-2">
+                <WarningCircle className="w-10 h-10 text-muted-foreground" weight="duotone" />
+                <p className="font-medium">Conta ainda não ativada</p>
+                <p className="text-sm text-muted-foreground max-w-sm">
+                  Reenvie os dados de acesso para o usuário ativar a conta. As permissões
+                  ficam disponíveis depois disso.
+                </p>
               </div>
             ) : isLoadingPermissions ? (
-              <div className="flex items-center justify-center py-8">
+              <div className="flex items-center justify-center py-12">
                 <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
               </div>
             ) : !(isAdmin || canEditPermissions) ? (
-              <div className="text-center py-8 text-muted-foreground">
+              <div className="text-center py-10 text-muted-foreground">
                 Você não tem permissão para editar as permissões deste usuário.
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Módulo</TableHead>
-                    <TableHead className="text-center w-24">Visualizar</TableHead>
-                    <TableHead className="text-center w-24">Criar</TableHead>
-                    <TableHead className="text-center w-24">Editar</TableHead>
-                    <TableHead className="text-center w-24">Excluir</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {MODULES.map((module) => (
-                    <TableRow key={module}>
-                      <TableCell className="font-medium">
-                        {MODULE_LABELS[module]}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Checkbox
-                          checked={getPermissionValue(module, "can_view") as boolean}
-                          onCheckedChange={(checked) =>
-                            handlePermissionChange(module, "can_view", !!checked)
-                          }
-                        />
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Checkbox
-                          checked={getPermissionValue(module, "can_create") as boolean}
-                          onCheckedChange={(checked) =>
-                            handlePermissionChange(module, "can_create", !!checked)
-                          }
-                        />
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Checkbox
-                          checked={getPermissionValue(module, "can_edit") as boolean}
-                          onCheckedChange={(checked) =>
-                            handlePermissionChange(module, "can_edit", !!checked)
-                          }
-                        />
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Checkbox
-                          checked={getPermissionValue(module, "can_delete") as boolean}
-                          onCheckedChange={(checked) =>
-                            handlePermissionChange(module, "can_delete", !!checked)
-                          }
-                        />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <div className="space-y-6">
+                {MODULE_GROUPS.map((group) => (
+                  <section key={group.label}>
+                    <header className="mb-3">
+                      <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                        {group.label}
+                      </h3>
+                      {group.description && (
+                        <p className="text-xs text-muted-foreground/80">{group.description}</p>
+                      )}
+                    </header>
+                    <div className="rounded-lg border overflow-hidden">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-muted/40 hover:bg-muted/40">
+                            <TableHead className="font-medium">Módulo</TableHead>
+                            <TableHead className="text-center w-20 font-medium">Ver</TableHead>
+                            <TableHead className="text-center w-20 font-medium">Criar</TableHead>
+                            <TableHead className="text-center w-20 font-medium">Editar</TableHead>
+                            <TableHead className="text-center w-20 font-medium">Excluir</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {group.modules.map((module) => (
+                            <TableRow key={module}>
+                              <TableCell className="font-medium text-sm">
+                                {MODULE_LABELS[module]}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Checkbox
+                                  checked={getPermissionValue(module, "can_view") as boolean}
+                                  onCheckedChange={(checked) =>
+                                    handlePermissionChange(module, "can_view", !!checked)
+                                  }
+                                />
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Checkbox
+                                  checked={getPermissionValue(module, "can_create") as boolean}
+                                  onCheckedChange={(checked) =>
+                                    handlePermissionChange(module, "can_create", !!checked)
+                                  }
+                                />
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Checkbox
+                                  checked={getPermissionValue(module, "can_edit") as boolean}
+                                  onCheckedChange={(checked) =>
+                                    handlePermissionChange(module, "can_edit", !!checked)
+                                  }
+                                />
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Checkbox
+                                  checked={getPermissionValue(module, "can_delete") as boolean}
+                                  onCheckedChange={(checked) =>
+                                    handlePermissionChange(module, "can_delete", !!checked)
+                                  }
+                                />
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </section>
+                ))}
+              </div>
             )}
-          </CardContent>
-        </Card>
-      )}
+          </div>
+
+          <DialogFooter className="px-6 py-4 border-t">
+            <Button onClick={() => setPermissionsDialogOpen(false)}>Concluir</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Resend Access Data Dialog */}
       <Dialog open={!!resendUser} onOpenChange={() => {

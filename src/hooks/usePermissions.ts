@@ -38,13 +38,55 @@ export const MODULE_LABELS: Record<ModuleType, string> = {
   empresas: "Empresas",
   beneficios: "Benefícios",
   ferias: "Férias e Ausências",
-  financeiro: "Lançamentos Financeiro",
+  financeiro: "Lançamentos Financeiros",
   relatorios: "Relatórios",
   contabilidade: "Contabilidade",
   configuracoes: "Configurações",
   permissoes: "Permissões de Usuários",
   exames: "Exames Ocupacionais",
+  jornada: "Jornada de Conhecimento",
+  admissoes: "Admissões",
+  vagas: "Vagas",
+  candidatos: "Candidatos",
+  folha: "Folha de Pagamento",
+  recrutador: "Agente Recrutador",
 };
+
+export type ModuleGroup = {
+  label: string;
+  description?: string;
+  modules: ModuleType[];
+};
+
+export const MODULE_GROUPS: ModuleGroup[] = [
+  {
+    label: "Cadastros",
+    description: "Estruturas básicas da empresa",
+    modules: ["colaboradores", "empresas", "setores", "cargos"],
+  },
+  {
+    label: "Operação",
+    description: "Rotina de gente & cultura",
+    modules: ["folha", "ferias", "financeiro", "beneficios", "exames", "contabilidade"],
+  },
+  {
+    label: "Recrutamento",
+    description: "Vagas, candidatos e admissão",
+    modules: ["admissoes", "vagas", "candidatos", "recrutador"],
+  },
+  {
+    label: "Engajamento & Análise",
+    description: "Jornada do colaborador e relatórios",
+    modules: ["jornada", "relatorios"],
+  },
+  {
+    label: "Sistema",
+    description: "Configurações e controle de acesso",
+    modules: ["configuracoes", "permissoes"],
+  },
+];
+
+export const ALL_MODULES: ModuleType[] = MODULE_GROUPS.flatMap((g) => g.modules);
 
 export const usePermissions = (module: ModuleType): ModulePermissions => {
   const { user, currentCompany } = useDashboard();
