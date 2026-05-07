@@ -608,7 +608,7 @@ export const UsersAccessTab = () => {
                           {companyUser.full_name || "-"}
                           {isOwner && (
                             <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
-                              Proprietário
+                              Desenvolvedor
                             </Badge>
                           )}
                         </div>

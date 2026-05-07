@@ -322,7 +322,12 @@ const FeriasPage = () => {
                             ) : "—"}
                           </TableCell>
                           <TableCell>
-                            <Badge variant="outline" className={situationClass}>{situationLabel}</Badge>
+                            <Badge
+                              variant="outline"
+                              className={`whitespace-nowrap ${situationClass}`}
+                            >
+                              {situationLabel}
+                            </Badge>
                           </TableCell>
                           {canManage && (
                             <TableCell className="text-right">

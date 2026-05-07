@@ -30,6 +30,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { formatCPFInput, formatPhoneInput, formatCEPInput, cleanCEP, BRAZIL_STATES } from "@/lib/validators";
 import { SoftHouseLogo } from "@/components/branding/SoftHouseLogo";
+import { TestStageView } from "../components/TestStageView";
 
 type PageState =
   | { kind: "loading" }
@@ -308,19 +309,90 @@ export default function AdmissaoPublicaPage() {
   // ─────────────────────────────────────────────────────────────────────────
   const { journey, documents } = state.data;
 
-  return (
-    <div className="min-h-screen gradient-warm py-8 px-4">
-      <div className="max-w-2xl mx-auto">
-        {/* Header SoftHouse */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 mb-2">
-            <SoftHouseLogo size="md" />
-            <span className="text-lg font-extrabold tracking-tight text-foreground">
-              SoftHouse
-            </span>
-          </div>
-        </div>
+  // Progresso global (formulário + documentos). Fica numa barra sticky
+  // no topo pra ficar sempre visível enquanto o candidato rola a página.
+  const requiredFormFields: Array<keyof typeof form> = [
+    "email",
+    "phone",
+    "cpf",
+    "rg",
+    "birth_date",
+    "zip",
+    "address",
+    "address_number",
+    "neighborhood",
+    "city",
+    "state",
+  ];
+  const filledFields = requiredFormFields.filter(
+    (f) => String(form[f] ?? "").trim().length > 0,
+  ).length;
+  const totalFields = requiredFormFields.length;
+  const totalDocs = documents.length;
+  const doneDocs = documents.filter(
+    (d) =>
+      d.status === "approved" ||
+      d.status === "submitted" ||
+      d.status === "ai_validating",
+  ).length;
+  const totalSteps = totalFields + totalDocs;
+  const doneSteps = filledFields + doneDocs;
+  const progressPct =
+    totalSteps === 0 ? 0 : Math.round((doneSteps / totalSteps) * 100);
 
+  // Etapa 1: testes — quando journey ainda está em tests_pending/in_review
+  // mostra o fluxo de testes em vez do form de docs.
+  if (journey.status === "tests_pending" || journey.status === "tests_in_review") {
+    return (
+      <div className="min-h-screen gradient-warm py-8 px-4">
+        <div className="max-w-2xl mx-auto">
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center gap-2 mb-2">
+              <SoftHouseLogo size="md" />
+              <span className="text-lg font-extrabold tracking-tight text-foreground">
+                SoftHouse
+              </span>
+            </div>
+          </div>
+          <TestStageView
+            token={token!}
+            onAdvancedToStage2={() => window.location.reload()}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen gradient-warm pb-8">
+      {/* Header sticky com logo + progresso global */}
+      <div className="sticky top-0 z-30 bg-background/85 backdrop-blur-md border-b border-border/60">
+        <div className="max-w-2xl mx-auto px-4 py-3 space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <SoftHouseLogo size="sm" />
+              <span className="text-sm sm:text-base font-extrabold tracking-tight text-foreground">
+                SoftHouse
+              </span>
+            </div>
+            <div className="text-right">
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                Progresso
+              </div>
+              <div className="text-sm font-bold text-foreground tabular-nums">
+                {progressPct}%
+              </div>
+            </div>
+          </div>
+          <Progress value={progressPct} className="h-2" />
+          <p className="text-[11px] text-muted-foreground tabular-nums">
+            <strong>{filledFields}/{totalFields}</strong> dados ·{" "}
+            <strong>{doneDocs}/{totalDocs}</strong> documentos
+          </p>
+        </div>
+      </div>
+
+      <div className="max-w-2xl mx-auto px-4 pt-6">
         {/* Welcome card */}
         <Card className="mb-6">
           <CardHeader>
@@ -350,7 +422,12 @@ export default function AdmissaoPublicaPage() {
         {/* Dados pessoais */}
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle className="text-base">Seus dados</CardTitle>
+            <CardTitle className="text-base flex items-center gap-2">
+              Seus dados
+              <span className="text-xs font-normal text-muted-foreground tabular-nums">
+                {filledFields}/{totalFields}
+              </span>
+            </CardTitle>
             <p className="text-xs text-muted-foreground">
               Salva automático ao sair do campo. Esses dados viram seu
               cadastro de colaborador depois da admissão.
@@ -556,58 +633,17 @@ export default function AdmissaoPublicaPage() {
         {/* Documentos */}
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>Documentos</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              Documentos
+              <span className="text-xs font-normal text-muted-foreground tabular-nums">
+                {doneDocs}/{totalDocs}
+              </span>
+            </CardTitle>
             <p className="text-sm text-muted-foreground">
               {docsToSubmit.length === 0
                 ? "Tudo enviado — só esperar a revisão do RH."
                 : `Falta${docsToSubmit.length === 1 ? "" : "m"} ${docsToSubmit.length} documento${docsToSubmit.length === 1 ? "" : "s"}.`}
             </p>
-
-            {/* Barra de progresso combina docs + campos do form pessoal.
-                100% só quando TUDO foi preenchido/enviado e nenhum doc
-                está em needs_adjustment. */}
-            {(() => {
-              const requiredFields: Array<keyof typeof form> = [
-                "email",
-                "phone",
-                "cpf",
-                "rg",
-                "birth_date",
-                "zip",
-                "address",
-                "address_number",
-                "neighborhood",
-                "city",
-                "state",
-              ];
-              const filledFields = requiredFields.filter((f) =>
-                String(form[f] ?? "").trim().length > 0,
-              ).length;
-              const totalFields = requiredFields.length;
-
-              const totalDocs = documents.length;
-              const doneDocs = documents.filter(
-                (d) =>
-                  d.status === "approved" ||
-                  d.status === "submitted" ||
-                  d.status === "ai_validating",
-              ).length;
-
-              const total = totalDocs + totalFields;
-              const done = doneDocs + filledFields;
-              const pct = total === 0 ? 0 : Math.round((done / total) * 100);
-              return (
-                <div className="space-y-1.5 pt-3">
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span className="font-medium">
-                      {done} de {total} enviado{total === 1 ? "" : "s"}
-                    </span>
-                    <span className="tabular-nums">{pct}%</span>
-                  </div>
-                  <Progress value={pct} className="h-2" />
-                </div>
-              );
-            })()}
           </CardHeader>
           <CardContent>
             <ul className="divide-y divide-border">

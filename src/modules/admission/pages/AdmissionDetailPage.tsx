@@ -51,6 +51,7 @@ import { useAdmissionDocuments } from "../hooks/use-admission-documents";
 import { AdmissionStatusBadge } from "../components/AdmissionStatusBadge";
 import { DocumentList } from "../components/DocumentList";
 import { AdmissionTimeline } from "../components/AdmissionTimeline";
+import { TestsSection } from "../components/TestsSection";
 import { REGIME_LABELS, type AdmissionJourneyStatus } from "../types";
 import CollaboratorModal, {
   type CollaboratorPrefill,
@@ -339,10 +340,17 @@ export default function AdmissionDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Coluna principal */}
         <div className="lg:col-span-2 space-y-6">
+          {/* Etapa 1: Testes */}
+          <TestsSection
+            journeyId={journey.id}
+            journeyStatus={journey.status}
+            canManage={canManage}
+          />
+
           {/* Documentos (sem exames) */}
           <Card>
             <CardHeader>
-              <CardTitle>Documentos</CardTitle>
+              <CardTitle>Documentos (Etapa 2)</CardTitle>
             </CardHeader>
             <CardContent>
               <DocumentList

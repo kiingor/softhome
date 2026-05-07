@@ -1,0 +1,230 @@
+import type { TestDefinition } from "./types";
+
+export const logicaTest: TestDefinition = {
+  slug: "logica",
+  scoring: "auto_multiple_choice",
+  estimatedMinutes: 20,
+  intro:
+    "Esse teste avalia raciocínio lógico-matemático e atenção a detalhes. " +
+    "São 18 perguntas de múltipla escolha. Respira fundo e segue 🧠",
+  questions: [
+    {
+      id: "q1",
+      type: "single_choice",
+      prompt: "Qual é o próximo número na sequência: 2, 4, 6, 8, __ ?",
+      options: [
+        { key: "A", label: "9" },
+        { key: "B", label: "10" },
+        { key: "C", label: "12" },
+        { key: "D", label: "14" },
+      ],
+      correctKey: "B",
+    },
+    {
+      id: "q2",
+      type: "single_choice",
+      prompt: 'O que significa a letra "I" na sigla TI?',
+      options: [
+        { key: "A", label: "Informática" },
+        { key: "B", label: "Internet" },
+        { key: "C", label: "Inovação" },
+        { key: "D", label: "Informação" },
+      ],
+      correctKey: "D",
+    },
+    {
+      id: "q3",
+      type: "single_choice",
+      prompt:
+        "Se uma tarefa demora 30 dias para ser completada por uma pessoa trabalhando sozinha, quantos dias levarão duas pessoas para completar a mesma tarefa?",
+      options: [
+        { key: "A", label: "15 dias" },
+        { key: "B", label: "20 dias" },
+        { key: "C", label: "60 dias" },
+        { key: "D", label: "30 dias" },
+      ],
+      correctKey: "A",
+    },
+    {
+      id: "q4",
+      type: "single_choice",
+      prompt: "João correu 15 km em 2 horas e meia. A que velocidade média ele correu?",
+      options: [
+        { key: "A", label: "6 km/h" },
+        { key: "B", label: "9 km/h" },
+        { key: "C", label: "15 km/h" },
+        { key: "D", label: "7,5 km/h" },
+      ],
+      correctKey: "A",
+    },
+    {
+      id: "q5",
+      type: "single_choice",
+      prompt: "Qual das seguintes afirmações é verdadeira?",
+      options: [
+        { key: "A", label: "Todas as rosas são vermelhas" },
+        { key: "B", label: "Algumas rosas são vermelhas" },
+        { key: "C", label: "Nenhuma rosa é vermelha" },
+        { key: "D", label: "As rosas são sempre brancas" },
+      ],
+      correctKey: "B",
+    },
+    {
+      id: "q6",
+      type: "single_choice",
+      prompt: "Se Ana é irmã de Carla, e Carla é filha de Maria, quem é Maria para Ana?",
+      options: [
+        { key: "A", label: "Mãe" },
+        { key: "B", label: "Tia" },
+        { key: "C", label: "Avó" },
+        { key: "D", label: "Irmã" },
+      ],
+      correctKey: "A",
+    },
+    {
+      id: "q7",
+      type: "single_choice",
+      prompt: "Qual é o resultado de ((1 + 2) × 2)² ?",
+      options: [
+        { key: "A", label: "6" },
+        { key: "B", label: "36" },
+        { key: "C", label: "5" },
+        { key: "D", label: "12" },
+      ],
+      correctKey: "B",
+    },
+    {
+      id: "q8",
+      type: "single_choice",
+      prompt: "Qual das seguintes opções não é um dispositivo de entrada?",
+      options: [
+        { key: "A", label: "Teclado" },
+        { key: "B", label: "Mouse" },
+        { key: "C", label: "Monitor" },
+        { key: "D", label: "Scanner" },
+      ],
+      correctKey: "C",
+    },
+    {
+      id: "q9",
+      type: "single_choice",
+      prompt: "Se 4x − 7 = 5, qual é o valor de x?",
+      options: [
+        { key: "A", label: "3" },
+        { key: "B", label: "4" },
+        { key: "C", label: "7" },
+        { key: "D", label: "9" },
+      ],
+      correctKey: "A",
+    },
+    {
+      id: "q10",
+      type: "single_choice",
+      prompt: "Se hoje é quinta-feira, que dia da semana será daqui a 5 dias?",
+      options: [
+        { key: "A", label: "Terça-feira" },
+        { key: "B", label: "Sábado" },
+        { key: "C", label: "Segunda-feira" },
+        { key: "D", label: "Quarta-feira" },
+      ],
+      correctKey: "A",
+    },
+    {
+      id: "q11",
+      type: "single_choice",
+      prompt: "Qual é o número que segue a sequência: 1, 1, 2, 3, 5, 8, __ ?",
+      options: [
+        { key: "A", label: "10" },
+        { key: "B", label: "11" },
+        { key: "C", label: "12" },
+        { key: "D", label: "13" },
+      ],
+      correctKey: "D",
+    },
+    {
+      id: "q12",
+      type: "single_choice",
+      prompt: "Qual das seguintes opções é uma palavra composta?",
+      options: [
+        { key: "A", label: "Computador" },
+        { key: "B", label: "Escola" },
+        { key: "C", label: "Caneta" },
+        { key: "D", label: "Guarda-chuva" },
+      ],
+      correctKey: "D",
+    },
+    {
+      id: "q13",
+      type: "single_choice",
+      prompt: "Se 1/3 de uma torta é igual a 4 fatias, quantas fatias há na torta inteira?",
+      options: [
+        { key: "A", label: "6" },
+        { key: "B", label: "9" },
+        { key: "C", label: "12" },
+        { key: "D", label: "16" },
+      ],
+      correctKey: "C",
+    },
+    {
+      id: "q14",
+      type: "single_choice",
+      prompt: "Se João tem 3 camisas e 2 calças, quantos conjuntos diferentes de roupa ele pode fazer?",
+      options: [
+        { key: "A", label: "2" },
+        { key: "B", label: "3" },
+        { key: "C", label: "4" },
+        { key: "D", label: "6" },
+      ],
+      correctKey: "D",
+    },
+    {
+      id: "q15",
+      type: "single_choice",
+      prompt:
+        "Se um cachorro pesa 10 kg a mais do que metade do peso de um gato que pesa 8 kg, quanto pesa o cachorro?",
+      options: [
+        { key: "A", label: "8 kg" },
+        { key: "B", label: "14 kg" },
+        { key: "C", label: "12 kg" },
+        { key: "D", label: "16 kg" },
+      ],
+      correctKey: "B",
+    },
+    {
+      id: "q16",
+      type: "single_choice",
+      prompt: "Qual é o número correto de bytes em um kilobyte?",
+      options: [
+        { key: "A", label: "2048 bytes" },
+        { key: "B", label: "512 bytes" },
+        { key: "C", label: "1.000 bytes" },
+        { key: "D", label: "1.024 bytes" },
+      ],
+      correctKey: "D",
+    },
+    {
+      id: "q17",
+      type: "single_choice",
+      prompt: "Se A = −2, B = 4 e C = −6, qual é o valor de A × B − C?",
+      options: [
+        { key: "A", label: "−14" },
+        { key: "B", label: "−2" },
+        { key: "C", label: "2" },
+        { key: "D", label: "14" },
+      ],
+      correctKey: "B",
+    },
+    {
+      id: "q18",
+      type: "single_choice",
+      prompt: "Quantas vezes o número 5 aparece entre 1 e 100?",
+      options: [
+        { key: "A", label: "20" },
+        { key: "B", label: "19" },
+        { key: "C", label: "10" },
+        { key: "D", label: "11" },
+      ],
+      correctKey: "A",
+    },
+  ],
+};

@@ -4,7 +4,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { CircleNotch as Loader2 } from "@phosphor-icons/react";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
+import { CircleNotch as Loader2, Info } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/formatters";
 import {
@@ -32,21 +37,114 @@ interface PaymentRecord {
 export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) {
   const queryClient = useQueryClient();
 
-  // Lista flat de lançamentos pagáveis (proventos), ordenada por colaborador
-  // e depois por descrição. Cada lançamento é uma linha com seu próprio check.
-  const payableEntries = useMemo(() => {
-    return entries
-      .filter((e) => isEarning(e.type))
-      .slice()
-      .sort((a, b) => {
-        const an = a.collaborator?.name ?? "";
-        const bn = b.collaborator?.name ?? "";
-        const cmp = an.localeCompare(bn, "pt-BR");
-        if (cmp !== 0) return cmp;
-        const ad = a.description ?? ENTRY_TYPE_LABELS[a.type] ?? a.type;
-        const bd = b.description ?? ENTRY_TYPE_LABELS[b.type] ?? b.type;
-        return ad.localeCompare(bd, "pt-BR");
-      });
+  // Lista flat de lançamentos pagáveis, com valores LÍQUIDOS após impostos.
+  // Regras:
+  // - só proventos (`isEarning`)
+  // - benefícios fora (`type === 'beneficio'`): pagamento por outro fluxo
+  // - FGTS fora: é encargo do empregador, não desconta do colaborador
+  // - INSS/IRPF descontam do que vai pra mão do colaborador:
+  //     · INSS desconta integralmente do salário base
+  //     · IRPF distribui proporcionalmente entre salário base + gratificações
+  // - estornos: par positivo+negativo do mesmo (collab,tipo) somam ≤ 0 → some
+  const { payableEntries, taxBreakdownByEntry } = useMemo(() => {
+    const earningOnly = entries.filter(
+      (e) => isEarning(e.type) && e.type !== "beneficio",
+    );
+
+    // Detecta pares estornados (positivo + negativo cancelam)
+    const groupSum = new Map<string, number>();
+    for (const e of earningOnly) {
+      const key = `${e.collaborator_id}::${e.type}`;
+      groupSum.set(key, (groupSum.get(key) ?? 0) + Number(e.value));
+    }
+
+    const survivors = earningOnly.filter((e) => {
+      const sum = groupSum.get(`${e.collaborator_id}::${e.type}`) ?? 0;
+      if (sum <= 0) return false;
+      return Number(e.value) > 0;
+    });
+
+    // Calcula impostos por colaborador a partir das entradas de IRPF/INSS
+    // do próprio período (não recalcula — usa o que está em payroll_entries,
+    // que veio do botão "Recalcular encargos" pela tabela 2026).
+    type CollabTaxes = { inss: number; irpf: number };
+    const taxesByCollab = new Map<string, CollabTaxes>();
+    for (const e of entries) {
+      if (e.type !== "inss" && e.type !== "irpf") continue;
+      const cid = e.collaborator_id;
+      const cur = taxesByCollab.get(cid) ?? { inss: 0, irpf: 0 };
+      if (e.type === "inss") cur.inss += Number(e.value);
+      else cur.irpf += Number(e.value);
+      taxesByCollab.set(cid, cur);
+    }
+
+    // Aplica deduções nas entries:
+    //   salary base: bruto − INSS − IRPF_share_salary
+    //   gratificação: bruto − IRPF_share_grat
+    // IRPF_share = irpf × bruto_dele / (bruto_salary + sum_grats)
+    type EntryTax = { inss: number; irpf: number };
+    const breakdownByEntry = new Map<string, EntryTax>();
+    const adjustedEntries: PayrollEntryWithCollaborator[] = [];
+
+    // Agrupa survivors por colaborador
+    const byCollab = new Map<string, PayrollEntryWithCollaborator[]>();
+    for (const e of survivors) {
+      const arr = byCollab.get(e.collaborator_id) ?? [];
+      arr.push(e);
+      byCollab.set(e.collaborator_id, arr);
+    }
+
+    for (const [collabId, list] of byCollab) {
+      const taxes = taxesByCollab.get(collabId) ?? { inss: 0, irpf: 0 };
+      const salary = list.find((e) => e.type === "salario_base");
+      const grats = list.filter((e) => e.type === "gratificacao");
+      const irpfBase =
+        (salary ? Number(salary.value) : 0) +
+        grats.reduce((s, e) => s + Number(e.value), 0);
+
+      // Distribui IRPF proporcional ao bruto de cada linha
+      const irpfShares = new Map<string, number>();
+      if (taxes.irpf > 0 && irpfBase > 0) {
+        const targets = [
+          ...(salary ? [salary] : []),
+          ...grats,
+        ];
+        let allocated = 0;
+        targets.forEach((t, i) => {
+          const isLast = i === targets.length - 1;
+          const share = isLast
+            ? taxes.irpf - allocated
+            : Math.round(((taxes.irpf * Number(t.value)) / irpfBase) * 100) / 100;
+          allocated += share;
+          irpfShares.set(t.id, share);
+        });
+      }
+
+      for (const e of list) {
+        const irpfShare = irpfShares.get(e.id) ?? 0;
+        let inssShare = 0;
+        if (e.type === "salario_base") inssShare = taxes.inss;
+        const adjusted = Number(e.value) - inssShare - irpfShare;
+        if (adjusted <= 0) continue; // não exibe linhas zeradas/negativas
+        adjustedEntries.push({
+          ...e,
+          value: adjusted,
+        } as PayrollEntryWithCollaborator);
+        breakdownByEntry.set(e.id, { inss: inssShare, irpf: irpfShare });
+      }
+    }
+
+    adjustedEntries.sort((a, b) => {
+      const an = a.collaborator?.name ?? "";
+      const bn = b.collaborator?.name ?? "";
+      const cmp = an.localeCompare(bn, "pt-BR");
+      if (cmp !== 0) return cmp;
+      const ad = a.description ?? ENTRY_TYPE_LABELS[a.type] ?? a.type;
+      const bd = b.description ?? ENTRY_TYPE_LABELS[b.type] ?? b.type;
+      return ad.localeCompare(bd, "pt-BR");
+    });
+
+    return { payableEntries: adjustedEntries, taxBreakdownByEntry: breakdownByEntry };
   }, [entries]);
 
   const { data: payments = [], isLoading } = useQuery({
@@ -218,7 +316,62 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
                   )}
                 </p>
               </div>
-              <div className="text-right shrink-0">
+              <div className="text-right shrink-0 flex items-center gap-1.5">
+                {(() => {
+                  const tax = taxBreakdownByEntry.get(entry.id);
+                  if (!tax || (tax.inss === 0 && tax.irpf === 0)) return null;
+                  const grossValue = Number(entry.value) + tax.inss + tax.irpf;
+                  return (
+                    <HoverCard openDelay={150} closeDelay={100}>
+                      <HoverCardTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex items-center justify-center w-4 h-4 rounded-full text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900/30 transition focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                          aria-label="Ver detalhes do líquido"
+                          onClick={(ev) => ev.stopPropagation()}
+                        >
+                          <Info className="w-3.5 h-3.5" weight="fill" />
+                        </button>
+                      </HoverCardTrigger>
+                      <HoverCardContent align="end" className="w-60 text-xs">
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-muted-foreground">Bruto</span>
+                            <span className="font-mono">
+                              {formatCurrency(grossValue)}
+                            </span>
+                          </div>
+                          {tax.inss > 0 && (
+                            <div className="flex items-center justify-between gap-2 text-rose-700 dark:text-rose-300">
+                              <span>− INSS</span>
+                              <span className="font-mono">
+                                {formatCurrency(tax.inss)}
+                              </span>
+                            </div>
+                          )}
+                          {tax.irpf > 0 && (
+                            <div className="flex items-center justify-between gap-2 text-rose-700 dark:text-rose-300">
+                              <span>− IRPF</span>
+                              <span className="font-mono">
+                                {formatCurrency(tax.irpf)}
+                              </span>
+                            </div>
+                          )}
+                          <div className="border-t border-border pt-1.5 flex items-center justify-between gap-2 font-medium">
+                            <span>Líquido</span>
+                            <span className="font-mono text-orange-700 dark:text-orange-300">
+                              {formatCurrency(value)}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground/80 pt-1 italic">
+                            FGTS é encargo do empregador — não desconta do
+                            valor pago.
+                          </p>
+                        </div>
+                      </HoverCardContent>
+                    </HoverCard>
+                  );
+                })()}
                 <p
                   className={`font-mono text-sm font-semibold ${
                     isPaid

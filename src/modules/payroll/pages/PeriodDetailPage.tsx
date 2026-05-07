@@ -31,6 +31,7 @@ import {
   CaretRight,
   CaretDown,
   Info,
+  ArrowsClockwise as RefreshCw,
 } from "@phosphor-icons/react";
 import {
   HoverCard,
@@ -41,9 +42,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PaymentsTab } from "../components/PaymentsTab";
 import { toast } from "sonner";
 import { useDashboard } from "@/contexts/DashboardContext";
+import { usePermissions } from "@/hooks/usePermissions";
 import {
   usePayrollEntries,
   usePayrollAlerts,
+  usePayrollPeriods,
 } from "../hooks/use-payroll";
 import { NewEntryDialog } from "../components/NewEntryDialog";
 import {
@@ -65,6 +68,9 @@ export default function PeriodDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { currentCompany, hasAnyRole } = useDashboard();
   const canManage = hasAnyRole(["admin_gc", "gestor_gc"]);
+  const paymentsPermission = usePermissions("folha_pagamentos");
+  const canViewPayments = paymentsPermission.canView || paymentsPermission.isAdmin;
+  const canManagePayments = canManage && (paymentsPermission.canEdit || paymentsPermission.isAdmin);
 
   const {
     period,
@@ -75,6 +81,8 @@ export default function PeriodDetailPage() {
     closePeriod,
     reopenPeriod,
   } = usePayrollEntries(id);
+  const { recalculateTaxes } = usePayrollPeriods();
+  const [confirmRecalc, setConfirmRecalc] = useState(false);
 
   const { data: alerts = [] } = usePayrollAlerts(id);
 
@@ -319,6 +327,14 @@ export default function PeriodDetailPage() {
                 </Button>
                 <Button
                   variant="outline"
+                  onClick={() => setConfirmRecalc(true)}
+                  title="Recalcula INSS/IRPF/FGTS pela tabela 2026"
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Recalcular encargos
+                </Button>
+                <Button
+                  variant="outline"
                   onClick={() => setConfirmAction("close")}
                 >
                   <Lock className="w-4 h-4 mr-2" />
@@ -398,27 +414,32 @@ export default function PeriodDetailPage() {
       <Tabs defaultValue="lancamentos" className="space-y-4">
         <TabsList>
           <TabsTrigger value="lancamentos">Lançamentos</TabsTrigger>
-          <TabsTrigger value="pagamentos">Pagamentos</TabsTrigger>
+          {canViewPayments && (
+            <TabsTrigger value="pagamentos">Pagamentos</TabsTrigger>
+          )}
         </TabsList>
 
-        <TabsContent value="pagamentos">
-          <Card>
-            <CardHeader>
-              <CardTitle>Pagamentos</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Cada lançamento de provento aparece separado pra ir marcando o
-                que já foi pago. Descontos e FGTS não entram aqui.
-              </p>
-            </CardHeader>
-            <CardContent>
-              <PaymentsTab
-                periodId={period.id}
-                entries={entries}
-                canManage={canManage}
-              />
-            </CardContent>
-          </Card>
-        </TabsContent>
+        {canViewPayments && (
+          <TabsContent value="pagamentos">
+            <Card>
+              <CardHeader>
+                <CardTitle>Pagamentos</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Valores líquidos (com INSS e IRPF já descontados conforme a
+                  tabela 2026). Benefícios, FGTS e lançamentos estornados ficam
+                  fora. Passa o mouse no ícone <Info className="inline w-3 h-3 mx-0.5 text-amber-600" weight="fill" /> pra ver bruto/desconto/líquido.
+                </p>
+              </CardHeader>
+              <CardContent>
+                <PaymentsTab
+                  periodId={period.id}
+                  entries={entries}
+                  canManage={canManagePayments}
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
 
         <TabsContent value="lancamentos">
 
@@ -627,6 +648,46 @@ export default function PeriodDetailPage() {
         onSubmit={handleNewEntry}
         isSubmitting={createEntry.isPending}
       />
+
+      {/* Confirmar recalcular encargos */}
+      <AlertDialog
+        open={confirmRecalc}
+        onOpenChange={(o) => !recalculateTaxes.isPending && setConfirmRecalc(o)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Recalcular encargos do período?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Apaga os lançamentos de INSS, IRPF e FGTS desse mês e recria
+              usando a tabela oficial 2026 (com base nos dependentes
+              cadastrados em cada colaborador). Salário base, gratificações,
+              benefícios e descontos manuais ficam intactos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={recalculateTaxes.isPending}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                if (period) {
+                  recalculateTaxes.mutate(
+                    { reference_month: period.reference_month },
+                    { onSuccess: () => setConfirmRecalc(false) },
+                  );
+                }
+              }}
+              disabled={recalculateTaxes.isPending}
+            >
+              {recalculateTaxes.isPending && (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              )}
+              Recalcular agora
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Confirmar fechar/reabrir */}
       <AlertDialog

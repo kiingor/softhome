@@ -16,6 +16,7 @@ import type {
   ReverseEntryValues,
 } from "../schemas/payroll.schema";
 import { calculateMonthlyBenefitValue, type DayAbbrev } from "@/lib/workingDays";
+import { calcAllTaxes } from "@/lib/payroll/cltCalc";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Lista de períodos da empresa atual (dashboard mensal)
@@ -84,35 +85,81 @@ export function usePayrollPeriods() {
       if (values.auto_populate) {
         const { month, year } = periodToMonthYear(values.reference_month);
 
-        // 3a. Salário base de cada colaborador ativo
+        // 3a. Salário base + encargos (IRPF/INSS/FGTS via tabela 2026)
         const { data: collaborators } = await supabase
           .from("collaborators")
-          .select("id, position_id, store_id, position:positions(salary)")
+          .select(
+            "id, position_id, store_id, dependents_count, position:positions(salary)",
+          )
           .eq("company_id", companyId)
           .eq("status", "ativo");
 
-        const salaryEntries =
-          (collaborators ?? [])
-            .map((c) => {
-              const salary =
-                (c.position as { salary?: number } | null)?.salary ?? 0;
-              if (salary <= 0) return null;
-              return {
-                company_id: companyId,
-                collaborator_id: c.id,
-                store_id: c.store_id,
-                type: "salario_base" as const,
-                description: "Salário base (auto)",
-                value: salary,
-                is_fixed: true,
-                month,
-                year,
-              };
-            })
-            .filter(Boolean) as PayrollEntry[];
+        const autoEntries: PayrollEntry[] = [];
+        for (const c of collaborators ?? []) {
+          const salary =
+            (c.position as { salary?: number } | null)?.salary ?? 0;
+          if (salary <= 0) continue;
+          const deps = (c as { dependents_count?: number }).dependents_count ?? 0;
+          const taxes = calcAllTaxes({ grossSalary: salary, dependents: deps });
 
-        if (salaryEntries.length > 0) {
-          await supabase.from("payroll_entries").insert(salaryEntries);
+          autoEntries.push({
+            company_id: companyId,
+            collaborator_id: c.id,
+            store_id: c.store_id,
+            type: "salario_base" as const,
+            description: "Salário base (auto)",
+            value: salary,
+            is_fixed: true,
+            month,
+            year,
+          } as PayrollEntry);
+
+          if (taxes.inss > 0) {
+            autoEntries.push({
+              company_id: companyId,
+              collaborator_id: c.id,
+              store_id: c.store_id,
+              type: "inss" as const,
+              description: "INSS (tabela 2026)",
+              value: taxes.inss,
+              is_fixed: true,
+              month,
+              year,
+            } as PayrollEntry);
+          }
+          if (taxes.fgts > 0) {
+            autoEntries.push({
+              company_id: companyId,
+              collaborator_id: c.id,
+              store_id: c.store_id,
+              type: "fgts" as const,
+              description: "FGTS (8%)",
+              value: taxes.fgts,
+              is_fixed: true,
+              month,
+              year,
+            } as PayrollEntry);
+          }
+          if (taxes.irpf > 0) {
+            autoEntries.push({
+              company_id: companyId,
+              collaborator_id: c.id,
+              store_id: c.store_id,
+              type: "irpf" as const,
+              description:
+                deps > 0
+                  ? `IRPF (tabela 2026, ${deps} dep.)`
+                  : "IRPF (tabela 2026)",
+              value: taxes.irpf,
+              is_fixed: true,
+              month,
+              year,
+            } as PayrollEntry);
+          }
+        }
+
+        if (autoEntries.length > 0) {
+          await supabase.from("payroll_entries").insert(autoEntries);
         }
 
         // 3b. Benefícios assigned
@@ -299,36 +346,79 @@ export function usePayrollPeriods() {
           .filter((e) => e.type === "beneficio")
           .map((e) => `${e.collaborator_id}::${e.description}`),
       );
+      const existingTaxes = new Set(
+        (existingEntries ?? [])
+          .filter((e) => e.type === "inss" || e.type === "fgts" || e.type === "irpf")
+          .map((e) => `${e.collaborator_id}::${e.type}`),
+      );
 
-      // Salários
+      // Salários + encargos pra colaboradores que ainda não foram populados
       const { data: collaborators } = await supabase
         .from("collaborators")
-        .select("id, store_id, position:positions(salary)")
+        .select(
+          "id, store_id, dependents_count, position:positions(salary)",
+        )
         .eq("company_id", companyId)
         .eq("status", "ativo");
 
-      const newSalaryEntries = (collaborators ?? [])
-        .filter((c) => !existingSalaries.has(c.id))
-        .map((c) => {
-          const salary = (c.position as { salary?: number } | null)?.salary ?? 0;
-          if (salary <= 0) return null;
-          return {
-            company_id: companyId,
-            collaborator_id: c.id,
-            store_id: c.store_id,
+      const newAutoEntries: PayrollEntry[] = [];
+      for (const c of collaborators ?? []) {
+        const salary = (c.position as { salary?: number } | null)?.salary ?? 0;
+        if (salary <= 0) continue;
+        const deps = (c as { dependents_count?: number }).dependents_count ?? 0;
+        const taxes = calcAllTaxes({ grossSalary: salary, dependents: deps });
+        const baseEntry = {
+          company_id: companyId,
+          collaborator_id: c.id,
+          store_id: c.store_id,
+          is_fixed: true,
+          month,
+          year,
+        };
+        if (!existingSalaries.has(c.id)) {
+          newAutoEntries.push({
+            ...baseEntry,
             type: "salario_base" as const,
             description: "Salário base (auto)",
             value: salary,
-            is_fixed: true,
-            month,
-            year,
-          };
-        })
-        .filter(Boolean) as PayrollEntry[];
-
-      if (newSalaryEntries.length > 0) {
-        await supabase.from("payroll_entries").insert(newSalaryEntries);
+          } as PayrollEntry);
+        }
+        if (taxes.inss > 0 && !existingTaxes.has(`${c.id}::inss`)) {
+          newAutoEntries.push({
+            ...baseEntry,
+            type: "inss" as const,
+            description: "INSS (tabela 2026)",
+            value: taxes.inss,
+          } as PayrollEntry);
+        }
+        if (taxes.fgts > 0 && !existingTaxes.has(`${c.id}::fgts`)) {
+          newAutoEntries.push({
+            ...baseEntry,
+            type: "fgts" as const,
+            description: "FGTS (8%)",
+            value: taxes.fgts,
+          } as PayrollEntry);
+        }
+        if (taxes.irpf > 0 && !existingTaxes.has(`${c.id}::irpf`)) {
+          newAutoEntries.push({
+            ...baseEntry,
+            type: "irpf" as const,
+            description:
+              deps > 0
+                ? `IRPF (tabela 2026, ${deps} dep.)`
+                : "IRPF (tabela 2026)",
+            value: taxes.irpf,
+          } as PayrollEntry);
+        }
       }
+
+      if (newAutoEntries.length > 0) {
+        await supabase.from("payroll_entries").insert(newAutoEntries);
+      }
+      // Manter compat com o retorno (nome legado)
+      const newSalaryEntries = newAutoEntries.filter(
+        (e) => e.type === "salario_base",
+      );
 
       // Benefícios
       const { data: assignments } = await supabase
@@ -435,7 +525,93 @@ export function usePayrollPeriods() {
     },
   });
 
-  return { periods, isLoading, openPeriod, deletePeriod, repopulatePeriod };
+  // ─────────────────────────────────────────────────────────────────────────
+  // Recalcula INSS/IRPF/FGTS de um período: apaga os encargos atuais e
+  // reinjeta usando calcAllTaxes (tabela 2026 + dependentes do colaborador).
+  // Útil pra periodos antigos com valores obsoletos.
+  // ─────────────────────────────────────────────────────────────────────────
+  const recalculateTaxes = useMutation({
+    mutationFn: async ({ reference_month }: { reference_month: string }) => {
+      if (!companyId) throw new Error("Empresa não encontrada");
+      const { month, year } = periodToMonthYear(reference_month);
+
+      // 1. Apaga encargos existentes do período
+      await supabase
+        .from("payroll_entries")
+        .delete()
+        .eq("company_id", companyId)
+        .eq("month", month)
+        .eq("year", year)
+        .in("type", ["inss", "irpf", "fgts"]);
+
+      // 2. Pega salários ativos com dependentes
+      const { data: collaborators } = await supabase
+        .from("collaborators")
+        .select(
+          "id, store_id, dependents_count, position:positions(salary)",
+        )
+        .eq("company_id", companyId)
+        .eq("status", "ativo");
+
+      // 3. Reinjeta usando calcAllTaxes
+      const newTaxEntries: PayrollEntry[] = [];
+      for (const c of collaborators ?? []) {
+        const salary = (c.position as { salary?: number } | null)?.salary ?? 0;
+        if (salary <= 0) continue;
+        const deps = (c as { dependents_count?: number }).dependents_count ?? 0;
+        const taxes = calcAllTaxes({ grossSalary: salary, dependents: deps });
+        const base = {
+          company_id: companyId,
+          collaborator_id: c.id,
+          store_id: c.store_id,
+          is_fixed: true,
+          month,
+          year,
+        };
+        if (taxes.inss > 0) {
+          newTaxEntries.push({
+            ...base,
+            type: "inss" as const,
+            description: "INSS (tabela 2026)",
+            value: taxes.inss,
+          } as PayrollEntry);
+        }
+        if (taxes.fgts > 0) {
+          newTaxEntries.push({
+            ...base,
+            type: "fgts" as const,
+            description: "FGTS (8%)",
+            value: taxes.fgts,
+          } as PayrollEntry);
+        }
+        if (taxes.irpf > 0) {
+          newTaxEntries.push({
+            ...base,
+            type: "irpf" as const,
+            description:
+              deps > 0
+                ? `IRPF (tabela 2026, ${deps} dep.)`
+                : "IRPF (tabela 2026)",
+            value: taxes.irpf,
+          } as PayrollEntry);
+        }
+      }
+
+      if (newTaxEntries.length > 0) {
+        await supabase.from("payroll_entries").insert(newTaxEntries);
+      }
+      return { count: newTaxEntries.length };
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["payroll-entries"] });
+      toast.success(`${result.count} encargos recalculados (tabela 2026) ✓`);
+    },
+    onError: (err: Error) => {
+      toast.error(err.message ?? "Não rolou. Tenta de novo?");
+    },
+  });
+
+  return { periods, isLoading, openPeriod, deletePeriod, repopulatePeriod, recalculateTaxes };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

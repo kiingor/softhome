@@ -20,6 +20,7 @@ import {
 import { House as Home, FileText, Gift, Download, SignOut as LogOut, List as Menu, TreePalm as Palmtree, ClipboardText as ClipboardCheck } from "@phosphor-icons/react";
 import { useState } from "react";
 import { SoftHouseLogo } from "@/components/branding/SoftHouseLogo";
+import { PortalNotificationBell } from "@/components/portal/PortalNotificationBell";
 
 interface PortalLayoutProps {
   children: ReactNode;
@@ -42,7 +43,9 @@ const PortalLayout = ({ children }: PortalLayoutProps) => {
 
   const handleSignOut = async () => {
     await signOut();
-    navigate("/portal/login");
+    // Hard reload pra garantir que nenhum estado em memória do supabase-js
+    // sobreviva e o PortalLogin não pegue uma sessão fantasma e re-redirecione.
+    window.location.href = "/portal/login";
   };
 
   const getInitials = (name: string) => {
@@ -136,7 +139,12 @@ const PortalLayout = ({ children }: PortalLayoutProps) => {
             </nav>
 
             {/* Desktop: User Menu | Mobile: Hamburger */}
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-1 shrink-0">
+              {/* Notification bell — desktop only (mobile vai pelo menu lateral) */}
+              <div className="hidden md:block">
+                <PortalNotificationBell />
+              </div>
+
               {/* Desktop User Menu */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild className="hidden md:flex">

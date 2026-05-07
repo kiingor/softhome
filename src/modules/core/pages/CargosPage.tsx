@@ -438,21 +438,11 @@ export default function CargosPage() {
                       <Input id="salary" value={formData.salary} onChange={(e) => handleSalaryChange(e.target.value)} placeholder="R$ 0,00" required />
                     </div>
                     <div className="border-t pt-4 mt-4">
-                      <p className="text-sm font-medium text-muted-foreground mb-3">Impostos (%)</p>
-                      <div className="grid grid-cols-3 gap-3">
-                        <div className="space-y-1">
-                          <Label htmlFor="inss_percent" className="text-xs">INSS</Label>
-                          <Input id="inss_percent" value={formData.inss_percent} onChange={(e) => handlePercentChange('inss_percent', e.target.value)} placeholder="0,00" />
-                        </div>
-                        <div className="space-y-1">
-                          <Label htmlFor="fgts_percent" className="text-xs">FGTS</Label>
-                          <Input id="fgts_percent" value={formData.fgts_percent} onChange={(e) => handlePercentChange('fgts_percent', e.target.value)} placeholder="0,00" />
-                        </div>
-                        <div className="space-y-1">
-                          <Label htmlFor="irpf_percent" className="text-xs">IRPF</Label>
-                          <Input id="irpf_percent" value={formData.irpf_percent} onChange={(e) => handlePercentChange('irpf_percent', e.target.value)} placeholder="0,00" />
-                        </div>
-                      </div>
+                      <p className="text-sm font-medium text-foreground mb-1">Encargos</p>
+                      <p className="text-xs text-muted-foreground mb-3">
+                        INSS e IRPF são calculados automaticamente pela tabela
+                        oficial 2026 no momento do lançamento. FGTS é fixo em 8%.
+                      </p>
                     </div>
                     <div className="border-t pt-4 mt-4">
                       <p className="text-sm font-medium text-muted-foreground mb-3">Exames Ocupacionais</p>

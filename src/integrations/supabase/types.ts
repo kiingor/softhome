@@ -1,10 +1,3 @@
-node.exe : Initialising login role...
-No linha:1 caractere:1
-+ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
-+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (Initialising login role...:String) [], RemoteException
-    + FullyQualifiedErrorId : NativeCommandError
- 
 export type Json =
   | string
   | number
@@ -63,6 +56,7 @@ export type Database = {
           reviewed_at: string | null
           reviewer_id: string | null
           status: Database["public"]["Enums"]["admission_document_status"]
+          text_response: string | null
           updated_at: string
           uploaded_at: string | null
         }
@@ -82,6 +76,7 @@ export type Database = {
           reviewed_at?: string | null
           reviewer_id?: string | null
           status?: Database["public"]["Enums"]["admission_document_status"]
+          text_response?: string | null
           updated_at?: string
           uploaded_at?: string | null
         }
@@ -101,6 +96,7 @@ export type Database = {
           reviewed_at?: string | null
           reviewer_id?: string | null
           status?: Database["public"]["Enums"]["admission_document_status"]
+          text_response?: string | null
           updated_at?: string
           uploaded_at?: string | null
         }
@@ -193,14 +189,98 @@ export type Database = {
           },
         ]
       }
+      admission_journey_tests: {
+        Row: {
+          answers: Json
+          assigned_at: string
+          auto_score: number | null
+          completed_at: string | null
+          created_at: string
+          id: string
+          journey_id: string
+          result_summary: Json | null
+          reviewed_at: string | null
+          reviewer_id: string | null
+          reviewer_notes: string | null
+          reviewer_score: number | null
+          started_at: string | null
+          status: Database["public"]["Enums"]["admission_test_status"]
+          test_id: string
+          test_slug: string
+          updated_at: string
+        }
+        Insert: {
+          answers?: Json
+          assigned_at?: string
+          auto_score?: number | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          journey_id: string
+          result_summary?: Json | null
+          reviewed_at?: string | null
+          reviewer_id?: string | null
+          reviewer_notes?: string | null
+          reviewer_score?: number | null
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["admission_test_status"]
+          test_id: string
+          test_slug: string
+          updated_at?: string
+        }
+        Update: {
+          answers?: Json
+          assigned_at?: string
+          auto_score?: number | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          journey_id?: string
+          result_summary?: Json | null
+          reviewed_at?: string | null
+          reviewer_id?: string | null
+          reviewer_notes?: string | null
+          reviewer_score?: number | null
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["admission_test_status"]
+          test_id?: string
+          test_slug?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admission_journey_tests_journey_id_fkey"
+            columns: ["journey_id"]
+            isOneToOne: false
+            referencedRelation: "admission_journeys"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admission_journey_tests_test_id_fkey"
+            columns: ["test_id"]
+            isOneToOne: false
+            referencedRelation: "admission_tests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       admission_journeys: {
         Row: {
           access_token: string
           application_id: string | null
+          candidate_address: string | null
+          candidate_address_complement: string | null
+          candidate_address_number: string | null
+          candidate_birth_date: string | null
+          candidate_city: string | null
           candidate_cpf: string | null
           candidate_email: string | null
           candidate_name: string
+          candidate_neighborhood: string | null
           candidate_phone: string | null
+          candidate_rg: string | null
+          candidate_state: string | null
+          candidate_zip: string | null
           collaborator_id: string | null
           company_id: string
           created_at: string
@@ -216,10 +296,19 @@ export type Database = {
         Insert: {
           access_token: string
           application_id?: string | null
+          candidate_address?: string | null
+          candidate_address_complement?: string | null
+          candidate_address_number?: string | null
+          candidate_birth_date?: string | null
+          candidate_city?: string | null
           candidate_cpf?: string | null
           candidate_email?: string | null
           candidate_name: string
+          candidate_neighborhood?: string | null
           candidate_phone?: string | null
+          candidate_rg?: string | null
+          candidate_state?: string | null
+          candidate_zip?: string | null
           collaborator_id?: string | null
           company_id: string
           created_at?: string
@@ -235,10 +324,19 @@ export type Database = {
         Update: {
           access_token?: string
           application_id?: string | null
+          candidate_address?: string | null
+          candidate_address_complement?: string | null
+          candidate_address_number?: string | null
+          candidate_birth_date?: string | null
+          candidate_city?: string | null
           candidate_cpf?: string | null
           candidate_email?: string | null
           candidate_name?: string
+          candidate_neighborhood?: string | null
           candidate_phone?: string | null
+          candidate_rg?: string | null
+          candidate_state?: string | null
+          candidate_zip?: string | null
           collaborator_id?: string | null
           company_id?: string
           created_at?: string
@@ -278,6 +376,66 @@ export type Database = {
             columns: ["position_id"]
             isOneToOne: false
             referencedRelation: "positions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admission_tests: {
+        Row: {
+          allow_pause: boolean
+          category: string | null
+          company_id: string
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          settings: Json
+          slug: string
+          time_limit_minutes: number | null
+          updated_at: string
+        }
+        Insert: {
+          allow_pause?: boolean
+          category?: string | null
+          company_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          settings?: Json
+          slug: string
+          time_limit_minutes?: number | null
+          updated_at?: string
+        }
+        Update: {
+          allow_pause?: boolean
+          category?: string | null
+          company_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          settings?: Json
+          slug?: string
+          time_limit_minutes?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admission_tests_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "admission_tests_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]
@@ -605,6 +763,7 @@ export type Database = {
           assigned_at: string
           benefit_id: string
           collaborator_id: string
+          custom_value: number | null
           id: string
           observation: string | null
         }
@@ -612,6 +771,7 @@ export type Database = {
           assigned_at?: string
           benefit_id: string
           collaborator_id: string
+          custom_value?: number | null
           id?: string
           observation?: string | null
         }
@@ -619,6 +779,7 @@ export type Database = {
           assigned_at?: string
           benefit_id?: string
           collaborator_id?: string
+          custom_value?: number | null
           id?: string
           observation?: string | null
         }
@@ -639,6 +800,173 @@ export type Database = {
           },
         ]
       }
+      bonus_entries: {
+        Row: {
+          base_salary: number
+          collaborator_id: string
+          created_at: string
+          gross_value: number
+          id: string
+          mode: Database["public"]["Enums"]["bonus_entry_mode"]
+          mode_notes: string | null
+          mode_set_at: string | null
+          mode_set_by: string | null
+          months_worked: number
+          period_id: string
+          updated_at: string
+        }
+        Insert: {
+          base_salary?: number
+          collaborator_id: string
+          created_at?: string
+          gross_value?: number
+          id?: string
+          mode?: Database["public"]["Enums"]["bonus_entry_mode"]
+          mode_notes?: string | null
+          mode_set_at?: string | null
+          mode_set_by?: string | null
+          months_worked?: number
+          period_id: string
+          updated_at?: string
+        }
+        Update: {
+          base_salary?: number
+          collaborator_id?: string
+          created_at?: string
+          gross_value?: number
+          id?: string
+          mode?: Database["public"]["Enums"]["bonus_entry_mode"]
+          mode_notes?: string | null
+          mode_set_at?: string | null
+          mode_set_by?: string | null
+          months_worked?: number
+          period_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bonus_entries_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bonus_entries_period_id_fkey"
+            columns: ["period_id"]
+            isOneToOne: false
+            referencedRelation: "bonus_periods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bonus_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          entry_id: string
+          id: string
+          installment: Database["public"]["Enums"]["bonus_installment"]
+          notes: string | null
+          paid_at: string | null
+          paid_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          entry_id: string
+          id?: string
+          installment: Database["public"]["Enums"]["bonus_installment"]
+          notes?: string | null
+          paid_at?: string | null
+          paid_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          entry_id?: string
+          id?: string
+          installment?: Database["public"]["Enums"]["bonus_installment"]
+          notes?: string | null
+          paid_at?: string | null
+          paid_by?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bonus_payments_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "bonus_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bonus_periods: {
+        Row: {
+          closed_at: string | null
+          closed_by: string | null
+          company_id: string
+          created_at: string
+          generated_at: string | null
+          generated_by: string | null
+          id: string
+          notes: string | null
+          opened_at: string
+          opened_by: string | null
+          status: Database["public"]["Enums"]["bonus_period_status"]
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          closed_at?: string | null
+          closed_by?: string | null
+          company_id: string
+          created_at?: string
+          generated_at?: string | null
+          generated_by?: string | null
+          id?: string
+          notes?: string | null
+          opened_at?: string
+          opened_by?: string | null
+          status?: Database["public"]["Enums"]["bonus_period_status"]
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          closed_at?: string | null
+          closed_by?: string | null
+          company_id?: string
+          created_at?: string
+          generated_at?: string | null
+          generated_by?: string | null
+          id?: string
+          notes?: string | null
+          opened_at?: string
+          opened_by?: string | null
+          status?: Database["public"]["Enums"]["bonus_period_status"]
+          updated_at?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bonus_periods_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "bonus_periods_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       candidate_applications: {
         Row: {
           ai_score: number | null
@@ -651,7 +979,7 @@ export type Database = {
           id: string
           job_id: string
           rejected_reason: string | null
-          stage: Database["public"]["Enums"]["application_stage"]
+          stage: string
           updated_at: string
         }
         Insert: {
@@ -665,7 +993,7 @@ export type Database = {
           id?: string
           job_id: string
           rejected_reason?: string | null
-          stage?: Database["public"]["Enums"]["application_stage"]
+          stage?: string
           updated_at?: string
         }
         Update: {
@@ -679,7 +1007,7 @@ export type Database = {
           id?: string
           job_id?: string
           rejected_reason?: string | null
-          stage?: Database["public"]["Enums"]["application_stage"]
+          stage?: string
           updated_at?: string
         }
         Relationships: [
@@ -1034,6 +1362,50 @@ export type Database = {
           },
         ]
       }
+      collaborator_notifications: {
+        Row: {
+          body: string | null
+          collaborator_id: string
+          created_at: string
+          id: string
+          is_read: boolean
+          payload: Json | null
+          read_at: string | null
+          title: string
+          type: string
+        }
+        Insert: {
+          body?: string | null
+          collaborator_id: string
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          payload?: Json | null
+          read_at?: string | null
+          title: string
+          type: string
+        }
+        Update: {
+          body?: string | null
+          collaborator_id?: string
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          payload?: Json | null
+          read_at?: string | null
+          title?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collaborator_notifications_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       collaborators: {
         Row: {
           address: string | null
@@ -1044,6 +1416,7 @@ export type Database = {
           contracted_store_id: string | null
           cpf: string
           created_at: string
+          dependents_count: number
           district: string | null
           email: string | null
           id: string
@@ -1075,6 +1448,7 @@ export type Database = {
           contracted_store_id?: string | null
           cpf: string
           created_at?: string
+          dependents_count?: number
           district?: string | null
           email?: string | null
           id?: string
@@ -1106,6 +1480,7 @@ export type Database = {
           contracted_store_id?: string | null
           cpf?: string
           created_at?: string
+          dependents_count?: number
           district?: string | null
           email?: string | null
           id?: string
@@ -1490,6 +1865,7 @@ export type Database = {
           id: string
           notes: string | null
           opened_at: string | null
+          pipeline_stages: string[]
           position_id: string | null
           regime: Database["public"]["Enums"]["collaborator_regime"]
           requirements: string | null
@@ -1508,6 +1884,7 @@ export type Database = {
           id?: string
           notes?: string | null
           opened_at?: string | null
+          pipeline_stages?: string[]
           position_id?: string | null
           regime: Database["public"]["Enums"]["collaborator_regime"]
           requirements?: string | null
@@ -1526,6 +1903,7 @@ export type Database = {
           id?: string
           notes?: string | null
           opened_at?: string | null
+          pipeline_stages?: string[]
           position_id?: string | null
           regime?: Database["public"]["Enums"]["collaborator_regime"]
           requirements?: string | null
@@ -2082,6 +2460,57 @@ export type Database = {
           },
         ]
       }
+      payroll_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          entry_id: string
+          id: string
+          notes: string | null
+          paid_at: string | null
+          paid_by: string | null
+          period_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          entry_id: string
+          id?: string
+          notes?: string | null
+          paid_at?: string | null
+          paid_by?: string | null
+          period_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          entry_id?: string
+          id?: string
+          notes?: string | null
+          paid_at?: string | null
+          paid_by?: string | null
+          period_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payroll_payments_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: true
+            referencedRelation: "payroll_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_payments_period_id_fkey"
+            columns: ["period_id"]
+            isOneToOne: false
+            referencedRelation: "payroll_periods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payroll_periods: {
         Row: {
           closed_at: string | null
@@ -2264,9 +2693,11 @@ export type Database = {
           id: string
           inss_percent: number | null
           irpf_percent: number | null
+          level: number | null
           name: string
           risk_group: string | null
           salary: number
+          team_id: string | null
         }
         Insert: {
           company_id: string
@@ -2276,9 +2707,11 @@ export type Database = {
           id?: string
           inss_percent?: number | null
           irpf_percent?: number | null
+          level?: number | null
           name: string
           risk_group?: string | null
           salary?: number
+          team_id?: string | null
         }
         Update: {
           company_id?: string
@@ -2288,9 +2721,11 @@ export type Database = {
           id?: string
           inss_percent?: number | null
           irpf_percent?: number | null
+          level?: number | null
           name?: string
           risk_group?: string | null
           salary?: number
+          team_id?: string | null
         }
         Relationships: [
           {
@@ -2305,6 +2740,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "positions_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
             referencedColumns: ["id"]
           },
         ]
@@ -2360,51 +2802,58 @@ export type Database = {
       }
       store_holidays: {
         Row: {
-          id: string
-          store_id: string
           company_id: string
-          date: string
-          name: string
-          type: Database["public"]["Enums"]["holiday_type"]
-          source: string | null
           created_at: string
+          date: string
+          id: string
+          name: string
+          source: string | null
+          store_id: string
+          type: Database["public"]["Enums"]["holiday_type"]
           updated_at: string
         }
         Insert: {
-          id?: string
-          store_id: string
           company_id: string
-          date: string
-          name: string
-          type?: Database["public"]["Enums"]["holiday_type"]
-          source?: string | null
           created_at?: string
+          date: string
+          id?: string
+          name: string
+          source?: string | null
+          store_id: string
+          type?: Database["public"]["Enums"]["holiday_type"]
           updated_at?: string
         }
         Update: {
-          id?: string
-          store_id?: string
           company_id?: string
-          date?: string
-          name?: string
-          type?: Database["public"]["Enums"]["holiday_type"]
-          source?: string | null
           created_at?: string
+          date?: string
+          id?: string
+          name?: string
+          source?: string | null
+          store_id?: string
+          type?: Database["public"]["Enums"]["holiday_type"]
           updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "store_holidays_store_id_fkey"
-            columns: ["store_id"]
+            foreignKeyName: "store_holidays_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: "stores"
-            referencedColumns: ["id"]
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "store_holidays_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "store_holidays_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
             referencedColumns: ["id"]
           },
         ]
@@ -2670,6 +3119,9 @@ export type Database = {
           days_taken: number
           end_date: string
           id: string
+          manual_adjustment_at: string | null
+          manual_adjustment_by: string | null
+          manual_adjustment_notes: string | null
           start_date: string
           status: string
         }
@@ -2683,6 +3135,9 @@ export type Database = {
           days_taken?: number
           end_date: string
           id?: string
+          manual_adjustment_at?: string | null
+          manual_adjustment_by?: string | null
+          manual_adjustment_notes?: string | null
           start_date: string
           status?: string
         }
@@ -2696,6 +3151,9 @@ export type Database = {
           days_taken?: number
           end_date?: string
           id?: string
+          manual_adjustment_at?: string | null
+          manual_adjustment_by?: string | null
+          manual_adjustment_notes?: string | null
           start_date?: string
           status?: string
         }
@@ -3040,6 +3498,36 @@ export type Database = {
       }
     }
     Functions: {
+      adjust_vacation_period_manual: {
+        Args: {
+          _days_sold: number
+          _days_taken: number
+          _notes?: string
+          _period_id: string
+        }
+        Returns: {
+          collaborator_id: string
+          company_id: string
+          created_at: string
+          days_entitled: number
+          days_remaining: number
+          days_sold: number
+          days_taken: number
+          end_date: string
+          id: string
+          manual_adjustment_at: string | null
+          manual_adjustment_by: string | null
+          manual_adjustment_notes: string | null
+          start_date: string
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "vacation_periods"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       can_modify_module: {
         Args: { _company_id: string; _module: string; _user_id: string }
         Returns: boolean
@@ -3085,6 +3573,11 @@ export type Database = {
         }
         Returns: boolean
       }
+      insert_default_position_documents: {
+        Args: { p_company_id: string; p_position_id: string }
+        Returns: undefined
+      }
+      is_admin_gc: { Args: { _user_id: string }; Returns: boolean }
       is_company_admin: {
         Args: { _company_id: string; _user_id: string }
         Returns: boolean
@@ -3128,8 +3621,14 @@ export type Database = {
         | "admitted"
         | "cancelled"
         | "note"
+        | "tests_assigned"
+        | "test_started"
+        | "test_completed"
+        | "tests_advanced"
       admission_journey_status:
         | "created"
+        | "tests_pending"
+        | "tests_in_review"
         | "docs_pending"
         | "docs_in_review"
         | "docs_needs_adjustment"
@@ -3139,6 +3638,11 @@ export type Database = {
         | "contract_signed"
         | "admitted"
         | "cancelled"
+      admission_test_status:
+        | "not_started"
+        | "in_progress"
+        | "completed"
+        | "reviewed"
       agent_message_role: "user" | "assistant" | "system" | "tool"
       app_role:
         | "admin_gc"
@@ -3170,14 +3674,17 @@ export type Database = {
         | "daycare"
         | "bonus"
         | "other"
+      bonus_entry_mode: "batch" | "individual" | "anticipated"
+      bonus_installment: "first" | "second" | "single"
+      bonus_period_status: "aberto" | "pagamento" | "concluido"
       collaborator_regime: "clt" | "pj" | "estagiario"
-      holiday_type: "national" | "state" | "municipal" | "manual"
       collaborator_status:
         | "ativo"
         | "inativo"
         | "aguardando_documentacao"
         | "validacao_pendente"
         | "reprovado"
+      holiday_type: "national" | "state" | "municipal" | "manual"
       job_opening_status: "draft" | "open" | "paused" | "filled" | "cancelled"
       journey_milestone_kind: "d30" | "d60" | "d90" | "d180" | "annual"
       journey_milestone_status: "pending" | "due" | "completed" | "overdue"
@@ -3203,6 +3710,7 @@ export type Database = {
         | "adiantamento"
         | "bonificacao"
         | "desconto"
+        | "gratificacao"
       payroll_period_status: "open" | "closed" | "exported"
       plan_tier: "essencial" | "crescer" | "profissional" | "empresa_plus"
     }
@@ -3356,9 +3864,15 @@ export const Constants = {
         "admitted",
         "cancelled",
         "note",
+        "tests_assigned",
+        "test_started",
+        "test_completed",
+        "tests_advanced",
       ],
       admission_journey_status: [
         "created",
+        "tests_pending",
+        "tests_in_review",
         "docs_pending",
         "docs_in_review",
         "docs_needs_adjustment",
@@ -3368,6 +3882,12 @@ export const Constants = {
         "contract_signed",
         "admitted",
         "cancelled",
+      ],
+      admission_test_status: [
+        "not_started",
+        "in_progress",
+        "completed",
+        "reviewed",
       ],
       agent_message_role: ["user", "assistant", "system", "tool"],
       app_role: [
@@ -3396,9 +3916,18 @@ export const Constants = {
         "integracao",
         "outro",
       ],
-      benefit_category: ["meal", "transport", "health", "daycare", "bonus", "other"],
+      benefit_category: [
+        "meal",
+        "transport",
+        "health",
+        "daycare",
+        "bonus",
+        "other",
+      ],
+      bonus_entry_mode: ["batch", "individual", "anticipated"],
+      bonus_installment: ["first", "second", "single"],
+      bonus_period_status: ["aberto", "pagamento", "concluido"],
       collaborator_regime: ["clt", "pj", "estagiario"],
-      holiday_type: ["national", "state", "municipal", "manual"],
       collaborator_status: [
         "ativo",
         "inativo",
@@ -3406,6 +3935,7 @@ export const Constants = {
         "validacao_pendente",
         "reprovado",
       ],
+      holiday_type: ["national", "state", "municipal", "manual"],
       job_opening_status: ["draft", "open", "paused", "filled", "cancelled"],
       journey_milestone_kind: ["d30", "d60", "d90", "d180", "annual"],
       journey_milestone_status: ["pending", "due", "completed", "overdue"],
@@ -3432,10 +3962,10 @@ export const Constants = {
         "adiantamento",
         "bonificacao",
         "desconto",
+        "gratificacao",
       ],
       payroll_period_status: ["open", "closed", "exported"],
       plan_tier: ["essencial", "crescer", "profissional", "empresa_plus"],
     },
   },
 } as const
-<claude-code-hint v="1" type="plugin" value="supabase@claude-plugins-official" />
