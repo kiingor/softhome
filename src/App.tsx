@@ -28,6 +28,7 @@ import BadgesPage from "./modules/journey/pages/BadgesPage";
 import CollaboratorJourneyPage from "./modules/journey/pages/CollaboratorJourneyPage";
 import AdmissoesPage from "./modules/admission/pages/AdmissoesPage";
 import AdmissionDetailPage from "./modules/admission/pages/AdmissionDetailPage";
+import AdmissionTestsCatalogPage from "./modules/admission/pages/AdmissionTestsCatalogPage";
 import VagasPage from "./modules/recruitment/pages/VagasPage";
 import VagaDetailPage from "./modules/recruitment/pages/VagaDetailPage";
 import CandidatosPage from "./modules/recruitment/pages/CandidatosPage";
@@ -35,6 +36,8 @@ import AplicarPage from "./modules/recruitment/pages/AplicarPage";
 import AdmissaoPublicaPage from "./modules/admission/pages/AdmissaoPublicaPage";
 import PeriodosPage from "./modules/payroll/pages/PeriodosPage";
 import PeriodDetailPage from "./modules/payroll/pages/PeriodDetailPage";
+import Bonus13ListPage from "./modules/bonus13/pages/Bonus13ListPage";
+import Bonus13DetailPage from "./modules/bonus13/pages/Bonus13DetailPage";
 import RecrutadorPage from "./modules/agents/pages/RecrutadorPage";
 import AnalistaPage from "./modules/agents/pages/AnalistaPage";
 
@@ -99,12 +102,15 @@ const App = () => {
               element={<CollaboratorJourneyPage />}
             />
             <Route path="admissoes" element={<AdmissoesPage />} />
+            <Route path="admissoes/testes" element={<AdmissionTestsCatalogPage />} />
             <Route path="admissoes/:id" element={<AdmissionDetailPage />} />
             <Route path="vagas" element={<VagasPage />} />
             <Route path="vagas/:id" element={<VagaDetailPage />} />
             <Route path="candidatos" element={<CandidatosPage />} />
             <Route path="folha" element={<PeriodosPage />} />
             <Route path="folha/:id" element={<PeriodDetailPage />} />
+            <Route path="decimo-terceiro" element={<Bonus13ListPage />} />
+            <Route path="decimo-terceiro/:id" element={<Bonus13DetailPage />} />
             <Route path="recrutador" element={<RecrutadorPage />} />
             <Route path="analista" element={<AnalistaPage />} />
           </Route>

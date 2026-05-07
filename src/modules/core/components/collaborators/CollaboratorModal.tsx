@@ -40,6 +40,7 @@ import { formatCPFInput, cleanCPF, validateCPF, formatPhoneInput, formatCEPInput
 import { sendWhatsAppNotification } from "@/lib/whatsappNotifications";
 import { formatCurrency, formatCurrencyForInput, parseCurrencyInput, getCurrentCompetencia } from "@/lib/formatters";
 import { calculateMonthlyBenefitValue, getBenefitCalculationDescription, DayAbbrev } from "@/lib/workingDays";
+import { calcAllTaxes } from "@/lib/payroll/cltCalc";
 import { useStoreHolidays } from "@/modules/payroll/hooks/use-store-holidays";
 import CollaboratorValidationTab from "./CollaboratorValidationTab";
 import { PositionChangeDialog } from "@/components/exames/PositionChangeDialog";
@@ -121,6 +122,7 @@ const CollaboratorModal = ({
     is_temp: false,
     is_pcd: false,
     is_apprentice: false,
+    dependents_count: 0,
     address: "",
     district: "",
     city: "",
@@ -364,6 +366,7 @@ const CollaboratorModal = ({
           is_temp: c.is_temp || false,
           is_pcd: c.is_pcd || false,
           is_apprentice: c.is_apprentice || false,
+          dependents_count: (c as { dependents_count?: number }).dependents_count ?? 0,
           address: c.address || "",
           district: c.district || "",
           city: c.city || "",
@@ -393,6 +396,7 @@ const CollaboratorModal = ({
           is_temp: false,
           is_pcd: false,
           is_apprentice: false,
+          dependents_count: 0,
           address: prefill?.address ?? "",
           district: prefill?.district ?? "",
           city: prefill?.city ?? "",
@@ -411,17 +415,23 @@ const CollaboratorModal = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, collaborator]);
 
-  // When position changes, update pending salary entry (for new collaborators)
+  // When position or dependents change, recalcula entries do salário/encargos.
+  // INSS/IRPF/FGTS usam tabela 2026 oficial via calcAllTaxes.
   useEffect(() => {
     if (!open) return;
 
     const position = positions.find((p) => p.id === formData.position_id);
-    
+
     if (isNew) {
       setPendingEntries((prev) => {
         const filtered = prev.filter((e) => e.source !== "position" && e.source !== "tax");
-        
+
         if (position && position.salary > 0) {
+          const taxes = calcAllTaxes({
+            grossSalary: position.salary,
+            dependents: formData.dependents_count,
+          });
+
           const newEntries: PendingEntry[] = [
             {
               id: `position-${position.id}`,
@@ -432,51 +442,51 @@ const CollaboratorModal = ({
               source: "position" as const,
             },
           ];
-  
-          if (position.inss_percent && position.inss_percent > 0) {
-            const inssValue = position.salary * (position.inss_percent / 100);
+
+          if (taxes.inss > 0) {
             newEntries.push({
               id: `tax-inss-${position.id}`,
               type: "inss" as const,
-              description: `INSS ${position.inss_percent}%`,
-              value: inssValue,
+              description: "INSS (tabela 2026)",
+              value: taxes.inss,
               is_fixed: true,
               source: "tax" as const,
             });
           }
-  
-          if (position.fgts_percent && position.fgts_percent > 0) {
-            const fgtsValue = position.salary * (position.fgts_percent / 100);
+
+          if (taxes.fgts > 0) {
             newEntries.push({
               id: `tax-fgts-${position.id}`,
               type: "fgts" as const,
-              description: `FGTS ${position.fgts_percent}%`,
-              value: fgtsValue,
+              description: "FGTS (8%)",
+              value: taxes.fgts,
               is_fixed: true,
               source: "tax" as const,
             });
           }
-  
-          if (position.irpf_percent && position.irpf_percent > 0) {
-            const irpfValue = position.salary * (position.irpf_percent / 100);
+
+          if (taxes.irpf > 0) {
             newEntries.push({
               id: `tax-irpf-${position.id}`,
               type: "irpf" as const,
-              description: `IRPF ${position.irpf_percent}%`,
-              value: irpfValue,
+              description:
+                formData.dependents_count > 0
+                  ? `IRPF (tabela 2026, ${formData.dependents_count} dep.)`
+                  : "IRPF (tabela 2026)",
+              value: taxes.irpf,
               is_fixed: true,
               source: "tax" as const,
             });
           }
-  
+
           return [...filtered, ...newEntries];
         }
-        
+
         return filtered;
       });
     }
     // For existing collaborators, position changes are handled exclusively via PositionChangeDialog
-  }, [formData.position_id, positions.length, isNew, open, collaboratorId, currentCompany, currentMonth, currentYear, previousPositionId]);
+  }, [formData.position_id, formData.dependents_count, positions.length, isNew, open, collaboratorId, currentCompany, currentMonth, currentYear, previousPositionId]);
 
   // Handle position change via dialog (existing collaborators only)
   const handlePositionChange = async (newPositionId: string, riskGroupChanged: boolean) => {
@@ -500,8 +510,13 @@ const CollaboratorModal = ({
         .eq("year", currentYear)
         .in("type", ["salario_base", "inss", "fgts", "irpf"]);
 
-      // 3. Create new entries with new position values
+      // 3. Create new entries with new position values + impostos via tabela 2026
       if (newPosition.salary > 0) {
+        const taxes = calcAllTaxes({
+          grossSalary: newPosition.salary,
+          dependents: formData.dependents_count,
+        });
+
         const entriesToCreate: any[] = [
           {
             collaborator_id: collaboratorId,
@@ -515,39 +530,42 @@ const CollaboratorModal = ({
           },
         ];
 
-        if (newPosition.inss_percent && newPosition.inss_percent > 0) {
+        if (taxes.inss > 0) {
           entriesToCreate.push({
             collaborator_id: collaboratorId,
             company_id: currentCompany.id,
             type: "inss",
-            description: `INSS ${newPosition.inss_percent}%`,
-            value: newPosition.salary * (newPosition.inss_percent / 100),
+            description: "INSS (tabela 2026)",
+            value: taxes.inss,
             month: currentMonth,
             year: currentYear,
             is_fixed: true,
           });
         }
 
-        if (newPosition.fgts_percent && newPosition.fgts_percent > 0) {
+        if (taxes.fgts > 0) {
           entriesToCreate.push({
             collaborator_id: collaboratorId,
             company_id: currentCompany.id,
             type: "fgts",
-            description: `FGTS ${newPosition.fgts_percent}%`,
-            value: newPosition.salary * (newPosition.fgts_percent / 100),
+            description: "FGTS (8%)",
+            value: taxes.fgts,
             month: currentMonth,
             year: currentYear,
             is_fixed: true,
           });
         }
 
-        if (newPosition.irpf_percent && newPosition.irpf_percent > 0) {
+        if (taxes.irpf > 0) {
           entriesToCreate.push({
             collaborator_id: collaboratorId,
             company_id: currentCompany.id,
             type: "irpf",
-            description: `IRPF ${newPosition.irpf_percent}%`,
-            value: newPosition.salary * (newPosition.irpf_percent / 100),
+            description:
+              formData.dependents_count > 0
+                ? `IRPF (tabela 2026, ${formData.dependents_count} dep.)`
+                : "IRPF (tabela 2026)",
+            value: taxes.irpf,
             month: currentMonth,
             year: currentYear,
             is_fixed: true,
@@ -753,6 +771,7 @@ const CollaboratorModal = ({
         is_temp: formData.is_temp,
         is_pcd: formData.is_pcd,
         is_apprentice: formData.is_apprentice,
+        dependents_count: formData.dependents_count,
         address: formData.address.trim() || null,
         district: formData.district.trim() || null,
         city: formData.city.trim() || null,
@@ -1662,6 +1681,28 @@ const CollaboratorModal = ({
                         </span>
                       </div>
                     </div>
+                  </div>
+
+                  {/* Dependentes pra cálculo de IRPF */}
+                  <div className="space-y-2">
+                    <Label htmlFor="dependents_count">Dependentes legais (IRPF)</Label>
+                    <Input
+                      id="dependents_count"
+                      type="number"
+                      min={0}
+                      max={30}
+                      step={1}
+                      value={formData.dependents_count}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          dependents_count: Math.max(0, Math.min(30, parseInt(e.target.value || "0", 10))),
+                        }))
+                      }
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Cada dependente reduz R$ 189,59 da base de cálculo do IRPF.
+                    </p>
                   </div>
 
                   {/* Observações */}

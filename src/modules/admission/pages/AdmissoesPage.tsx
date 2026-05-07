@@ -26,6 +26,7 @@ import {
   DotsThreeVertical,
   Trash,
   Eye,
+  Gear,
 } from "@phosphor-icons/react";
 import {
   AlertDialog,
@@ -96,10 +97,18 @@ export default function AdmissoesPage() {
             Acompanhe os processos de contratação em andamento.
           </p>
         </div>
-        <Button onClick={() => setIsFormOpen(true)}>
-          <Plus className="w-4 h-4 mr-2" />
-          Nova admissão
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button asChild variant="outline">
+            <Link to="/dashboard/admissoes/testes">
+              <Gear className="w-4 h-4 mr-2" />
+              Testes
+            </Link>
+          </Button>
+          <Button onClick={() => setIsFormOpen(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            Nova admissão
+          </Button>
+        </div>
       </div>
 
       {/* Filtros */}
@@ -124,6 +133,8 @@ export default function AdmissoesPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos status</SelectItem>
+                <SelectItem value="tests_pending">Aguardando testes</SelectItem>
+                <SelectItem value="tests_in_review">Testes em análise</SelectItem>
                 <SelectItem value="docs_pending">Aguardando docs</SelectItem>
                 <SelectItem value="docs_in_review">Em revisão</SelectItem>
                 <SelectItem value="docs_needs_adjustment">Pedindo ajuste</SelectItem>

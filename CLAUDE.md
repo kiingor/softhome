@@ -30,7 +30,7 @@ Solo dev (eu, kiingor) cumulando dev + PO + PM. Bus factor = 1, então:
 ## Princípios não-negociáveis
 
 1. **LGPD primeiro.** Audit log em toda tabela com PII. Dado pessoal mascarado em log/erro. Retenção definida por tabela.
-2. **CLT é território minado.** Não calculamos folha. Folha v1 é controle de lançamentos + exportação pro contador. Cálculo CLT, eSocial, encargos = projeto de 9-15 meses, fora do escopo.
+2. **CLT — escopo limitado.** Calculamos **mensal** IRPF, INSS (tabelas oficiais 2026) e FGTS 8% — toda a lógica fica em [src/lib/payroll/cltCalc.ts](src/lib/payroll/cltCalc.ts). 13º também desconta INSS + IRPF (tributação exclusiva, sem redutor 2026) — ver [src/modules/bonus13/lib/calc-13.ts](src/modules/bonus13/lib/calc-13.ts). Atualização anual = mexer só nas constantes desse arquivo + testes. **Fora do escopo:** rescisão CLT, eSocial, FAP/RAT, contribuição patronal, IRPF anual.
 3. **Agente nunca escreve dado irreversível sem aprovação humana.** Mesmo interno. Mesmo "óbvio". Policy layer obrigatório.
 4. **RLS em tudo.** Toda tabela tem policy por `company_id` + role. Sem exceção.
 5. **Migration tem rollback.** Toda migration tem `up` e `down`. Sem exceção.
@@ -162,7 +162,7 @@ Cada fase é PR(s) próprias com merge em `main` quando estável.
 
 ## O que NUNCA fazer
 
-- Calcular folha CLT (encargos, INSS, IRRF, FGTS) — fora do escopo
+- Calcular rescisão CLT, eSocial, contribuição patronal, FAP/RAT — fora do escopo (cálculo de IRPF/INSS/FGTS mensal está em [src/lib/payroll/cltCalc.ts](src/lib/payroll/cltCalc.ts), e 13º em [src/modules/bonus13/lib/calc-13.ts](src/modules/bonus13/lib/calc-13.ts))
 - Criar tabela sem RLS
 - Criar tabela com PII sem audit trigger
 - Permitir que agente IA escreva sem aprovação humana

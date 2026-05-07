@@ -57,11 +57,11 @@ const DashboardHeader = ({ onOpenSearch }: DashboardHeaderProps = {}) => {
           <button
             type="button"
             onClick={onOpenSearch}
-            className="flex items-center gap-2 px-3 h-9 w-72 rounded-md border border-input bg-background text-sm text-muted-foreground hover:bg-accent transition-colors"
+            className="group flex items-center gap-2 px-3 h-9 w-72 rounded-md border border-input bg-background text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground hover:border-accent transition-colors"
           >
             <MagnifyingGlass className="h-4 w-4" />
             <span className="flex-1 text-left">Buscar no SoftHouse...</span>
-            <kbd className="hidden md:inline-flex items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">
+            <kbd className="hidden md:inline-flex items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground group-hover:bg-accent-foreground/15 group-hover:text-accent-foreground group-hover:border-accent-foreground/30">
               {isMac ? "⌘" : "Ctrl"}+K
             </kbd>
           </button>

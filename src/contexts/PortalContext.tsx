@@ -109,7 +109,11 @@ export const PortalProvider: React.FC<PortalProviderProps> = ({ children }) => {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut({ scope: "local" });
+    } catch (error) {
+      console.error("Sign out error:", error);
+    }
     resetState();
   };
 

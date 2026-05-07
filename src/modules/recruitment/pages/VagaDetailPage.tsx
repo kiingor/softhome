@@ -283,6 +283,46 @@ export default function VagaDetailPage() {
         </Card>
       )}
 
+      {/* Link público de candidatura */}
+      {job.status === "open" && (
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2 shrink-0">
+              <LinkSimple className="w-4 h-4 text-primary" />
+              <span className="text-sm font-medium text-foreground">
+                Link público de candidatura
+              </span>
+            </div>
+            <code className="flex-1 min-w-0 text-xs bg-muted/50 px-3 py-2 rounded font-mono truncate select-all">
+              {`${window.location.origin}/aplicar/${job.id}`}
+            </code>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  navigator.clipboard
+                    .writeText(`${window.location.origin}/aplicar/${job.id}`)
+                    .then(() => toast.success("Link copiado ✓"))
+                    .catch(() => toast.error("Não rolou copiar."));
+                }}
+              >
+                Copiar
+              </Button>
+              <Button asChild size="sm" variant="ghost">
+                <a
+                  href={`/aplicar/${job.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Abrir
+                </a>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Pipeline */}
       <div>
         <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">

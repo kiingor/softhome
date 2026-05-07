@@ -8,7 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { CircleNotch as Loader2, Eye } from "@phosphor-icons/react";
+import { CircleNotch as Loader2, Eye, Robot } from "@phosphor-icons/react";
 import type { AuditLogRowWithUser } from "../hooks/use-audit-log";
 import { tableLabel } from "../lib/audit-labels";
 import { ACTION_LABELS, ACTION_COLORS } from "../lib/audit-formatters";
@@ -66,13 +66,29 @@ export function AuditTable({ rows, isLoading, onView }: Props) {
                 </div>
               </TableCell>
               <TableCell className="text-sm">
-                <div className="font-medium text-foreground truncate max-w-[200px]">
-                  {r.user_name ?? "(sem nome)"}
-                </div>
-                {r.user_email && (
-                  <div className="text-xs text-muted-foreground truncate max-w-[200px]">
-                    {r.user_email}
+                {!r.user_id ? (
+                  <div
+                    className="flex items-center gap-1.5 text-muted-foreground"
+                    title="Ação executada por uma Edge Function ou fluxo público (ex: candidatura, processamento de CV)"
+                  >
+                    <Robot className="w-3.5 h-3.5 shrink-0" weight="duotone" />
+                    <span className="font-medium italic">Sistema</span>
                   </div>
+                ) : !r.user_name && !r.user_email ? (
+                  <div className="text-muted-foreground italic" title={r.user_id}>
+                    Usuário removido
+                  </div>
+                ) : (
+                  <>
+                    <div className="font-medium text-foreground truncate max-w-[200px]">
+                      {r.user_name ?? r.user_email}
+                    </div>
+                    {r.user_name && r.user_email && (
+                      <div className="text-xs text-muted-foreground truncate max-w-[200px]">
+                        {r.user_email}
+                      </div>
+                    )}
+                  </>
                 )}
               </TableCell>
               <TableCell>

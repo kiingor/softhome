@@ -35,6 +35,11 @@ export const TABLE_LABELS: Record<string, string> = {
   payroll_alerts: "Alertas de folha",
   payslips: "Contracheques",
 
+  // 13º Salário
+  bonus_periods: "Campanhas de 13º",
+  bonus_entries: "Linhas de 13º",
+  bonus_payments: "Parcelas de 13º",
+
   // Férias
   vacation_periods: "Períodos aquisitivos",
   vacation_requests: "Solicitações de férias",

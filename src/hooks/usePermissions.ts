@@ -20,6 +20,8 @@ export type ModuleType =
   | "vagas"
   | "candidatos"
   | "folha"
+  | "folha_pagamentos"
+  | "decimo_terceiro"
   | "recrutador";
 
 export interface ModulePermissions {
@@ -48,7 +50,9 @@ export const MODULE_LABELS: Record<ModuleType, string> = {
   admissoes: "Admissões",
   vagas: "Vagas",
   candidatos: "Candidatos",
-  folha: "Folha de Pagamento",
+  folha: "Folha — Lançamentos",
+  folha_pagamentos: "Folha — Pagamentos",
+  decimo_terceiro: "13º Salário",
   recrutador: "Agente Recrutador",
 };
 
@@ -67,7 +71,7 @@ export const MODULE_GROUPS: ModuleGroup[] = [
   {
     label: "Operação",
     description: "Rotina de gente & cultura",
-    modules: ["folha", "ferias", "financeiro", "beneficios", "exames", "contabilidade"],
+    modules: ["folha", "folha_pagamentos", "decimo_terceiro", "ferias", "financeiro", "beneficios", "exames", "contabilidade"],
   },
   {
     label: "Recrutamento",
