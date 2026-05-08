@@ -40,6 +40,22 @@ import {
   usePermissions,
 } from "@/hooks/usePermissions";
 import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+type DashboardRole = "admin_gc" | "gestor_gc" | "contador" | "colaborador";
+
+const ROLE_LABELS: Record<DashboardRole, string> = {
+  admin_gc: "Administrador G&C",
+  gestor_gc: "Gestor G&C",
+  contador: "Contador",
+  colaborador: "Colaborador",
+};
 
 interface CompanyUser {
   id: string;
@@ -173,6 +189,26 @@ export const UsersAccessTab = () => {
       return data as UserPermission[];
     },
     enabled: !!selectedUser?.user_id && !!currentCompany?.id,
+  });
+
+  // Fetch current role for selected user.
+  // user_roles aceita N roles por usuário, mas a UI trata como single-role
+  // (mostra/edita apenas o role primário).
+  const { data: userRole } = useQuery({
+    queryKey: ["user-role", selectedUser?.user_id],
+    queryFn: async () => {
+      if (!selectedUser?.user_id) return null;
+      const { data, error } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", selectedUser.user_id)
+        .order("created_at", { ascending: true })
+        .limit(1);
+      if (error) throw error;
+      const first = (data ?? [])[0] as { role: string } | undefined;
+      return (first?.role ?? null) as DashboardRole | null;
+    },
+    enabled: !!selectedUser?.user_id,
   });
 
   // Create user mutation (new flow with password)
@@ -347,6 +383,35 @@ export const UsersAccessTab = () => {
     },
     onError: () => {
       toast.error("Erro ao atualizar permissão.");
+    },
+  });
+
+  // Atualiza o role do usuário em user_roles. Substitui qualquer role
+  // anterior pra manter o modelo single-role (DashboardHeader mostra
+  // roles[0]; multiplos roles deixavam ordem indefinida).
+  const updateRoleMutation = useMutation({
+    mutationFn: async (newRole: DashboardRole) => {
+      if (!selectedUser?.user_id) throw new Error("Usuário sem user_id");
+
+      const { error: deleteError } = await supabase
+        .from("user_roles")
+        .delete()
+        .eq("user_id", selectedUser.user_id);
+      if (deleteError) throw deleteError;
+
+      const { error: insertError } = await supabase
+        .from("user_roles")
+        .insert({ user_id: selectedUser.user_id, role: newRole });
+      if (insertError) throw insertError;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-role"] });
+      toast.success(
+        "Permissão atualizada. Peça pro usuário sair e entrar de novo pra aplicar.",
+      );
+    },
+    onError: (err: Error) => {
+      toast.error(err.message ?? "Erro ao atualizar permissão.");
     },
   });
 
@@ -709,22 +774,47 @@ export const UsersAccessTab = () => {
                 </div>
               </div>
               {selectedUser?.accepted_at && (isAdmin || canEditPermissions) && (
-                <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/5 border border-primary/20 shrink-0">
-                  <ShieldCheck className="w-5 h-5 text-primary" />
-                  <div className="flex flex-col">
-                    <Label htmlFor="admin-toggle" className="text-sm font-medium leading-tight">
-                      Acesso total
+                <div className="flex items-center gap-3 shrink-0">
+                  <div className="flex flex-col gap-1">
+                    <Label htmlFor="role-select" className="text-xs text-muted-foreground">
+                      Permissão
                     </Label>
-                    <span className="text-[11px] text-muted-foreground leading-tight">
-                      Marcar tudo
-                    </span>
+                    <Select
+                      value={userRole ?? "colaborador"}
+                      onValueChange={(value) =>
+                        updateRoleMutation.mutate(value as DashboardRole)
+                      }
+                      disabled={updateRoleMutation.isPending}
+                    >
+                      <SelectTrigger id="role-select" className="h-9 w-[200px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(Object.keys(ROLE_LABELS) as DashboardRole[]).map((r) => (
+                          <SelectItem key={r} value={r}>
+                            {ROLE_LABELS[r]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <Switch
-                    id="admin-toggle"
-                    checked={hasAllPermissions}
-                    onCheckedChange={handleToggleAllPermissions}
-                    disabled={batchUpdatePermissionsMutation.isPending}
-                  />
+                  <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/5 border border-primary/20">
+                    <ShieldCheck className="w-5 h-5 text-primary" />
+                    <div className="flex flex-col">
+                      <Label htmlFor="admin-toggle" className="text-sm font-medium leading-tight">
+                        Acesso total
+                      </Label>
+                      <span className="text-[11px] text-muted-foreground leading-tight">
+                        Marcar tudo
+                      </span>
+                    </div>
+                    <Switch
+                      id="admin-toggle"
+                      checked={hasAllPermissions}
+                      onCheckedChange={handleToggleAllPermissions}
+                      disabled={batchUpdatePermissionsMutation.isPending}
+                    />
+                  </div>
                 </div>
               )}
             </div>
