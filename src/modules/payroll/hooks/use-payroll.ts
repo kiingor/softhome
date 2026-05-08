@@ -107,9 +107,10 @@ export function usePayrollPeriods() {
             collaborator_id: c.id,
             store_id: c.store_id,
             type: "salario_base" as const,
-            description: "Salário base (auto)",
+            description: "Salário base",
             value: salary,
             is_fixed: true,
+            is_payable: true,
             month,
             year,
           } as PayrollEntry);
@@ -123,6 +124,7 @@ export function usePayrollPeriods() {
               description: "INSS (tabela 2026)",
               value: taxes.inss,
               is_fixed: true,
+              is_payable: true,
               month,
               year,
             } as PayrollEntry);
@@ -136,6 +138,7 @@ export function usePayrollPeriods() {
               description: "FGTS (8%)",
               value: taxes.fgts,
               is_fixed: true,
+              is_payable: true,
               month,
               year,
             } as PayrollEntry);
@@ -152,6 +155,7 @@ export function usePayrollPeriods() {
                   : "IRPF (tabela 2026)",
               value: taxes.irpf,
               is_fixed: true,
+              is_payable: true,
               month,
               year,
             } as PayrollEntry);
@@ -165,10 +169,11 @@ export function usePayrollPeriods() {
         // 3b. Benefícios assigned
         // Pega value_type/applicable_days pra calcular valor mensal correto
         // (daily × dias úteis − feriados da store do colaborador).
+        // category é usada pra setar is_payable (Adicional entra na aba Pagamentos).
         const { data: assignments } = await supabase
           .from("benefits_assignments")
           .select(
-            "collaborator_id, custom_value, benefit:benefits(name, value, value_type, applicable_days), collaborator:collaborators!inner(company_id, status, store_id, contracted_store_id)",
+            "collaborator_id, custom_value, benefit:benefits(name, value, value_type, applicable_days, category), collaborator:collaborators!inner(company_id, status, store_id, contracted_store_id)",
           )
           .eq("collaborator.company_id", companyId)
           .eq("collaborator.status", "ativo");
@@ -211,6 +216,7 @@ export function usePayrollPeriods() {
                     value: number;
                     value_type: "monthly" | "daily" | null;
                     applicable_days: string[] | null;
+                    category: string | null;
                   }
                 | null;
               if (!benefit || benefit.value <= 0) return null;
@@ -252,9 +258,10 @@ export function usePayrollPeriods() {
                 collaborator_id: a.collaborator_id,
                 store_id: null,
                 type: "beneficio" as const,
-                description: `${benefit.name} (auto)`,
+                description: benefit.name,
                 value: monthlyValue,
                 is_fixed: true,
+                is_payable: benefit.category === "adicional",
                 month,
                 year,
               };
@@ -341,10 +348,14 @@ export function usePayrollPeriods() {
           .filter((e) => e.type === "salario_base")
           .map((e) => e.collaborator_id),
       );
+      // Normaliza removendo sufixo " (auto)" pra casar tanto entries antigas
+      // quanto novas (depois da remoção do sufixo).
+      const stripAuto = (desc: string | null) =>
+        (desc ?? "").replace(/\s*\(auto\)$/, "");
       const existingBenefits = new Set(
         (existingEntries ?? [])
           .filter((e) => e.type === "beneficio")
-          .map((e) => `${e.collaborator_id}::${e.description}`),
+          .map((e) => `${e.collaborator_id}::${stripAuto(e.description)}`),
       );
       const existingTaxes = new Set(
         (existingEntries ?? [])
@@ -372,6 +383,7 @@ export function usePayrollPeriods() {
           collaborator_id: c.id,
           store_id: c.store_id,
           is_fixed: true,
+          is_payable: true,
           month,
           year,
         };
@@ -379,7 +391,7 @@ export function usePayrollPeriods() {
           newAutoEntries.push({
             ...baseEntry,
             type: "salario_base" as const,
-            description: "Salário base (auto)",
+            description: "Salário base",
             value: salary,
           } as PayrollEntry);
         }
@@ -424,7 +436,7 @@ export function usePayrollPeriods() {
       const { data: assignments } = await supabase
         .from("benefits_assignments")
         .select(
-          "collaborator_id, benefit:benefits(name, value, value_type, applicable_days), collaborator:collaborators!inner(company_id, status, store_id, contracted_store_id)",
+          "collaborator_id, benefit:benefits(name, value, value_type, applicable_days, category), collaborator:collaborators!inner(company_id, status, store_id, contracted_store_id)",
         )
         .eq("collaborator.company_id", companyId)
         .eq("collaborator.status", "ativo");
@@ -465,11 +477,12 @@ export function usePayrollPeriods() {
                 value: number;
                 value_type: "monthly" | "daily" | null;
                 applicable_days: string[] | null;
+                category: string | null;
               }
             | null;
           if (!benefit || benefit.value <= 0) return null;
 
-          const desc = `${benefit.name} (auto)`;
+          const desc = benefit.name;
           if (existingBenefits.has(`${a.collaborator_id}::${desc}`)) return null;
 
           const collab = a.collaborator as
@@ -496,6 +509,7 @@ export function usePayrollPeriods() {
             description: desc,
             value: monthlyValue,
             is_fixed: true,
+            is_payable: benefit.category === "adicional",
             month,
             year,
           };
@@ -652,7 +666,7 @@ export function usePayrollEntries(periodId: string | undefined) {
       const { data, error } = await supabase
         .from("payroll_entries")
         .select(
-          "*, collaborator:collaborators(id, name, cpf, regime, status)"
+          "*, collaborator:collaborators(id, name, cpf, regime, status, pix_key, softcom_surname)"
         )
         .eq("company_id", companyId)
         .eq("month", month)

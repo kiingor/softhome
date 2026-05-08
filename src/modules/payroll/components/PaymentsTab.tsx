@@ -3,13 +3,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
-import { Badge } from "@/components/ui/badge";
 import {
   HoverCard,
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
-import { CircleNotch as Loader2, Info } from "@phosphor-icons/react";
+import { CircleNotch as Loader2, Info, Copy } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/formatters";
 import {
@@ -40,7 +39,8 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
   // Lista flat de lançamentos pagáveis, com valores LÍQUIDOS após impostos.
   // Regras:
   // - só proventos (`isEarning`)
-  // - benefícios fora (`type === 'beneficio'`): pagamento por outro fluxo
+  // - benefícios entram só se is_payable=true (categoria 'adicional');
+  //   demais benefícios são vouchers/serviços, pagos por outro fluxo
   // - FGTS fora: é encargo do empregador, não desconta do colaborador
   // - INSS/IRPF descontam do que vai pra mão do colaborador:
   //     · INSS desconta integralmente do salário base
@@ -48,7 +48,9 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
   // - estornos: par positivo+negativo do mesmo (collab,tipo) somam ≤ 0 → some
   const { payableEntries, taxBreakdownByEntry } = useMemo(() => {
     const earningOnly = entries.filter(
-      (e) => isEarning(e.type) && e.type !== "beneficio",
+      (e) =>
+        isEarning(e.type) &&
+        (e.type !== "beneficio" || e.is_payable === true),
     );
 
     // Detecta pares estornados (positivo + negativo cancelam)
@@ -166,6 +168,15 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
     return map;
   }, [payments]);
 
+  const handleCopyPix = async (pixKey: string) => {
+    try {
+      await navigator.clipboard.writeText(pixKey);
+      toast.success("PIX copiado");
+    } catch {
+      toast.error("Não consegui copiar. Tenta selecionar e copiar manualmente.");
+    }
+  };
+
   const togglePayment = useMutation({
     mutationFn: async ({
       entryId,
@@ -262,6 +273,7 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
           const rec = paymentByEntry.get(entry.id);
           const isPaid = !!rec?.paid_at;
           const value = Number(entry.value);
+          const pixKey = entry.collaborator?.pix_key ?? null;
           return (
             <div
               key={entry.id}
@@ -297,6 +309,32 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
                   >
                     {ENTRY_TYPE_LABELS[entry.type] ?? entry.type}
                   </span>
+                </div>
+                <div className="flex items-center gap-1.5 text-xs mt-0.5">
+                  {pixKey ? (
+                    <>
+                      <span className="text-muted-foreground">PIX:</span>
+                      <span className="font-mono text-foreground/80 truncate max-w-[260px]">
+                        {pixKey}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(ev) => {
+                          ev.stopPropagation();
+                          handleCopyPix(pixKey);
+                        }}
+                        className="inline-flex items-center justify-center w-5 h-5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        aria-label="Copiar chave PIX"
+                        title="Copiar chave PIX"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground/70 italic">
+                      PIX não cadastrado
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-muted-foreground truncate">
                   {entry.description ?? "—"}

@@ -1,7 +1,18 @@
 // Cálculo proporcional do 13º salário conforme regra CLT.
 //
-// Regra: cada mês com 15 dias ou mais de vínculo conta como 1 mês cheio.
-// 13º bruto = salário base × meses_trabalhados / 12.
+// Regra de meses: cada mês com 15 dias ou mais de vínculo conta como 1 mês
+// cheio (regra CLT padrão).
+//
+// Base de cálculo (CLT art. 457, §1º — médias de proventos habituais entram
+// na base do 13º):
+//   13º bruto = (salário base × meses + soma_gratificações_ano + adicional_mensal × meses) / 12
+//
+// Componentes:
+//   · salário base: snapshot do salário atual
+//   · soma_gratificações_ano: SUM(payroll_entries.value) onde
+//       type='gratificacao' e collaborator+ano = X
+//   · adicional_mensal: SUM(coalesce(custom_value, benefits.value)) das
+//       atribuições de benefício categoria 'adicional' do colaborador
 //
 // Impostos no 13º (regra CLT 2026):
 // - 1ª parcela (Nov): adiantamento, SEM descontos (50% do bruto)
@@ -22,6 +33,18 @@ export type CalcInput = {
   year: number;
   /** Salário base atual. Se 0/undefined, gross_value sai 0. */
   baseSalary: number;
+  /**
+   * Soma das Gratificações lançadas no ano da campanha (payroll_entries com
+   * type='gratificacao'). Default 0. Pro-rata CLT: este valor é dividido por
+   * 12 e somado ao bruto.
+   */
+  gratificacaoSum?: number;
+  /**
+   * Soma do valor mensal das atribuições de benefício categoria 'adicional'
+   * do colaborador. Default 0. Pro-rata CLT: este valor é multiplicado pelos
+   * meses trabalhados e dividido por 12.
+   */
+  adicionalMonthly?: number;
   /** Data de hoje — opcional, default = `new Date()`. Útil pra testes determinísticos. */
   today?: Date;
 };
@@ -29,6 +52,13 @@ export type CalcInput = {
 export type CalcResult = {
   monthsWorked: number;
   grossValue: number;
+};
+
+export type GrossValueInput = {
+  baseSalary: number;
+  monthsWorked: number;
+  gratificacaoSum?: number;
+  adicionalMonthly?: number;
 };
 
 const DAYS_THRESHOLD_FOR_MONTH = 15;
@@ -94,20 +124,57 @@ export function calcMonthsWorked(input: {
 }
 
 /**
- * Calcula o 13º bruto proporcional aos meses trabalhados.
+ * Calcula o 13º bruto proporcional aos meses trabalhados, somando
+ * gratificações e adicionais do ano (CLT art. 457).
+ *
+ * Fórmula:
+ *   bruto = (baseSalary × meses + gratificacaoSum + adicionalMonthly × meses) / 12
+ *
+ * Aceita assinatura legada (baseSalary, monthsWorked) por compatibilidade —
+ * nesse caso gratificacaoSum e adicionalMonthly assumem 0 e o resultado é
+ * idêntico ao comportamento anterior.
+ *
  * Arredonda para 2 casas decimais (centavos).
  */
-export function calcGrossValue(baseSalary: number, monthsWorked: number): number {
-  if (!baseSalary || baseSalary <= 0) return 0;
+export function calcGrossValue(
+  inputOrBase: number | GrossValueInput,
+  monthsWorkedLegacy?: number,
+): number {
+  const input: GrossValueInput =
+    typeof inputOrBase === "number"
+      ? {
+          baseSalary: inputOrBase,
+          monthsWorked: monthsWorkedLegacy ?? 0,
+        }
+      : inputOrBase;
+
+  const baseSalary = input.baseSalary || 0;
+  const monthsWorked = input.monthsWorked || 0;
+  const gratificacaoSum = input.gratificacaoSum ?? 0;
+  const adicionalMonthly = input.adicionalMonthly ?? 0;
+
   if (monthsWorked <= 0) return 0;
-  const value = (baseSalary * monthsWorked) / 12;
+  if (baseSalary <= 0 && gratificacaoSum <= 0 && adicionalMonthly <= 0) {
+    return 0;
+  }
+
+  const value =
+    (baseSalary * monthsWorked +
+      gratificacaoSum +
+      adicionalMonthly * monthsWorked) /
+    12;
   return Math.round(value * 100) / 100;
 }
 
 /** Conveniência: input → result. */
 export function calcBonus13(input: CalcInput): CalcResult {
   const monthsWorked = calcMonthsWorked(input);
-  const grossValue = calcGrossValue(input.baseSalary, monthsWorked);
+  const grossValue = calcGrossValue({
+    baseSalary: input.baseSalary,
+    monthsWorked,
+    gratificacaoSum: input.gratificacaoSum,
+    adicionalMonthly: input.adicionalMonthly,
+  });
   return { monthsWorked, grossValue };
 }
 

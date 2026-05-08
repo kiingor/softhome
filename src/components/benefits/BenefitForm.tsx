@@ -37,6 +37,7 @@ export type BenefitCategory =
   | "health"
   | "daycare"
   | "bonus"
+  | "adicional"
   | "other";
 
 export const BENEFIT_CATEGORY_LABELS: Record<BenefitCategory, string> = {
@@ -45,6 +46,7 @@ export const BENEFIT_CATEGORY_LABELS: Record<BenefitCategory, string> = {
   health: "Saúde (Plano/Odonto)",
   daycare: "Auxílio Creche",
   bonus: "Bônus / PLR",
+  adicional: "Adicional (pago em folha)",
   other: "Outro",
 };
 
@@ -53,7 +55,15 @@ const benefitSchema = z.object({
   description: z.string().optional(),
   value: z.string().min(1, "Valor é obrigatório"),
   value_type: z.enum(["monthly", "daily"]),
-  category: z.enum(["meal", "transport", "health", "daycare", "bonus", "other"]),
+  category: z.enum([
+    "meal",
+    "transport",
+    "health",
+    "daycare",
+    "bonus",
+    "adicional",
+    "other",
+  ]),
   applicable_days: z.array(z.string()).optional(),
 });
 
