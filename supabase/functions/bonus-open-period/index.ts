@@ -48,9 +48,24 @@ function calcMonthsWorked(admissionDateStr: string | null, year: number): number
   return Math.min(count, 12);
 }
 
-function calcGrossValue(baseSalary: number, monthsWorked: number): number {
-  if (!baseSalary || baseSalary <= 0 || monthsWorked <= 0) return 0;
-  return Math.round((baseSalary * monthsWorked * 100) / 12) / 100;
+/**
+ * Pro-rata CLT (art. 457): inclui gratificações habituais e adicionais.
+ *   bruto = (baseSalary × meses + gratificacaoSum + adicionalMonthly × meses) / 12
+ */
+function calcGrossValue(
+  baseSalary: number,
+  monthsWorked: number,
+  gratificacaoSum = 0,
+  adicionalMonthly = 0,
+): number {
+  if (monthsWorked <= 0) return 0;
+  if (baseSalary <= 0 && gratificacaoSum <= 0 && adicionalMonthly <= 0) return 0;
+  const value =
+    (baseSalary * monthsWorked +
+      gratificacaoSum +
+      adicionalMonthly * monthsWorked) /
+    12;
+  return Math.round(value * 100) / 100;
 }
 
 serve(async (req) => {
@@ -181,6 +196,53 @@ serve(async (req) => {
     }
   }
 
+  const collabIds = collabs.map((c) => (c as { id: string }).id);
+
+  // 3b. Soma de gratificações do ano por colaborador (CLT art. 457).
+  const gratByCollab = new Map<string, number>();
+  if (collabIds.length > 0) {
+    const { data: grats } = await sbAdmin
+      .from("payroll_entries")
+      .select("collaborator_id, value")
+      .eq("company_id", companyId)
+      .eq("type", "gratificacao")
+      .eq("year", year)
+      .in("collaborator_id", collabIds);
+    for (const g of (grats ?? []) as Array<{
+      collaborator_id: string;
+      value: number;
+    }>) {
+      const cur = gratByCollab.get(g.collaborator_id) ?? 0;
+      gratByCollab.set(g.collaborator_id, cur + Number(g.value));
+    }
+  }
+
+  // 3c. Soma do valor mensal vigente das atribuições Adicional por colaborador.
+  // Lê custom_value (se existir) ou benefits.value como fallback.
+  const adicByCollab = new Map<string, number>();
+  if (collabIds.length > 0) {
+    const { data: assigns } = await sbAdmin
+      .from("benefits_assignments")
+      .select(
+        "collaborator_id, custom_value, benefit:benefits!inner(value, category)",
+      )
+      .in("collaborator_id", collabIds)
+      .eq("benefit.category", "adicional");
+    for (const a of (assigns ?? []) as Array<{
+      collaborator_id: string;
+      custom_value: number | null;
+      benefit: { value: number; category: string } | null;
+    }>) {
+      if (!a.benefit) continue;
+      const v =
+        a.custom_value != null
+          ? Number(a.custom_value)
+          : Number(a.benefit.value) || 0;
+      const cur = adicByCollab.get(a.collaborator_id) ?? 0;
+      adicByCollab.set(a.collaborator_id, cur + v);
+    }
+  }
+
   // 4. Calcula entries
   const entries = collabs.map((c) => {
     const collab = c as {
@@ -192,13 +254,24 @@ serve(async (req) => {
       ? salaryByPosition.get(collab.position_id) ?? 0
       : 0;
     const monthsWorked = calcMonthsWorked(collab.admission_date, year);
-    const grossValue = calcGrossValue(baseSalary, monthsWorked);
+    const gratificacaoSum =
+      Math.round((gratByCollab.get(collab.id) ?? 0) * 100) / 100;
+    const adicionalMonthly =
+      Math.round((adicByCollab.get(collab.id) ?? 0) * 100) / 100;
+    const grossValue = calcGrossValue(
+      baseSalary,
+      monthsWorked,
+      gratificacaoSum,
+      adicionalMonthly,
+    );
     return {
       period_id: periodId,
       collaborator_id: collab.id,
       base_salary: baseSalary,
       months_worked: monthsWorked,
       gross_value: grossValue,
+      gratificacao_sum: gratificacaoSum,
+      adicional_monthly: adicionalMonthly,
       mode: "batch" as const,
     };
   });

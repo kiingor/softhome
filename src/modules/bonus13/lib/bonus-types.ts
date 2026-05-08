@@ -25,6 +25,10 @@ export interface BonusEntry {
   period_id: string;
   collaborator_id: string;
   base_salary: number;
+  /** Soma das gratificações (type='gratificacao') do colaborador no ano da campanha. Snapshot. */
+  gratificacao_sum: number;
+  /** Soma do valor mensal das atribuições de benefício categoria 'adicional'. Snapshot. */
+  adicional_monthly: number;
   months_worked: number;
   gross_value: number;
   mode: BonusEntryMode;

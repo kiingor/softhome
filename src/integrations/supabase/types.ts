@@ -802,9 +802,11 @@ export type Database = {
       }
       bonus_entries: {
         Row: {
+          adicional_monthly: number
           base_salary: number
           collaborator_id: string
           created_at: string
+          gratificacao_sum: number
           gross_value: number
           id: string
           mode: Database["public"]["Enums"]["bonus_entry_mode"]
@@ -816,9 +818,11 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          adicional_monthly?: number
           base_salary?: number
           collaborator_id: string
           created_at?: string
+          gratificacao_sum?: number
           gross_value?: number
           id?: string
           mode?: Database["public"]["Enums"]["bonus_entry_mode"]
@@ -830,9 +834,11 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          adicional_monthly?: number
           base_salary?: number
           collaborator_id?: string
           created_at?: string
+          gratificacao_sum?: number
           gross_value?: number
           id?: string
           mode?: Database["public"]["Enums"]["bonus_entry_mode"]
@@ -1426,11 +1432,13 @@ export type Database = {
           name: string
           notes: string | null
           phone: string | null
+          pix_key: string | null
           position: string | null
           position_id: string | null
           postal_code: string | null
           regime: Database["public"]["Enums"]["collaborator_regime"]
           rg: string | null
+          softcom_surname: string | null
           state: string | null
           status: Database["public"]["Enums"]["collaborator_status"]
           store_id: string | null
@@ -1458,11 +1466,13 @@ export type Database = {
           name: string
           notes?: string | null
           phone?: string | null
+          pix_key?: string | null
           position?: string | null
           position_id?: string | null
           postal_code?: string | null
           regime?: Database["public"]["Enums"]["collaborator_regime"]
           rg?: string | null
+          softcom_surname?: string | null
           state?: string | null
           status?: Database["public"]["Enums"]["collaborator_status"]
           store_id?: string | null
@@ -1490,11 +1500,13 @@ export type Database = {
           name?: string
           notes?: string | null
           phone?: string | null
+          pix_key?: string | null
           position?: string | null
           position_id?: string | null
           postal_code?: string | null
           regime?: Database["public"]["Enums"]["collaborator_regime"]
           rg?: string | null
+          softcom_surname?: string | null
           state?: string | null
           status?: Database["public"]["Enums"]["collaborator_status"]
           store_id?: string | null
@@ -2386,6 +2398,7 @@ export type Database = {
           installment_number: number | null
           installment_total: number | null
           is_fixed: boolean
+          is_payable: boolean
           month: number
           store_id: string | null
           type: Database["public"]["Enums"]["payroll_entry_type"]
@@ -2404,6 +2417,7 @@ export type Database = {
           installment_number?: number | null
           installment_total?: number | null
           is_fixed?: boolean
+          is_payable?: boolean
           month: number
           store_id?: string | null
           type: Database["public"]["Enums"]["payroll_entry_type"]
@@ -2422,6 +2436,7 @@ export type Database = {
           installment_number?: number | null
           installment_total?: number | null
           is_fixed?: boolean
+          is_payable?: boolean
           month?: number
           store_id?: string | null
           type?: Database["public"]["Enums"]["payroll_entry_type"]
@@ -3674,6 +3689,7 @@ export type Database = {
         | "daycare"
         | "bonus"
         | "other"
+        | "adicional"
       bonus_entry_mode: "batch" | "individual" | "anticipated"
       bonus_installment: "first" | "second" | "single"
       bonus_period_status: "aberto" | "pagamento" | "concluido"
@@ -3923,6 +3939,7 @@ export const Constants = {
         "daycare",
         "bonus",
         "other",
+        "adicional",
       ],
       bonus_entry_mode: ["batch", "individual", "anticipated"],
       bonus_installment: ["first", "second", "single"],

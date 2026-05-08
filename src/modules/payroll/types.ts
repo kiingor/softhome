@@ -167,6 +167,8 @@ export interface PayrollEntryWithCollaborator extends PayrollEntry {
     cpf: string;
     regime: string | null;
     status: string;
+    pix_key?: string | null;
+    softcom_surname?: string | null;
   } | null;
 }
 

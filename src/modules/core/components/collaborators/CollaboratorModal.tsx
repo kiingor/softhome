@@ -69,10 +69,12 @@ interface PendingBenefit {
 
 export interface CollaboratorPrefill {
   name?: string;
+  softcom_surname?: string;
   cpf?: string;
   rg?: string;
   email?: string;
   phone?: string;
+  pix_key?: string;
   birth_date?: string;
   position_id?: string;
   regime?: "clt" | "pj" | "estagiario";
@@ -107,10 +109,12 @@ const CollaboratorModal = ({
   // Form state
   const [formData, setFormData] = useState({
     name: "",
+    softcom_surname: "",
     cpf: "",
     rg: "",
     email: "",
     phone: "",
+    pix_key: "",
     birth_date: "",
     position_id: "",
     store_id: "",
@@ -348,13 +352,17 @@ const CollaboratorModal = ({
           state?: string | null;
           postal_code?: string | null;
           notes?: string | null;
+          softcom_surname?: string | null;
+          pix_key?: string | null;
         };
         setFormData({
           name: c.name || "",
+          softcom_surname: c.softcom_surname || "",
           cpf: c.cpf || "",
           rg: c.rg || "",
           email: c.email || "",
           phone: c.phone || "",
+          pix_key: c.pix_key || "",
           birth_date: c.birth_date || "",
           position_id: c.position_id || "",
           store_id: c.store_id || "",
@@ -381,10 +389,12 @@ const CollaboratorModal = ({
         // tela de admissão, p.ex.) pra deixar tudo preenchido.
         setFormData({
           name: prefill?.name ?? "",
+          softcom_surname: prefill?.softcom_surname ?? "",
           cpf: prefill?.cpf ?? "",
           rg: prefill?.rg ?? "",
           email: prefill?.email ?? "",
           phone: prefill?.phone ?? "",
+          pix_key: prefill?.pix_key ?? "",
           birth_date: prefill?.birth_date ?? "",
           position_id: prefill?.position_id ?? "",
           store_id: "",
@@ -757,10 +767,12 @@ const CollaboratorModal = ({
 
       const baseData = {
         name: formData.name.trim(),
+        softcom_surname: formData.softcom_surname.trim() || null,
         cpf: cleanedCPF,
         rg: formData.rg.trim() || null,
         email: formData.email.trim().toLowerCase() || null,
         phone: formData.phone.replace(/\D/g, "") || null,
+        pix_key: formData.pix_key.trim() || null,
         birth_date: formData.birth_date || null,
         position_id: formData.position_id || null,
         store_id: formData.store_id || null,
@@ -1323,6 +1335,17 @@ const CollaboratorModal = ({
                     />
                   </div>
 
+                  {/* Sobrenome Softcom (apelido interno) */}
+                  <div className="space-y-2">
+                    <Label htmlFor="softcom_surname">Sobrenome Softcom</Label>
+                    <Input
+                      id="softcom_surname"
+                      value={formData.softcom_surname}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, softcom_surname: e.target.value }))}
+                      placeholder="Apelido interno (ex: Lucas P.)"
+                    />
+                  </div>
+
                   {/* CPF */}
                   <div className="space-y-2">
                     <Label htmlFor="cpf">CPF *</Label>
@@ -1410,6 +1433,17 @@ const CollaboratorModal = ({
                         onChange={(e) => setFormData((prev) => ({ ...prev, birth_date: e.target.value }))}
                       />
                     </div>
+                  </div>
+
+                  {/* Chave PIX */}
+                  <div className="space-y-2">
+                    <Label htmlFor="pix_key">Chave PIX</Label>
+                    <Input
+                      id="pix_key"
+                      value={formData.pix_key}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, pix_key: e.target.value }))}
+                      placeholder="CPF, e-mail, telefone ou chave aleatória"
+                    />
                   </div>
 
                   {/* Tipo de Contrato (regime) */}

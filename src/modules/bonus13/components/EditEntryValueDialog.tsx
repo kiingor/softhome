@@ -31,7 +31,14 @@ export function EditEntryValueDialog({ open, onOpenChange, entry }: Props) {
     if (entry) setValue(String(entry.gross_value));
   }, [entry]);
 
-  const calculated = entry ? calcGrossValue(entry.base_salary, entry.months_worked) : 0;
+  const calculated = entry
+    ? calcGrossValue({
+        baseSalary: entry.base_salary,
+        monthsWorked: entry.months_worked,
+        gratificacaoSum: entry.gratificacao_sum ?? 0,
+        adicionalMonthly: entry.adicional_monthly ?? 0,
+      })
+    : 0;
   const numericValue = Number(value) || 0;
 
   const handleConfirm = async () => {
@@ -70,13 +77,29 @@ export function EditEntryValueDialog({ open, onOpenChange, entry }: Props) {
               <span className="text-muted-foreground">Salário base (snapshot)</span>
               <span className="tabular-nums">{formatCurrency(entry.base_salary)}</span>
             </div>
+            {(entry.gratificacao_sum ?? 0) > 0 && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Gratificações no ano</span>
+                <span className="tabular-nums">
+                  {formatCurrency(entry.gratificacao_sum)}
+                </span>
+              </div>
+            )}
+            {(entry.adicional_monthly ?? 0) > 0 && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Adicional mensal</span>
+                <span className="tabular-nums">
+                  {formatCurrency(entry.adicional_monthly)}
+                </span>
+              </div>
+            )}
             <div className="flex justify-between">
               <span className="text-muted-foreground">Meses trabalhados</span>
               <span className="tabular-nums">{entry.months_worked}/12</span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between border-t pt-1 mt-1">
               <span className="text-muted-foreground">Valor calculado</span>
-              <span className="tabular-nums">{formatCurrency(calculated)}</span>
+              <span className="tabular-nums font-medium">{formatCurrency(calculated)}</span>
             </div>
           </div>
         )}
