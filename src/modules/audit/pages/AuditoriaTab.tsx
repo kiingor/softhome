@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,25 +18,38 @@ import { AuditTable } from "../components/AuditTable";
 import { AuditDiffDialog } from "../components/AuditDiffDialog";
 import { exportAuditCSV } from "../services/audit-export.service";
 
-function defaultFilters(): AuditLogFilters {
-  // Default: últimos 7 dias
+function defaultFilters(recordId: string | null = null): AuditLogFilters {
+  // Default: últimos 7 dias. Quando filtrando por recordId (ex: histórico de
+  // um colaborador), expande a janela pra últimos 365 dias.
   const today = new Date();
-  const week = new Date();
-  week.setDate(week.getDate() - 7);
+  const past = new Date();
+  past.setDate(past.getDate() - (recordId ? 365 : 7));
   return {
-    dateFrom: week.toISOString().slice(0, 10),
+    dateFrom: past.toISOString().slice(0, 10),
     dateTo: today.toISOString().slice(0, 10),
     userId: null,
     tableName: null,
     action: null,
+    recordId,
     page: 0,
     pageSize: AUDIT_DEFAULT_PAGE_SIZE,
   };
 }
 
 export default function AuditoriaTab() {
-  const [filters, setFilters] = useState<AuditLogFilters>(defaultFilters);
+  const [searchParams] = useSearchParams();
+  const recordIdFromUrl = searchParams.get("recordId");
+  const [filters, setFilters] = useState<AuditLogFilters>(() =>
+    defaultFilters(recordIdFromUrl),
+  );
   const [viewRow, setViewRow] = useState<AuditLogRowWithUser | null>(null);
+
+  useEffect(() => {
+    setFilters((prev) => {
+      if (prev.recordId === recordIdFromUrl) return prev;
+      return defaultFilters(recordIdFromUrl);
+    });
+  }, [recordIdFromUrl]);
 
   const { data, isLoading } = useAuditLog(filters);
   const { data: tables = [] } = useAuditedTables();
@@ -93,6 +107,24 @@ export default function AuditoriaTab() {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {filters.recordId && (
+          <div className="flex items-center justify-between gap-2 rounded-md border border-dashed bg-muted/40 px-3 py-2 text-sm">
+            <span className="text-muted-foreground">
+              Filtrando alterações de um registro específico
+              <span className="font-mono text-xs ml-2 text-foreground">
+                {filters.recordId.slice(0, 8)}…
+              </span>
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setFilters((p) => ({ ...p, recordId: null, page: 0 }))}
+            >
+              Limpar
+            </Button>
+          </div>
+        )}
+
         <AuditFilters
           filters={filters}
           onChange={setFilters}

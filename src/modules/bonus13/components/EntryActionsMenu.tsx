@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -11,7 +12,10 @@ import {
   PencilSimple,
   UserCircle,
   FastForward,
+  FileText,
 } from "@phosphor-icons/react";
+import { toast } from "sonner";
+import { downloadBonusReceipt } from "../services/bonus-receipt.service";
 import type { BonusEntryWithCollaborator } from "../lib/bonus-types";
 
 type Props = {
@@ -29,8 +33,21 @@ export function EntryActionsMenu({
   onRequestIndividual,
   onAnticipate,
 }: Props) {
+  const [isGeneratingReceipt, setIsGeneratingReceipt] = useState(false);
   // Se já saiu do batch (avulso/antecipado), só permite editar valor
   const isOutOfBatch = entry.mode !== "batch";
+
+  const handleGenerateReceipt = async () => {
+    setIsGeneratingReceipt(true);
+    try {
+      await downloadBonusReceipt(entry.id);
+      toast.success("Recibo gerado ✓");
+    } catch (err) {
+      toast.error("Não rolou. " + (err as Error).message);
+    } finally {
+      setIsGeneratingReceipt(false);
+    }
+  };
 
   return (
     <DropdownMenu>
@@ -44,6 +61,13 @@ export function EntryActionsMenu({
         <DropdownMenuItem onClick={() => onEdit(entry)}>
           <PencilSimple className="w-4 h-4 mr-2" />
           Editar valor
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={handleGenerateReceipt}
+          disabled={isGeneratingReceipt}
+        >
+          <FileText className="w-4 h-4 mr-2 text-primary" />
+          Gerar recibo (PDF)
         </DropdownMenuItem>
         {!isOutOfBatch && (
           <>

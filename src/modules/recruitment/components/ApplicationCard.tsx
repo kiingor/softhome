@@ -14,6 +14,7 @@ import {
   Eye,
   CaretRight,
   Trophy,
+  ClipboardText,
 } from "@phosphor-icons/react";
 import {
   STAGE_LABELS,
@@ -22,6 +23,9 @@ import {
   type CandidateApplicationWithCandidate,
 } from "../types";
 import type { AIScoringResult } from "../types";
+import { useCvViewer } from "../hooks/use-cv-viewer";
+import { AssignApplicationTestsDialog } from "./AssignApplicationTestsDialog";
+import { useDashboard } from "@/contexts/DashboardContext";
 
 interface ApplicationCardProps {
   application: CandidateApplicationWithCandidate;
@@ -35,7 +39,10 @@ export function ApplicationCard({
   onStartAdmission,
 }: ApplicationCardProps) {
   const [showFull, setShowFull] = useState(false);
+  const [testsOpen, setTestsOpen] = useState(false);
   const candidate = application.candidate;
+  const { openCv, isOpening } = useCvViewer();
+  const { currentCompany } = useDashboard();
 
   // Tenta parsear ai_summary como JSON estruturado
   let aiResult: AIScoringResult | null = null;
@@ -120,17 +127,31 @@ export function ApplicationCard({
         )}
 
         <div className="flex items-center justify-between gap-1 pt-1 border-t border-border">
-          <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-xs">
-            <a
-              href={candidate?.cv_url ?? "#"}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => !candidate?.cv_url && e.preventDefault()}
-            >
-              <Eye className="w-3 h-3 mr-1" />
-              CV
-            </a>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs"
+            disabled={isOpening || !candidate?.cv_url}
+            onClick={() => openCv(candidate?.cv_url)}
+          >
+            <Eye className="w-3 h-3 mr-1" />
+            CV
           </Button>
+
+          {application.stage === "tests" && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/20"
+              onClick={() => setTestsOpen(true)}
+              title="Atribuir e enviar testes"
+            >
+              <ClipboardText className="w-3 h-3 mr-1" />
+              Testes
+            </Button>
+          )}
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -157,6 +178,18 @@ export function ApplicationCard({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+
+        {currentCompany?.id && candidate && (
+          <AssignApplicationTestsDialog
+            open={testsOpen}
+            onOpenChange={setTestsOpen}
+            applicationId={application.id}
+            candidateId={candidate.id}
+            companyId={currentCompany.id}
+            candidateName={candidate.name ?? "candidato"}
+            candidatePhone={candidate.phone}
+          />
+        )}
       </CardContent>
     </Card>
   );

@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Robot, User } from "@phosphor-icons/react";
+import ReactMarkdown from "react-markdown";
 import type { AgentMessage } from "../types";
 
 interface ChatMessageProps {
@@ -45,9 +46,15 @@ export function ChatMessage({ message, children }: ChatMessageProps) {
           )}
         >
           <CardContent className="p-3">
-            <p className="text-sm whitespace-pre-wrap break-words">
-              {message.content}
-            </p>
+            {isUser ? (
+              <p className="text-sm whitespace-pre-wrap break-words">
+                {message.content}
+              </p>
+            ) : (
+              <div className="text-sm prose prose-sm max-w-none break-words prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-headings:my-2 prose-headings:font-semibold prose-strong:font-semibold prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:before:content-none prose-code:after:content-none">
+                <ReactMarkdown>{message.content}</ReactMarkdown>
+              </div>
+            )}
           </CardContent>
         </Card>
 

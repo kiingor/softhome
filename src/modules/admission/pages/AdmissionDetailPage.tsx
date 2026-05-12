@@ -340,12 +340,17 @@ export default function AdmissionDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Coluna principal */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Etapa 1: Testes */}
-          <TestsSection
-            journeyId={journey.id}
-            journeyStatus={journey.status}
-            canManage={canManage}
-          />
+          {/* Testes saíram da Admissão e foram para Recrutamento (vagas).
+              Mantido aqui apenas para journeys legadas que ainda estão em
+              tests_pending — em produção a maioria já avançou. */}
+          {(journey.status === "tests_pending" ||
+            journey.status === "tests_in_review") && (
+            <TestsSection
+              journeyId={journey.id}
+              journeyStatus={journey.status}
+              canManage={canManage}
+            />
+          )}
 
           {/* Documentos (sem exames) */}
           <Card>

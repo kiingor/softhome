@@ -599,6 +599,114 @@ export type Database = {
           },
         ]
       }
+      application_tests: {
+        Row: {
+          access_token: string
+          answers: Json
+          application_id: string
+          assigned_at: string
+          auto_score: number | null
+          candidate_id: string
+          company_id: string
+          completed_at: string | null
+          created_at: string
+          expires_at: string | null
+          id: string
+          result_summary: Json | null
+          reviewed_at: string | null
+          reviewer_id: string | null
+          reviewer_notes: string | null
+          reviewer_score: number | null
+          started_at: string | null
+          status: Database["public"]["Enums"]["admission_test_status"]
+          test_id: string
+          test_slug: string
+          updated_at: string
+        }
+        Insert: {
+          access_token?: string
+          answers?: Json
+          application_id: string
+          assigned_at?: string
+          auto_score?: number | null
+          candidate_id: string
+          company_id: string
+          completed_at?: string | null
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          result_summary?: Json | null
+          reviewed_at?: string | null
+          reviewer_id?: string | null
+          reviewer_notes?: string | null
+          reviewer_score?: number | null
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["admission_test_status"]
+          test_id: string
+          test_slug: string
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string
+          answers?: Json
+          application_id?: string
+          assigned_at?: string
+          auto_score?: number | null
+          candidate_id?: string
+          company_id?: string
+          completed_at?: string | null
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          result_summary?: Json | null
+          reviewed_at?: string | null
+          reviewer_id?: string | null
+          reviewer_notes?: string | null
+          reviewer_score?: number | null
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["admission_test_status"]
+          test_id?: string
+          test_slug?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "application_tests_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "candidate_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "application_tests_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "application_tests_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "application_tests_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "application_tests_test_id_fkey"
+            columns: ["test_id"]
+            isOneToOne: false
+            referencedRelation: "admission_tests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_log: {
         Row: {
           action: string
@@ -715,6 +823,7 @@ export type Database = {
           created_at: string
           description: string | null
           id: string
+          is_company_expense: boolean
           name: string
           value: number
           value_type: string
@@ -726,6 +835,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          is_company_expense?: boolean
           name: string
           value?: number
           value_type?: string
@@ -737,6 +847,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          is_company_expense?: boolean
           name?: string
           value?: number
           value_type?: string
@@ -1115,6 +1226,8 @@ export type Database = {
       candidates: {
         Row: {
           company_id: string
+          consent_lgpd_at: string | null
+          consent_talent_pool: boolean
           cpf: string | null
           created_at: string
           cv_filename: string | null
@@ -1133,6 +1246,8 @@ export type Database = {
         }
         Insert: {
           company_id: string
+          consent_lgpd_at?: string | null
+          consent_talent_pool?: boolean
           cpf?: string | null
           created_at?: string
           cv_filename?: string | null
@@ -1151,6 +1266,8 @@ export type Database = {
         }
         Update: {
           company_id?: string
+          consent_lgpd_at?: string | null
+          consent_talent_pool?: boolean
           cpf?: string | null
           created_at?: string
           cv_filename?: string | null
@@ -1219,6 +1336,91 @@ export type Database = {
           },
           {
             foreignKeyName: "closed_periods_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      collaborator_alimony_orders: {
+        Row: {
+          beneficiary_bank_info: string | null
+          beneficiary_cpf: string | null
+          beneficiary_name: string
+          calculation_type: Database["public"]["Enums"]["alimony_calculation_type"]
+          case_number: string | null
+          collaborator_id: string
+          company_id: string
+          court_order_doc_url: string | null
+          created_at: string
+          created_by: string | null
+          effective_from: string
+          effective_to: string | null
+          id: string
+          judgment_date: string | null
+          notes: string | null
+          status: Database["public"]["Enums"]["alimony_status"]
+          updated_at: string
+          value: number
+        }
+        Insert: {
+          beneficiary_bank_info?: string | null
+          beneficiary_cpf?: string | null
+          beneficiary_name: string
+          calculation_type: Database["public"]["Enums"]["alimony_calculation_type"]
+          case_number?: string | null
+          collaborator_id: string
+          company_id: string
+          court_order_doc_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          effective_from: string
+          effective_to?: string | null
+          id?: string
+          judgment_date?: string | null
+          notes?: string | null
+          status?: Database["public"]["Enums"]["alimony_status"]
+          updated_at?: string
+          value: number
+        }
+        Update: {
+          beneficiary_bank_info?: string | null
+          beneficiary_cpf?: string | null
+          beneficiary_name?: string
+          calculation_type?: Database["public"]["Enums"]["alimony_calculation_type"]
+          case_number?: string | null
+          collaborator_id?: string
+          company_id?: string
+          court_order_doc_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          effective_from?: string
+          effective_to?: string | null
+          id?: string
+          judgment_date?: string | null
+          notes?: string | null
+          status?: Database["public"]["Enums"]["alimony_status"]
+          updated_at?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collaborator_alimony_orders_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collaborator_alimony_orders_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "collaborator_alimony_orders_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
@@ -1297,6 +1499,82 @@ export type Database = {
           },
         ]
       }
+      collaborator_dependents: {
+        Row: {
+          birth_certificate_url: string | null
+          birth_date: string | null
+          collaborator_id: string
+          company_id: string
+          cpf: string | null
+          created_at: string
+          id: string
+          is_health_plan_dependent: boolean
+          is_irpf_dependent: boolean
+          kinship: Database["public"]["Enums"]["kinship_type"]
+          name: string
+          notes: string | null
+          school_enrollment_url: string | null
+          updated_at: string
+          vaccination_card_url: string | null
+        }
+        Insert: {
+          birth_certificate_url?: string | null
+          birth_date?: string | null
+          collaborator_id: string
+          company_id: string
+          cpf?: string | null
+          created_at?: string
+          id?: string
+          is_health_plan_dependent?: boolean
+          is_irpf_dependent?: boolean
+          kinship: Database["public"]["Enums"]["kinship_type"]
+          name: string
+          notes?: string | null
+          school_enrollment_url?: string | null
+          updated_at?: string
+          vaccination_card_url?: string | null
+        }
+        Update: {
+          birth_certificate_url?: string | null
+          birth_date?: string | null
+          collaborator_id?: string
+          company_id?: string
+          cpf?: string | null
+          created_at?: string
+          id?: string
+          is_health_plan_dependent?: boolean
+          is_irpf_dependent?: boolean
+          kinship?: Database["public"]["Enums"]["kinship_type"]
+          name?: string
+          notes?: string | null
+          school_enrollment_url?: string | null
+          updated_at?: string
+          vaccination_card_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collaborator_dependents_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collaborator_dependents_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "collaborator_dependents_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       collaborator_documents: {
         Row: {
           collaborator_id: string
@@ -1368,6 +1646,137 @@ export type Database = {
           },
         ]
       }
+      collaborator_emergency_contacts: {
+        Row: {
+          collaborator_id: string
+          company_id: string
+          created_at: string
+          id: string
+          is_primary: boolean
+          kinship: Database["public"]["Enums"]["kinship_type"]
+          name: string
+          notes: string | null
+          phone: string
+          updated_at: string
+        }
+        Insert: {
+          collaborator_id: string
+          company_id: string
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          kinship: Database["public"]["Enums"]["kinship_type"]
+          name: string
+          notes?: string | null
+          phone: string
+          updated_at?: string
+        }
+        Update: {
+          collaborator_id?: string
+          company_id?: string
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          kinship?: Database["public"]["Enums"]["kinship_type"]
+          name?: string
+          notes?: string | null
+          phone?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collaborator_emergency_contacts_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collaborator_emergency_contacts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "collaborator_emergency_contacts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      collaborator_medical_certificates: {
+        Row: {
+          cid_code: string | null
+          collaborator_id: string
+          company_id: string
+          created_at: string
+          created_by: string | null
+          days_off: number
+          doctor_crm: string | null
+          doctor_name: string | null
+          document_url: string | null
+          id: string
+          issued_at: string
+          notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          cid_code?: string | null
+          collaborator_id: string
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          days_off: number
+          doctor_crm?: string | null
+          doctor_name?: string | null
+          document_url?: string | null
+          id?: string
+          issued_at: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cid_code?: string | null
+          collaborator_id?: string
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          days_off?: number
+          doctor_crm?: string | null
+          doctor_name?: string | null
+          document_url?: string | null
+          id?: string
+          issued_at?: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collaborator_medical_certificates_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collaborator_medical_certificates_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "collaborator_medical_certificates_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       collaborator_notifications: {
         Row: {
           body: string | null
@@ -1412,8 +1821,137 @@ export type Database = {
           },
         ]
       }
+      collaborator_timeline_events: {
+        Row: {
+          collaborator_id: string
+          company_id: string
+          created_at: string
+          created_by: string | null
+          effective_date: string
+          event_type: Database["public"]["Enums"]["collaborator_timeline_event_type"]
+          from_value: Json | null
+          id: string
+          reason: string | null
+          to_value: Json | null
+        }
+        Insert: {
+          collaborator_id: string
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          effective_date?: string
+          event_type: Database["public"]["Enums"]["collaborator_timeline_event_type"]
+          from_value?: Json | null
+          id?: string
+          reason?: string | null
+          to_value?: Json | null
+        }
+        Update: {
+          collaborator_id?: string
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          effective_date?: string
+          event_type?: Database["public"]["Enums"]["collaborator_timeline_event_type"]
+          from_value?: Json | null
+          id?: string
+          reason?: string | null
+          to_value?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collaborator_timeline_events_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collaborator_timeline_events_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "collaborator_timeline_events_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      collaborator_uniform_sizes: {
+        Row: {
+          collaborator_id: string
+          company_id: string
+          created_at: string
+          id: string
+          jacket_size: string | null
+          measured_at: string
+          measured_by: string | null
+          notes: string | null
+          pants_size: string | null
+          shirt_size: string | null
+          shoe_size: string | null
+          updated_at: string
+        }
+        Insert: {
+          collaborator_id: string
+          company_id: string
+          created_at?: string
+          id?: string
+          jacket_size?: string | null
+          measured_at?: string
+          measured_by?: string | null
+          notes?: string | null
+          pants_size?: string | null
+          shirt_size?: string | null
+          shoe_size?: string | null
+          updated_at?: string
+        }
+        Update: {
+          collaborator_id?: string
+          company_id?: string
+          created_at?: string
+          id?: string
+          jacket_size?: string | null
+          measured_at?: string
+          measured_by?: string | null
+          notes?: string | null
+          pants_size?: string | null
+          shirt_size?: string | null
+          shoe_size?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collaborator_uniform_sizes_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collaborator_uniform_sizes_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "collaborator_uniform_sizes_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       collaborators: {
         Row: {
+          accounting_code: string | null
           address: string | null
           admission_date: string | null
           birth_date: string | null
@@ -1423,6 +1961,7 @@ export type Database = {
           cpf: string
           created_at: string
           dependents_count: number
+          discord_username: string | null
           district: string | null
           email: string | null
           id: string
@@ -1432,10 +1971,13 @@ export type Database = {
           name: string
           notes: string | null
           phone: string | null
+          photo_url: string | null
+          pis: string | null
           pix_key: string | null
           position: string | null
           position_id: string | null
           postal_code: string | null
+          recado_phone: string | null
           regime: Database["public"]["Enums"]["collaborator_regime"]
           rg: string | null
           softcom_surname: string | null
@@ -1448,6 +1990,7 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          accounting_code?: string | null
           address?: string | null
           admission_date?: string | null
           birth_date?: string | null
@@ -1457,6 +2000,7 @@ export type Database = {
           cpf: string
           created_at?: string
           dependents_count?: number
+          discord_username?: string | null
           district?: string | null
           email?: string | null
           id?: string
@@ -1466,10 +2010,13 @@ export type Database = {
           name: string
           notes?: string | null
           phone?: string | null
+          photo_url?: string | null
+          pis?: string | null
           pix_key?: string | null
           position?: string | null
           position_id?: string | null
           postal_code?: string | null
+          recado_phone?: string | null
           regime?: Database["public"]["Enums"]["collaborator_regime"]
           rg?: string | null
           softcom_surname?: string | null
@@ -1482,6 +2029,7 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          accounting_code?: string | null
           address?: string | null
           admission_date?: string | null
           birth_date?: string | null
@@ -1491,6 +2039,7 @@ export type Database = {
           cpf?: string
           created_at?: string
           dependents_count?: number
+          discord_username?: string | null
           district?: string | null
           email?: string | null
           id?: string
@@ -1500,10 +2049,13 @@ export type Database = {
           name?: string
           notes?: string | null
           phone?: string | null
+          photo_url?: string | null
+          pis?: string | null
           pix_key?: string | null
           position?: string | null
           position_id?: string | null
           postal_code?: string | null
+          recado_phone?: string | null
           regime?: Database["public"]["Enums"]["collaborator_regime"]
           rg?: string | null
           softcom_surname?: string | null
@@ -3207,6 +3759,9 @@ export type Database = {
           end_date: string
           id: string
           notes: string | null
+          paid_at: string | null
+          paid_by: string | null
+          paid_value: number | null
           rejection_reason: string | null
           requested_by: string | null
           sell_days: number
@@ -3225,6 +3780,9 @@ export type Database = {
           end_date: string
           id?: string
           notes?: string | null
+          paid_at?: string | null
+          paid_by?: string | null
+          paid_value?: number | null
           rejection_reason?: string | null
           requested_by?: string | null
           sell_days?: number
@@ -3243,6 +3801,9 @@ export type Database = {
           end_date?: string
           id?: string
           notes?: string | null
+          paid_at?: string | null
+          paid_by?: string | null
+          paid_value?: number | null
           rejection_reason?: string | null
           requested_by?: string | null
           sell_days?: number
@@ -3559,6 +4120,18 @@ export type Database = {
         }
         Returns: undefined
       }
+      get_application_test_by_token: {
+        Args: { p_token: string }
+        Returns: {
+          answers: Json
+          candidate_name: string
+          expires_at: string
+          id: string
+          started_at: string
+          status: Database["public"]["Enums"]["admission_test_status"]
+          test_slug: string
+        }[]
+      }
       get_user_permissions: {
         Args: { _company_id: string; _module: string; _user_id: string }
         Returns: {
@@ -3659,6 +4232,8 @@ export type Database = {
         | "completed"
         | "reviewed"
       agent_message_role: "user" | "assistant" | "system" | "tool"
+      alimony_calculation_type: "fixed" | "percentage_gross" | "percentage_net"
+      alimony_status: "active" | "suspended" | "ended"
       app_role:
         | "admin_gc"
         | "rh"
@@ -3700,10 +4275,32 @@ export type Database = {
         | "aguardando_documentacao"
         | "validacao_pendente"
         | "reprovado"
+      collaborator_timeline_event_type:
+        | "store_change"
+        | "position_change"
+        | "team_change"
+        | "regime_change"
+        | "salary_change"
+        | "migration"
+        | "admission"
+        | "termination"
+        | "manual"
       holiday_type: "national" | "state" | "municipal" | "manual"
       job_opening_status: "draft" | "open" | "paused" | "filled" | "cancelled"
       journey_milestone_kind: "d30" | "d60" | "d90" | "d180" | "annual"
       journey_milestone_status: "pending" | "due" | "completed" | "overdue"
+      kinship_type:
+        | "filho"
+        | "enteado"
+        | "tutelado"
+        | "conjuge"
+        | "companheiro"
+        | "pai"
+        | "mae"
+        | "irmao"
+        | "avô"
+        | "neto"
+        | "outro"
       payroll_alert_kind:
         | "collaborator_no_entry"
         | "value_divergence"
@@ -3906,6 +4503,8 @@ export const Constants = {
         "reviewed",
       ],
       agent_message_role: ["user", "assistant", "system", "tool"],
+      alimony_calculation_type: ["fixed", "percentage_gross", "percentage_net"],
+      alimony_status: ["active", "suspended", "ended"],
       app_role: [
         "admin_gc",
         "rh",
@@ -3952,10 +4551,34 @@ export const Constants = {
         "validacao_pendente",
         "reprovado",
       ],
+      collaborator_timeline_event_type: [
+        "store_change",
+        "position_change",
+        "team_change",
+        "regime_change",
+        "salary_change",
+        "migration",
+        "admission",
+        "termination",
+        "manual",
+      ],
       holiday_type: ["national", "state", "municipal", "manual"],
       job_opening_status: ["draft", "open", "paused", "filled", "cancelled"],
       journey_milestone_kind: ["d30", "d60", "d90", "d180", "annual"],
       journey_milestone_status: ["pending", "due", "completed", "overdue"],
+      kinship_type: [
+        "filho",
+        "enteado",
+        "tutelado",
+        "conjuge",
+        "companheiro",
+        "pai",
+        "mae",
+        "irmao",
+        "avô",
+        "neto",
+        "outro",
+      ],
       payroll_alert_kind: [
         "collaborator_no_entry",
         "value_divergence",
@@ -3986,3 +4609,4 @@ export const Constants = {
     },
   },
 } as const
+<claude-code-hint v="1" type="plugin" value="supabase@claude-plugins-official" />

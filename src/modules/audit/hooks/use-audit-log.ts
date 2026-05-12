@@ -25,6 +25,7 @@ export interface AuditLogFilters {
   userId: string | null;
   tableName: string | null;
   action: "insert" | "update" | "delete" | null;
+  recordId: string | null; // filtrar por ID específico (ex: colaborador)
   page: number; // 0-indexed
   pageSize: number;
 }
@@ -44,6 +45,7 @@ export function useAuditLog(filters: AuditLogFilters) {
       filters.userId,
       filters.tableName,
       filters.action,
+      filters.recordId,
       filters.page,
       filters.pageSize,
     ],
@@ -72,6 +74,7 @@ export function useAuditLog(filters: AuditLogFilters) {
       if (filters.userId) q = q.eq("user_id", filters.userId);
       if (filters.tableName) q = q.eq("table_name", filters.tableName);
       if (filters.action) q = q.eq("action", filters.action);
+      if (filters.recordId) q = q.eq("record_id", filters.recordId);
 
       const { data, error, count } = await q;
       if (error) throw error;

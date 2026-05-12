@@ -47,6 +47,7 @@ const KNOWN_STAGE_LABELS: Record<string, string> = {
   new: "Inscritos",
   screening: "Triagem",
   interview_hr: "Entrevista RH",
+  tests: "Testes",
   interview_manager: "Entrevista Gestor",
   offer: "Proposta",
   accepted: "Aceito",
@@ -74,6 +75,7 @@ const KNOWN_STAGE_COLORS: Record<string, string> = {
   new: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
   screening: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
   interview_hr: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+  tests: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
   interview_manager:
     "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
   offer: "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300",
@@ -92,10 +94,12 @@ export const STAGE_COLORS = new Proxy({} as Record<string, string>, {
 });
 
 // Defaults pro pipeline_stages quando vaga não tem nenhum (fallback compat).
+// 'tests' entra entre 'interview_hr' e 'interview_manager' desde 2026-05-12.
 export const DEFAULT_STAGES: ApplicationStage[] = [
   "new",
   "screening",
   "interview_hr",
+  "tests",
   "interview_manager",
   "offer",
   "accepted",
@@ -106,6 +110,7 @@ export const PIPELINE_STAGES: ApplicationStage[] = [
   "new",
   "screening",
   "interview_hr",
+  "tests",
   "interview_manager",
   "offer",
   "accepted",

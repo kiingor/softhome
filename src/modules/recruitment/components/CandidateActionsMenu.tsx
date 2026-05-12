@@ -32,9 +32,9 @@ import {
 } from "@phosphor-icons/react";
 import {
   uploadAndProcessCv,
-  getCvSignedUrl,
   reprocessCv,
 } from "../services/cv-process.service";
+import { useCvViewer } from "../hooks/use-cv-viewer";
 import type { Candidate } from "../types";
 
 interface Props {
@@ -48,6 +48,7 @@ export function CandidateActionsMenu({ candidate, onDeactivate, isDeactivating }
   const [isProcessing, setIsProcessing] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const queryClient = useQueryClient();
+  const { openCv } = useCvViewer();
 
   const indexed = !!candidate.cv_processed_at;
   const hasCv = !!candidate.cv_url;
@@ -85,19 +86,7 @@ export function CandidateActionsMenu({ candidate, onDeactivate, isDeactivating }
     }
   };
 
-  const handleViewCv = async () => {
-    if (!candidate.cv_url) return;
-    if (candidate.cv_url.startsWith("http")) {
-      window.open(candidate.cv_url, "_blank", "noopener");
-      return;
-    }
-    const url = await getCvSignedUrl(candidate.cv_url);
-    if (url) {
-      window.open(url, "_blank", "noopener");
-    } else {
-      toast.error("Não consegui gerar o link de download.");
-    }
-  };
+  const handleViewCv = () => openCv(candidate.cv_url);
 
   return (
     <div className="flex items-center gap-2 justify-end">

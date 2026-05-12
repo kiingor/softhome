@@ -105,6 +105,7 @@ const BeneficiosPage = () => {
       value_type: "monthly" | "daily";
       category: BenefitCategory;
       applicable_days: string[];
+      is_company_expense: boolean;
     }) => {
       const { error } = await supabase.from("benefits").insert({
         name: data.name,
@@ -114,6 +115,7 @@ const BeneficiosPage = () => {
         category: data.category,
         applicable_days: data.applicable_days,
         company_id: currentCompany!.id,
+        is_company_expense: data.is_company_expense,
       });
       if (error) throw error;
     },
@@ -137,6 +139,7 @@ const BeneficiosPage = () => {
       value_type: "monthly" | "daily";
       category: BenefitCategory;
       applicable_days: string[];
+      is_company_expense: boolean;
     }) => {
       const { error } = await supabase
         .from("benefits")
@@ -147,6 +150,7 @@ const BeneficiosPage = () => {
           value_type: data.value_type,
           category: data.category,
           applicable_days: data.applicable_days,
+          is_company_expense: data.is_company_expense,
         })
         .eq("id", data.id);
       if (error) throw error;
@@ -185,6 +189,7 @@ const BeneficiosPage = () => {
     value_type: "monthly" | "daily";
     category: BenefitCategory;
     applicable_days: string[];
+    is_company_expense: boolean;
   }) => {
     setIsSubmitting(true);
     try {
@@ -384,6 +389,7 @@ const BeneficiosPage = () => {
             value_type: editingBenefit.value_type || "monthly",
             category: (editingBenefit.category ?? "other") as BenefitCategory,
             applicable_days: editingBenefit.applicable_days || ["mon", "tue", "wed", "thu", "fri"],
+            is_company_expense: editingBenefit.is_company_expense ?? true,
           } : undefined}
           isLoading={isSubmitting}
         />

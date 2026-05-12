@@ -65,6 +65,7 @@ const benefitSchema = z.object({
     "other",
   ]),
   applicable_days: z.array(z.string()).optional(),
+  is_company_expense: z.boolean().default(true),
 });
 
 type BenefitFormData = z.infer<typeof benefitSchema>;
@@ -79,6 +80,7 @@ interface BenefitFormProps {
     value_type: "monthly" | "daily";
     category: BenefitCategory;
     applicable_days: string[];
+    is_company_expense: boolean;
   }) => Promise<void>;
   initialData?: {
     name: string;
@@ -87,6 +89,7 @@ interface BenefitFormProps {
     value_type?: "monthly" | "daily";
     category?: BenefitCategory;
     applicable_days?: string[];
+    is_company_expense?: boolean;
   };
   isLoading?: boolean;
 }
@@ -119,6 +122,7 @@ const BenefitForm = ({
       value_type: initialData?.value_type || "monthly",
       category: initialData?.category || "other",
       applicable_days: initialData?.applicable_days || defaultWorkingDays,
+      is_company_expense: initialData?.is_company_expense ?? true,
     },
   });
 
@@ -150,6 +154,7 @@ const BenefitForm = ({
         value_type: initialData?.value_type || "monthly",
         category: initialData?.category || "other",
         applicable_days: initialData?.applicable_days || defaultWorkingDays,
+        is_company_expense: initialData?.is_company_expense ?? true,
       });
     }
   }, [open, initialData, form]);
@@ -169,6 +174,7 @@ const BenefitForm = ({
       value_type: data.value_type,
       category: data.category,
       applicable_days: data.value_type === "daily" ? (data.applicable_days || defaultWorkingDays) : defaultWorkingDays,
+      is_company_expense: data.is_company_expense,
     });
     form.reset();
     setValueDisplay("");
@@ -222,6 +228,31 @@ const BenefitForm = ({
                     Usado em relatórios e regras específicas (ex: VT desconta 6% do salário).
                   </FormDescription>
                   <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="is_company_expense"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel className="text-sm font-medium cursor-pointer">
+                      Conta como despesa da empresa
+                    </FormLabel>
+                    <FormDescription>
+                      Desmarque quando o custo é integralmente do colaborador (ex: plano
+                      odontológico opcional). Continua aparecendo no contracheque, mas não
+                      entra em relatórios de despesa.
+                    </FormDescription>
+                  </div>
                 </FormItem>
               )}
             />
