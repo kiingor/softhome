@@ -16,8 +16,11 @@ import {
   Copy,
   CheckCircle,
   Clock,
+  WhatsappLogo,
+  Phone,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import {
   assignTests,
   buildApplicationTestUrl,
@@ -33,6 +36,7 @@ interface Props {
   candidateId: string;
   companyId: string;
   candidateName: string;
+  candidatePhone?: string | null;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -49,9 +53,11 @@ export function AssignApplicationTestsDialog({
   candidateId,
   companyId,
   candidateName,
+  candidatePhone,
 }: Props) {
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [isSending, setIsSending] = useState(false);
 
   const { data: assigned = [], isLoading: loadingAssigned } = useQuery({
     queryKey: ["application-tests", applicationId],
@@ -98,14 +104,62 @@ export function AssignApplicationTestsDialog({
     toast.success("Link copiado ✓");
   };
 
+  // Conta testes pendentes (não-completados) que serão enviados pelo WhatsApp.
+  const pendingTestsCount = assigned.filter(
+    (a) => a.status === "not_started" || a.status === "in_progress",
+  ).length;
+
+  const sendWhatsApp = async () => {
+    if (!candidatePhone) {
+      toast.error("Candidato sem telefone cadastrado.");
+      return;
+    }
+    if (pendingTestsCount === 0) {
+      toast.error("Sem testes pendentes para enviar.");
+      return;
+    }
+    setIsSending(true);
+    try {
+      const { data, error } = await supabase.functions.invoke<{
+        success?: boolean;
+        error?: string;
+        tests_count?: number;
+      }>("application-test-notify", {
+        body: {
+          application_id: applicationId,
+          public_url_origin: window.location.origin,
+        },
+      });
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
+      toast.success(
+        `WhatsApp enviado ✓ (${data?.tests_count ?? pendingTestsCount} teste${
+          (data?.tests_count ?? pendingTestsCount) === 1 ? "" : "s"
+        })`,
+      );
+      onOpenChange(false);
+    } catch (err) {
+      toast.error("Não rolou. " + (err as Error).message);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Testes do candidato</DialogTitle>
           <DialogDescription>
-            Atribua testes para {candidateName} e compartilhe o link com ele.
+            Atribua testes para {candidateName} e envie via WhatsApp ou copie o
+            link.
           </DialogDescription>
+          {candidatePhone && (
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-1">
+              <Phone className="w-3 h-3" />
+              <span className="font-mono">{candidatePhone}</span>
+            </div>
+          )}
         </DialogHeader>
 
         <div className="space-y-4">
@@ -222,21 +276,43 @@ export function AssignApplicationTestsDialog({
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="flex-col sm:flex-row gap-2 sm:justify-between">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Fechar
           </Button>
-          {notYetAssigned.length > 0 && (
-            <Button
-              onClick={() => assign.mutate()}
-              disabled={selected.size === 0 || assign.isPending}
-            >
-              {assign.isPending && (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              )}
-              Atribuir {selected.size > 0 ? `(${selected.size})` : ""}
-            </Button>
-          )}
+          <div className="flex flex-wrap gap-2 sm:ml-auto">
+            {notYetAssigned.length > 0 && (
+              <Button
+                onClick={() => assign.mutate()}
+                disabled={selected.size === 0 || assign.isPending}
+                variant="outline"
+              >
+                {assign.isPending && (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                )}
+                Atribuir {selected.size > 0 ? `(${selected.size})` : ""}
+              </Button>
+            )}
+            {pendingTestsCount > 0 && (
+              <Button
+                onClick={sendWhatsApp}
+                disabled={isSending || !candidatePhone}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                title={
+                  !candidatePhone
+                    ? "Candidato sem telefone cadastrado"
+                    : `Enviar ${pendingTestsCount} link${pendingTestsCount === 1 ? "" : "s"} via WhatsApp`
+                }
+              >
+                {isSending ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <WhatsappLogo className="w-4 h-4 mr-2" />
+                )}
+                Enviar via WhatsApp
+              </Button>
+            )}
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

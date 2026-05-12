@@ -133,8 +133,7 @@ export default function AdmissoesPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos status</SelectItem>
-                <SelectItem value="tests_pending">Aguardando testes</SelectItem>
-                <SelectItem value="tests_in_review">Testes em análise</SelectItem>
+                {/* Filtros de testes removidos: agora testes ficam em Vagas/Recrutamento. */}
                 <SelectItem value="docs_pending">Aguardando docs</SelectItem>
                 <SelectItem value="docs_in_review">Em revisão</SelectItem>
                 <SelectItem value="docs_needs_adjustment">Pedindo ajuste</SelectItem>

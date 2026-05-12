@@ -139,17 +139,19 @@ export function ApplicationCard({
             CV
           </Button>
 
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-xs"
-            onClick={() => setTestsOpen(true)}
-            title="Atribuir testes"
-          >
-            <ClipboardText className="w-3 h-3 mr-1" />
-            Testes
-          </Button>
+          {application.stage === "tests" && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/20"
+              onClick={() => setTestsOpen(true)}
+              title="Atribuir e enviar testes"
+            >
+              <ClipboardText className="w-3 h-3 mr-1" />
+              Testes
+            </Button>
+          )}
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -185,6 +187,7 @@ export function ApplicationCard({
             candidateId={candidate.id}
             companyId={currentCompany.id}
             candidateName={candidate.name ?? "candidato"}
+            candidatePhone={candidate.phone}
           />
         )}
       </CardContent>
