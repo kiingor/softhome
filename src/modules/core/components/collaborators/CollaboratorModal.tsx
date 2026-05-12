@@ -47,6 +47,12 @@ import { PositionChangeDialog } from "@/components/exames/PositionChangeDialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { VacationPeriodAdjustDialog } from "./VacationPeriodAdjustDialog";
 import { Pencil } from "@phosphor-icons/react";
+import { CollaboratorPhotoUploader } from "./CollaboratorPhotoUploader";
+import { CollaboratorTimelineTab } from "./tabs/CollaboratorTimelineTab";
+import { CollaboratorDependentsTab } from "./tabs/CollaboratorDependentsTab";
+import { CollaboratorUniformTab } from "./tabs/CollaboratorUniformTab";
+import { CollaboratorMedicalCertsTab } from "./tabs/CollaboratorMedicalCertsTab";
+import { CollaboratorAlimonyTab } from "./tabs/CollaboratorAlimonyTab";
 
 interface PendingEntry {
   id: string;
@@ -114,6 +120,10 @@ const CollaboratorModal = ({
     rg: "",
     email: "",
     phone: "",
+    recado_phone: "",
+    pis: "",
+    discord_username: "",
+    accounting_code: "",
     pix_key: "",
     birth_date: "",
     position_id: "",
@@ -133,6 +143,7 @@ const CollaboratorModal = ({
     state: "",
     postal_code: "",
     notes: "",
+    photo_url: "",
     password: "",
   });
   const [showPasswordField, setShowPasswordField] = useState(false);
@@ -355,6 +366,13 @@ const CollaboratorModal = ({
           softcom_surname?: string | null;
           pix_key?: string | null;
         };
+        const cExtra = c as typeof c & {
+          recado_phone?: string | null;
+          pis?: string | null;
+          discord_username?: string | null;
+          accounting_code?: string | null;
+          photo_url?: string | null;
+        };
         setFormData({
           name: c.name || "",
           softcom_surname: c.softcom_surname || "",
@@ -362,6 +380,10 @@ const CollaboratorModal = ({
           rg: c.rg || "",
           email: c.email || "",
           phone: c.phone || "",
+          recado_phone: cExtra.recado_phone || "",
+          pis: cExtra.pis || "",
+          discord_username: cExtra.discord_username || "",
+          accounting_code: cExtra.accounting_code || "",
           pix_key: c.pix_key || "",
           birth_date: c.birth_date || "",
           position_id: c.position_id || "",
@@ -381,6 +403,7 @@ const CollaboratorModal = ({
           state: c.state || "",
           postal_code: c.postal_code ? formatCEPInput(c.postal_code) : "",
           notes: c.notes || "",
+          photo_url: cExtra.photo_url || "",
           password: "",
         });
         setShowPasswordField(!c.user_id);
@@ -394,6 +417,10 @@ const CollaboratorModal = ({
           rg: prefill?.rg ?? "",
           email: prefill?.email ?? "",
           phone: prefill?.phone ?? "",
+          recado_phone: "",
+          pis: "",
+          discord_username: "",
+          accounting_code: "",
           pix_key: prefill?.pix_key ?? "",
           birth_date: prefill?.birth_date ?? "",
           position_id: prefill?.position_id ?? "",
@@ -415,6 +442,7 @@ const CollaboratorModal = ({
             ? formatCEPInput(prefill.postal_code)
             : "",
           notes: prefill?.notes ?? "",
+          photo_url: "",
           password: "",
         });
         setShowPasswordField(false);
@@ -772,6 +800,11 @@ const CollaboratorModal = ({
         rg: formData.rg.trim() || null,
         email: formData.email.trim().toLowerCase() || null,
         phone: formData.phone.replace(/\D/g, "") || null,
+        recado_phone: formData.recado_phone.replace(/\D/g, "") || null,
+        pis: formData.pis.replace(/\D/g, "") || null,
+        discord_username: formData.discord_username.trim() || null,
+        accounting_code: formData.accounting_code.trim() || null,
+        photo_url: formData.photo_url || null,
         pix_key: formData.pix_key.trim() || null,
         birth_date: formData.birth_date || null,
         position_id: formData.position_id || null,
@@ -1304,11 +1337,20 @@ const CollaboratorModal = ({
           ) : (
             /* Content with Tabs */
             <Tabs defaultValue="geral" className="flex-1 flex flex-col min-h-0 overflow-hidden">
-              {["validacao_pendente", "reprovado"].includes(formData.status) && collaboratorId && (
+              {collaboratorId && (
                 <div className="shrink-0 px-6 pt-2">
-                  <TabsList>
+                  <TabsList className="flex-wrap h-auto">
                     <TabsTrigger value="geral">Geral</TabsTrigger>
-                    <TabsTrigger value="validacao">Validação</TabsTrigger>
+                    {["validacao_pendente", "reprovado"].includes(formData.status) && (
+                      <TabsTrigger value="validacao">Validação</TabsTrigger>
+                    )}
+                    <TabsTrigger value="historico">Histórico</TabsTrigger>
+                    <TabsTrigger value="dependentes">Dependentes</TabsTrigger>
+                    <TabsTrigger value="atestados">Atestados</TabsTrigger>
+                    <TabsTrigger value="fardamento">Fardamento</TabsTrigger>
+                    {canManage && (
+                      <TabsTrigger value="pensao">Pensão</TabsTrigger>
+                    )}
                   </TabsList>
                 </div>
               )}
@@ -1323,7 +1365,19 @@ const CollaboratorModal = ({
                     <Users className="w-5 h-5 text-primary" />
                     Dados Cadastrais
                   </h3>
-                  
+
+                  {/* Foto */}
+                  <CollaboratorPhotoUploader
+                    collaboratorId={collaboratorId ?? null}
+                    companyId={currentCompany?.id ?? ""}
+                    photoUrl={formData.photo_url || null}
+                    name={formData.name}
+                    onChange={(path) =>
+                      setFormData((prev) => ({ ...prev, photo_url: path ?? "" }))
+                    }
+                    canEdit={canManage}
+                  />
+
                   {/* Name */}
                   <div className="space-y-2">
                     <Label htmlFor="name">Nome Completo *</Label>
@@ -1444,6 +1498,69 @@ const CollaboratorModal = ({
                       onChange={(e) => setFormData((prev) => ({ ...prev, pix_key: e.target.value }))}
                       placeholder="CPF, e-mail, telefone ou chave aleatória"
                     />
+                  </div>
+
+                  {/* PIS + Telefone de Recado */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="pis">PIS / NIS</Label>
+                      <Input
+                        id="pis"
+                        value={formData.pis}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, pis: e.target.value }))
+                        }
+                        placeholder="000.00000.00-0"
+                        maxLength={20}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="recado_phone">Telefone para recado</Label>
+                      <Input
+                        id="recado_phone"
+                        value={formData.recado_phone}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            recado_phone: formatPhoneInput(e.target.value),
+                          }))
+                        }
+                        placeholder="(00) 00000-0000"
+                        maxLength={15}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Discord + Código contabilidade */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="discord_username">Discord</Label>
+                      <Input
+                        id="discord_username"
+                        value={formData.discord_username}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            discord_username: e.target.value,
+                          }))
+                        }
+                        placeholder="usuario#1234 ou @usuario"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="accounting_code">Código contabilidade</Label>
+                      <Input
+                        id="accounting_code"
+                        value={formData.accounting_code}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            accounting_code: e.target.value,
+                          }))
+                        }
+                        placeholder="Identificador externo"
+                      />
+                    </div>
                   </div>
 
                   {/* Tipo de Contrato (regime) */}
@@ -2121,6 +2238,59 @@ const CollaboratorModal = ({
                     }}
                   />
                 </TabsContent>
+              )}
+
+              {collaboratorId && (
+                <>
+                  <TabsContent
+                    value="historico"
+                    className="flex-1 min-h-0 overflow-auto m-0 p-4"
+                  >
+                    <CollaboratorTimelineTab collaboratorId={collaboratorId} />
+                  </TabsContent>
+                  <TabsContent
+                    value="dependentes"
+                    className="flex-1 min-h-0 overflow-auto m-0 p-4"
+                  >
+                    <CollaboratorDependentsTab
+                      collaboratorId={collaboratorId}
+                      companyId={currentCompany?.id || ""}
+                      canEdit={canManage}
+                    />
+                  </TabsContent>
+                  <TabsContent
+                    value="atestados"
+                    className="flex-1 min-h-0 overflow-auto m-0 p-4"
+                  >
+                    <CollaboratorMedicalCertsTab
+                      collaboratorId={collaboratorId}
+                      companyId={currentCompany?.id || ""}
+                      canEdit={canManage}
+                    />
+                  </TabsContent>
+                  <TabsContent
+                    value="fardamento"
+                    className="flex-1 min-h-0 overflow-auto m-0 p-4"
+                  >
+                    <CollaboratorUniformTab
+                      collaboratorId={collaboratorId}
+                      companyId={currentCompany?.id || ""}
+                      canEdit={canManage}
+                    />
+                  </TabsContent>
+                  {canManage && (
+                    <TabsContent
+                      value="pensao"
+                      className="flex-1 min-h-0 overflow-auto m-0 p-4"
+                    >
+                      <CollaboratorAlimonyTab
+                        collaboratorId={collaboratorId}
+                        companyId={currentCompany?.id || ""}
+                        canEdit={canManage}
+                      />
+                    </TabsContent>
+                  )}
+                </>
               )}
             </Tabs>
           )}

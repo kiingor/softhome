@@ -46,6 +46,7 @@ export default function AplicarPage() {
   const [submitted, setSubmitted] = useState<{
     indexed: boolean;
     message: string;
+    name: string;
   } | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -96,7 +97,11 @@ export default function AplicarPage() {
         consent_lgpd: values.consent_lgpd,
         cvFile,
       });
-      setSubmitted({ indexed: result.indexed, message: result.message });
+      setSubmitted({
+        indexed: result.indexed,
+        message: result.message,
+        name: values.name.split(" ")[0],
+      });
     } catch (err) {
       toast.error("Não rolou. " + (err as Error).message);
     } finally {
@@ -147,15 +152,19 @@ export default function AplicarPage() {
             <div className="w-16 h-16 rounded-2xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center mx-auto mb-4">
               <CheckCircle className="w-8 h-8 text-orange-700 dark:text-orange-300" />
             </div>
-            <h1 className="text-xl font-bold text-foreground mb-2">
-              Recebemos sua candidatura! 🎉
+            <h1 className="text-xl font-bold text-foreground mb-3">
+              {submitted.name}, seu currículo chegou até a gente ✨
             </h1>
-            <p className="text-muted-foreground mb-2">
-              {submitted.message}
+            <p className="text-muted-foreground mb-3">
+              Ficamos felizes pelo seu interesse em fazer parte da Softcom.
+            </p>
+            <p className="text-sm text-muted-foreground mb-3">
+              Agora nosso time vai analisar seu perfil com atenção e, caso exista
+              match com a oportunidade, entraremos em contato com os próximos passos.
             </p>
             <p className="text-sm text-muted-foreground">
-              O time de RH vai analisar e te procurar caso seu perfil bata
-              com o que a gente tá buscando.
+              Buscamos pessoas que gostem de aprender, colaborar e construir
+              soluções que gerem impacto real para nossos clientes e para o time.
             </p>
           </CardContent>
         </Card>

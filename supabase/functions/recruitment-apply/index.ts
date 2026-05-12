@@ -167,14 +167,18 @@ serve(async (req) => {
   let candidateId: string;
   if (existing) {
     candidateId = existing.id;
-    // Atualiza dados (caso candidato tenha mudado tel/linkedin)
+    // Atualiza dados (caso candidato tenha mudado tel/linkedin).
+    // is_active fica true (só vira false via "remover" pelo RH ou pedido LGPD).
+    // consent_talent_pool é informativo, não controla visibilidade.
     await sbAdmin
       .from("candidates")
       .update({
         name: body.name,
         phone: body.phone || null,
         linkedin_url: body.linkedin_url || null,
-        is_active: body.consent_talent_pool,
+        is_active: true,
+        consent_talent_pool: body.consent_talent_pool,
+        consent_lgpd_at: new Date().toISOString(),
       })
       .eq("id", candidateId);
   } else {
@@ -188,7 +192,9 @@ serve(async (req) => {
         cpf: cleanCpf,
         linkedin_url: body.linkedin_url || null,
         source: "form_publico",
-        is_active: body.consent_talent_pool,
+        is_active: true,
+        consent_talent_pool: body.consent_talent_pool,
+        consent_lgpd_at: new Date().toISOString(),
       })
       .select("id")
       .single();

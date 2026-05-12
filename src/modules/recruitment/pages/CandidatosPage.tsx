@@ -31,7 +31,9 @@ import { reprocessCv } from "../services/cv-process.service";
 import { useCandidates } from "../hooks/use-candidates";
 import { NewCandidateForm } from "../components/NewCandidateForm";
 import { CandidateActionsMenu } from "../components/CandidateActionsMenu";
+import { CandidateDetailDialog } from "../components/CandidateDetailDialog";
 import type { CandidateManualValues } from "../schemas/recruitment.schema";
+import type { Candidate } from "../types";
 import { formatCPF } from "@/lib/validators";
 
 export default function CandidatosPage() {
@@ -40,6 +42,7 @@ export default function CandidatosPage() {
   );
   const [search, setSearch] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [detailCandidate, setDetailCandidate] = useState<Candidate | null>(null);
   const [bulkIndexing, setBulkIndexing] = useState<{ done: number; total: number } | null>(null);
   const queryClient = useQueryClient();
 
@@ -188,6 +191,7 @@ export default function CandidatosPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Candidato</TableHead>
+                  <TableHead>Mensagem</TableHead>
                   <TableHead>CPF</TableHead>
                   <TableHead>Fonte</TableHead>
                   <TableHead>Recebido em</TableHead>
@@ -196,7 +200,11 @@ export default function CandidatosPage() {
               </TableHeader>
               <TableBody>
                 {filtered.map((c) => (
-                  <TableRow key={c.id} className="hover:bg-muted/50">
+                  <TableRow
+                    key={c.id}
+                    className="hover:bg-muted/50 cursor-pointer"
+                    onClick={() => setDetailCandidate(c)}
+                  >
                     <TableCell>
                       <div className="flex flex-col">
                         <span className="font-medium text-foreground">
@@ -213,15 +221,19 @@ export default function CandidatosPage() {
                         <span className="text-xs text-muted-foreground">
                           {c.email}
                         </span>
-                        {c.notes && (
-                          <span
-                            className="text-xs text-muted-foreground/70 line-clamp-2 max-w-xs"
-                            title={c.notes}
-                          >
-                            {c.notes}
-                          </span>
-                        )}
                       </div>
+                    </TableCell>
+                    <TableCell className="text-sm max-w-xs">
+                      {c.notes ? (
+                        <span
+                          className="text-muted-foreground line-clamp-2 block"
+                          title="Clique pra ver completo"
+                        >
+                          {c.notes}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground/60">—</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-sm font-mono text-muted-foreground">
                       {c.cpf ? formatCPF(c.cpf) : "—"}
@@ -240,7 +252,10 @@ export default function CandidatosPage() {
                         })}
                       </div>
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell
+                      className="text-right"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <CandidateActionsMenu
                         candidate={c}
                         onDeactivate={(id) => deactivateCandidate.mutate(id)}
@@ -260,6 +275,14 @@ export default function CandidatosPage() {
         onOpenChange={setIsFormOpen}
         onSubmit={handleSubmit}
         isSubmitting={createCandidate.isPending}
+      />
+
+      <CandidateDetailDialog
+        candidate={detailCandidate}
+        open={!!detailCandidate}
+        onOpenChange={(open) => {
+          if (!open) setDetailCandidate(null);
+        }}
       />
     </div>
   );

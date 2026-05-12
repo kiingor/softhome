@@ -33,6 +33,7 @@ import VagasPage from "./modules/recruitment/pages/VagasPage";
 import VagaDetailPage from "./modules/recruitment/pages/VagaDetailPage";
 import CandidatosPage from "./modules/recruitment/pages/CandidatosPage";
 import AplicarPage from "./modules/recruitment/pages/AplicarPage";
+import AplicarTestePage from "./modules/recruitment/pages/AplicarTestePage";
 import AdmissaoPublicaPage from "./modules/admission/pages/AdmissaoPublicaPage";
 import PeriodosPage from "./modules/payroll/pages/PeriodosPage";
 import PeriodDetailPage from "./modules/payroll/pages/PeriodDetailPage";
@@ -79,6 +80,7 @@ const App = () => {
 
           {/* Forms públicos (sem auth, fora do DashboardLayout) */}
           <Route path="/aplicar/:jobId" element={<AplicarPage />} />
+          <Route path="/recrutamento/teste/:token" element={<AplicarTestePage />} />
           <Route path="/admissao/:token" element={<AdmissaoPublicaPage />} />
 
           {/* Dashboard routes with persistent layout */}

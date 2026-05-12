@@ -7,8 +7,7 @@ import {
   Phone,
   LinkSimple,
 } from "@phosphor-icons/react";
-import { toast } from "sonner";
-import { getCvSignedUrl } from "@/modules/recruitment/services/cv-process.service";
+import { useCvViewer } from "@/modules/recruitment/hooks/use-cv-viewer";
 import type { CandidateMatch } from "../types";
 
 interface CandidateMatchCardProps {
@@ -28,12 +27,7 @@ export function CandidateMatchCard({
       ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
       : "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300";
 
-  const handleViewCv = async () => {
-    if (!candidate.cv_url) return;
-    const url = await getCvSignedUrl(candidate.cv_url);
-    if (url) window.open(url, "_blank", "noopener");
-    else toast.error("Não consegui gerar o link de download.");
-  };
+  const { openCv, isOpening } = useCvViewer();
 
   return (
     <Card className="card-hover">
@@ -102,7 +96,12 @@ export function CandidateMatchCard({
 
         {candidate.cv_url && (
           <div className="mt-3 pt-3 border-t border-border">
-            <Button variant="outline" size="sm" onClick={handleViewCv}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => openCv(candidate.cv_url)}
+              disabled={isOpening}
+            >
               <Eye className="w-4 h-4 mr-2" />
               Ver CV completo
             </Button>

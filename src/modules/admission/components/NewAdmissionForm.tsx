@@ -23,7 +23,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CircleNotch as Loader2 } from "@phosphor-icons/react";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import {
+  CircleNotch as Loader2,
+  CaretUpDown,
+  Check,
+} from "@phosphor-icons/react";
+import { useState } from "react";
 import {
   newAdmissionSchema,
   type NewAdmissionValues,
@@ -79,6 +98,7 @@ export function NewAdmissionForm({
   initialValues,
 }: NewAdmissionFormProps) {
   const { currentCompany } = useDashboard();
+  const [cargoPickerOpen, setCargoPickerOpen] = useState(false);
   const form = useForm<NewAdmissionValues>({
     resolver: zodResolver(newAdmissionSchema),
     defaultValues: DEFAULTS,
@@ -221,29 +241,85 @@ export function NewAdmissionForm({
 
           <div className="space-y-2">
             <Label htmlFor="position_id">Cargo</Label>
-            <Select
-              value={form.watch("position_id") || "_none"}
-              onValueChange={(v) =>
-                form.setValue("position_id", v === "_none" ? "" : v)
-              }
-            >
-              <SelectTrigger id="position_id">
-                <SelectValue placeholder="Sem cargo definido" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_none">Sem cargo definido</SelectItem>
-                {cargos.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
-                    {c.risk_group && (
-                      <span className="text-muted-foreground text-xs ml-2">
-                        · {c.risk_group}
-                      </span>
-                    )}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover open={cargoPickerOpen} onOpenChange={setCargoPickerOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  id="position_id"
+                  type="button"
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={cargoPickerOpen}
+                  className="w-full justify-between font-normal"
+                >
+                  {selectedCargo ? (
+                    <span className="truncate">
+                      {selectedCargo.name}
+                      {selectedCargo.risk_group && (
+                        <span className="text-muted-foreground text-xs ml-2">
+                          · {selectedCargo.risk_group}
+                        </span>
+                      )}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      Sem cargo definido
+                    </span>
+                  )}
+                  <CaretUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="p-0 w-[--radix-popover-trigger-width]"
+                align="start"
+              >
+                <Command>
+                  <CommandInput placeholder="Buscar cargo..." />
+                  <CommandList>
+                    <CommandEmpty>Nenhum cargo com esse nome.</CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        value="__none__ sem cargo"
+                        onSelect={() => {
+                          form.setValue("position_id", "");
+                          setCargoPickerOpen(false);
+                        }}
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4",
+                            !positionId ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        Sem cargo definido
+                      </CommandItem>
+                      {cargos.map((c) => (
+                        <CommandItem
+                          key={c.id}
+                          value={`${c.name} ${c.risk_group ?? ""}`}
+                          onSelect={() => {
+                            form.setValue("position_id", c.id);
+                            setCargoPickerOpen(false);
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              positionId === c.id ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          <span className="truncate">{c.name}</span>
+                          {c.risk_group && (
+                            <span className="text-muted-foreground text-xs ml-2">
+                              · {c.risk_group}
+                            </span>
+                          )}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
             <p className="text-xs text-muted-foreground">
               O cargo define os documentos exigidos (cadastrados em{" "}
               <strong>Cargos</strong>) e o exame admissional pelo grupo de
