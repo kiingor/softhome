@@ -1,4 +1,3 @@
-export type Json =
   | string
   | number
   | boolean
@@ -1097,6 +1096,7 @@ export type Database = {
           job_id: string
           rejected_reason: string | null
           stage: string
+          tests_session_token: string | null
           updated_at: string
         }
         Insert: {
@@ -1111,6 +1111,7 @@ export type Database = {
           job_id: string
           rejected_reason?: string | null
           stage?: string
+          tests_session_token?: string | null
           updated_at?: string
         }
         Update: {
@@ -1125,6 +1126,7 @@ export type Database = {
           job_id?: string
           rejected_reason?: string | null
           stage?: string
+          tests_session_token?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -4112,6 +4114,16 @@ export type Database = {
         Args: { _company_id: string; _module: string; _user_id: string }
         Returns: boolean
       }
+      complete_application_test_in_session: {
+        Args: {
+          p_answers: Json
+          p_auto_score: number
+          p_result_summary: Json
+          p_test_id: string
+          p_token: string
+        }
+        Returns: Json
+      }
       generate_vacation_periods: {
         Args: {
           _admission_date: string
@@ -4131,6 +4143,10 @@ export type Database = {
           status: Database["public"]["Enums"]["admission_test_status"]
           test_slug: string
         }[]
+      }
+      get_application_tests_session: {
+        Args: { p_token: string }
+        Returns: Json
       }
       get_user_permissions: {
         Args: { _company_id: string; _module: string; _user_id: string }
@@ -4182,6 +4198,14 @@ export type Database = {
           content: string
           similarity: number
         }[]
+      }
+      save_application_test_progress_in_session: {
+        Args: { p_answers: Json; p_test_id: string; p_token: string }
+        Returns: Json
+      }
+      start_application_test_in_session: {
+        Args: { p_test_id: string; p_token: string }
+        Returns: Json
       }
       user_belongs_to_company: {
         Args: { _company_id: string; _user_id: string }
@@ -4609,4 +4633,3 @@ export const Constants = {
     },
   },
 } as const
-<claude-code-hint v="1" type="plugin" value="supabase@claude-plugins-official" />

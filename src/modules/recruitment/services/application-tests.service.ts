@@ -146,3 +146,102 @@ export function buildApplicationTestUrl(token: string): string {
   const origin = window.location.origin;
   return `${origin}/recrutamento/teste/${token}`;
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// Session-based (1 link único pra application com todos os testes)
+// ─────────────────────────────────────────────────────────────────────
+
+export interface ApplicationTestSessionItem {
+  id: string;
+  test_slug: string;
+  status: "not_started" | "in_progress" | "completed" | "reviewed";
+  answers: Record<string, unknown>;
+  completed_at: string | null;
+  started_at: string | null;
+  name: string;
+  description: string | null;
+  category: string | null;
+  time_limit_minutes: number | null;
+}
+
+export interface ApplicationTestSession {
+  application_id: string;
+  candidate_name: string;
+  job_title: string;
+  tests: ApplicationTestSessionItem[];
+}
+
+export async function getApplicationTestsSession(
+  token: string,
+): Promise<ApplicationTestSession | null> {
+  const { data, error } = await supabase.rpc("get_application_tests_session", {
+    p_token: token,
+  });
+  if (error) throw error;
+  if (!data) return null;
+  return data as unknown as ApplicationTestSession;
+}
+
+export async function startApplicationTestInSession(
+  token: string,
+  testId: string,
+): Promise<void> {
+  const { data, error } = await supabase.rpc(
+    "start_application_test_in_session",
+    { p_token: token, p_test_id: testId },
+  );
+  if (error) throw error;
+  const res = data as { ok?: boolean; error?: string } | null;
+  if (res?.ok === false) throw new Error(res.error ?? "Falha ao iniciar teste");
+}
+
+export async function saveApplicationTestProgressInSession(
+  token: string,
+  testId: string,
+  answers: Record<string, unknown>,
+): Promise<void> {
+  const { error } = await supabase.rpc(
+    "save_application_test_progress_in_session",
+    { p_token: token, p_test_id: testId, p_answers: answers },
+  );
+  if (error) throw error;
+}
+
+export async function completeApplicationTestInSession(
+  token: string,
+  testId: string,
+  answers: Record<string, unknown>,
+  autoScore: number | null,
+  resultSummary: Record<string, unknown> | null,
+): Promise<void> {
+  const { data, error } = await supabase.rpc(
+    "complete_application_test_in_session",
+    {
+      p_token: token,
+      p_test_id: testId,
+      p_answers: answers,
+      p_auto_score: autoScore,
+      p_result_summary: resultSummary,
+    },
+  );
+  if (error) throw error;
+  const res = data as { ok?: boolean; error?: string } | null;
+  if (res?.ok === false) throw new Error(res.error ?? "Falha ao finalizar");
+}
+
+export function buildApplicationTestsSessionUrl(sessionToken: string): string {
+  const origin = window.location.origin;
+  return `${origin}/recrutamento/teste/${sessionToken}`;
+}
+
+export async function getApplicationSessionToken(
+  applicationId: string,
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("candidate_applications")
+    .select("tests_session_token")
+    .eq("id", applicationId)
+    .maybeSingle();
+  if (error) throw error;
+  return (data?.tests_session_token as string | null) ?? null;
+}

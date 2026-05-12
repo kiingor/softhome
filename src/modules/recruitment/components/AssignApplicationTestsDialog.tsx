@@ -23,7 +23,8 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
   assignTests,
-  buildApplicationTestUrl,
+  buildApplicationTestsSessionUrl,
+  getApplicationSessionToken,
   listApplicationTests,
   listAvailableAdmissionTests,
   type CompanyAdmissionTest,
@@ -59,6 +60,12 @@ export function AssignApplicationTestsDialog({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isSending, setIsSending] = useState(false);
 
+  const { data: sessionToken } = useQuery({
+    queryKey: ["application-tests-session-token", applicationId],
+    queryFn: () => getApplicationSessionToken(applicationId),
+    enabled: open && !!applicationId,
+  });
+
   const { data: assigned = [], isLoading: loadingAssigned } = useQuery({
     queryKey: ["application-tests", applicationId],
     queryFn: () => listApplicationTests(applicationId),
@@ -91,6 +98,9 @@ export function AssignApplicationTestsDialog({
       queryClient.invalidateQueries({
         queryKey: ["application-tests", applicationId],
       });
+      queryClient.invalidateQueries({
+        queryKey: ["application-tests-session-token", applicationId],
+      });
       setSelected(new Set());
       toast.success("Testes atribuídos ✓");
     },
@@ -98,8 +108,12 @@ export function AssignApplicationTestsDialog({
       toast.error("Não rolou. " + err.message),
   });
 
-  const copyLink = async (token: string) => {
-    const url = buildApplicationTestUrl(token);
+  const copySessionLink = async () => {
+    if (!sessionToken) {
+      toast.error("Atribua pelo menos 1 teste antes de copiar o link.");
+      return;
+    }
+    const url = buildApplicationTestsSessionUrl(sessionToken);
     await navigator.clipboard.writeText(url);
     toast.success("Link copiado ✓");
   };
@@ -206,22 +220,39 @@ export function AssignApplicationTestsDialog({
                           )}
                         </div>
                       </div>
-                      {a.status !== "completed" && a.status !== "reviewed" && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => copyLink(a.access_token)}
-                        >
-                          <Copy className="w-3 h-3 mr-1" />
-                          Copiar link
-                        </Button>
-                      )}
                     </div>
                   );
                 })}
               </div>
             )}
           </section>
+
+          {/* Link único da sessão */}
+          {sessionToken && pendingTestsCount > 0 && (
+            <section className="space-y-2 pt-2 border-t">
+              <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Link para o candidato
+              </h3>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 min-w-0 rounded-md border bg-muted/30 px-3 py-2 text-xs font-mono truncate">
+                  {buildApplicationTestsSessionUrl(sessionToken)}
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={copySessionLink}
+                  className="shrink-0"
+                >
+                  <Copy className="w-3 h-3 mr-1" />
+                  Copiar
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Mesmo link para todos os testes. O candidato vê a lista e responde
+                um por vez.
+              </p>
+            </section>
+          )}
 
           {/* Atribuir novos */}
           {notYetAssigned.length > 0 && (

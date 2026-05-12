@@ -20,15 +20,19 @@ import type {
   OpenTextQuestion,
 } from "@/modules/admission/lib/tests/types";
 import {
-  completePublicApplicationTest,
-  savePublicApplicationTestProgress,
+  completeApplicationTestInSession,
+  saveApplicationTestProgressInSession,
 } from "../services/application-tests.service";
 
 interface Props {
-  token: string;
+  /** Token da sessão (vem da URL, igual pra todos os testes da application). */
+  sessionToken: string;
+  /** ID do application_test específico que está sendo respondido. */
+  testId: string;
   testSlug: string;
   initialAnswers?: Answers;
   onCompleted: () => void;
+  onCancel?: () => void;
 }
 
 const LIKERT_LABELS: Record<1 | 2 | 3 | 4 | 5, string> = {
@@ -40,10 +44,12 @@ const LIKERT_LABELS: Record<1 | 2 | 3 | 4 | 5, string> = {
 };
 
 export function ApplicationTestRunner({
-  token,
+  sessionToken,
+  testId,
   testSlug,
   initialAnswers,
   onCompleted,
+  onCancel,
 }: Props) {
   const def = useMemo(() => getTestDefinition(testSlug), [testSlug]);
   const [index, setIndex] = useState(0);
@@ -72,8 +78,9 @@ export function ApplicationTestRunner({
   const setAnswer = (a: Answer) => {
     setAnswers((prev) => {
       const next = { ...prev, [current.id]: a };
-      savePublicApplicationTestProgress(
-        token,
+      saveApplicationTestProgressInSession(
+        sessionToken,
+        testId,
         next as unknown as Record<string, unknown>,
       ).catch(() => {
         /* autosave falha silencia */
@@ -90,8 +97,9 @@ export function ApplicationTestRunner({
     setSubmitting(true);
     try {
       const result = scoreTest(def, answers);
-      await completePublicApplicationTest(
-        token,
+      await completeApplicationTestInSession(
+        sessionToken,
+        testId,
         answers as unknown as Record<string, unknown>,
         result.score,
         result.summary,
@@ -108,11 +116,21 @@ export function ApplicationTestRunner({
     <div className="space-y-6">
       <div className="space-y-2">
         <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground font-medium">{def.name}</span>
+          {onCancel ? (
+            <Button variant="ghost" size="sm" onClick={onCancel} className="-ml-2">
+              <ArrowLeft className="w-4 h-4 mr-1" />
+              Voltar à lista
+            </Button>
+          ) : (
+            <span className="text-muted-foreground font-medium">{def.name}</span>
+          )}
           <span className="text-muted-foreground tabular-nums">
             Pergunta {index + 1} de {total}
           </span>
         </div>
+        {onCancel && (
+          <p className="text-sm font-medium text-foreground">{def.name}</p>
+        )}
         <Progress value={pct} className="h-2" />
       </div>
 
