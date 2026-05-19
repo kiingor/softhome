@@ -179,11 +179,11 @@ export const exportJourneyPDF = (
   const margin = 14;
   const generatedAt = formatDateTime(new Date());
 
-  // Header — wordmark SoftHouse (texto, sem imagem) + empresa + data
+  // Header — wordmark DNA Softcom (texto, sem imagem) + empresa + data
   let y = 12;
 
   // Símbolo orange antes do wordmark (círculo simples, mantém o
-  // padrão "[●] SoftHouse" da seção 5 do DESIGN_SYSTEM.md sem custo
+  // padrão "[●] DNA Softcom" da seção 5 do DESIGN_SYSTEM.md sem custo
   // de carregar SVG/PNG)
   doc.setFillColor(249, 115, 22); // orange-500 (#F97316)
   doc.circle(margin + 2, y + 2, 2, "F");
@@ -191,7 +191,7 @@ export const exportJourneyPDF = (
   doc.setTextColor(0, 0, 0);
   doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
-  doc.text("SoftHouse", margin + 7, y + 3);
+  doc.text("DNA Softcom", margin + 7, y + 3);
 
   doc.setFontSize(8);
   doc.setFont("helvetica", "normal");

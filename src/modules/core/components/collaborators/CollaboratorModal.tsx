@@ -34,11 +34,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { FloppyDisk as Save, Plus, CurrencyDollar as DollarSign, Gift, Buildings as Building2, Users, CircleNotch as Loader2, X, Wallet, TreePalm as Palmtree, ArrowsLeftRight as ArrowRightLeft, Power, Trash } from "@phosphor-icons/react";
+import { FloppyDisk as Save, Plus, CurrencyDollar as DollarSign, Gift, Buildings as Building2, Users, CircleNotch as Loader2, X, Wallet, TreePalm as Palmtree, ArrowsLeftRight as ArrowRightLeft, Power, Trash, Clock, Stethoscope, TShirt, Scales, CheckCircle, IdentificationCard, Bandaids, CalendarX, Storefront, ArrowsClockwise } from "@phosphor-icons/react";
+import { SubResourceTab, type FieldDef } from "./tabs/SubResourceTab";
 import { toast } from "sonner";
 import { formatCPFInput, cleanCPF, validateCPF, formatPhoneInput, formatCEPInput, cleanCEP, BRAZIL_STATES } from "@/lib/validators";
 import { sendWhatsAppNotification } from "@/lib/whatsappNotifications";
-import { formatCurrency, formatCurrencyForInput, parseCurrencyInput, getCurrentCompetencia } from "@/lib/formatters";
+import { formatCurrency, formatCurrencyForInput, parseCurrencyInput, getCurrentCompetencia, formatDateBR, toTitleCase } from "@/lib/formatters";
 import { calculateMonthlyBenefitValue, getBenefitCalculationDescription, DayAbbrev } from "@/lib/workingDays";
 import { calcAllTaxes } from "@/lib/payroll/cltCalc";
 import { useStoreHolidays } from "@/modules/payroll/hooks/use-store-holidays";
@@ -53,6 +54,64 @@ import { CollaboratorDependentsTab } from "./tabs/CollaboratorDependentsTab";
 import { CollaboratorUniformTab } from "./tabs/CollaboratorUniformTab";
 import { CollaboratorMedicalCertsTab } from "./tabs/CollaboratorMedicalCertsTab";
 import { CollaboratorAlimonyTab } from "./tabs/CollaboratorAlimonyTab";
+
+// Field configs das sub-abas (Afastamentos, Absenteísmos, Férias, 13º, Planos, PDVs)
+const AFASTAMENTO_FIELDS: FieldDef[] = [
+  { name: "reason_code", label: "Código do motivo", type: "number", placeholder: "ex: 1" },
+  { name: "start_date", label: "Data inicial", type: "date", required: true },
+  { name: "end_date", label: "Data final", type: "date" },
+  { name: "description", label: "Descrição", type: "textarea", placeholder: "Detalhes do afastamento" },
+  { name: "has_certificate", label: "Tem atestado?", type: "checkbox" },
+];
+const ABSENTEISMO_FIELDS: FieldDef[] = [
+  { name: "occurred_on", label: "Data", type: "date", required: true },
+  { name: "days", label: "Dias", type: "number", placeholder: "1" },
+  { name: "reason", label: "Motivo", type: "text", placeholder: "ex: Doença sem atestado" },
+  { name: "notes", label: "Observação", type: "textarea" },
+  { name: "has_certificate", label: "Tem atestado?", type: "checkbox" },
+  { name: "bank_hours", label: "Banco de horas (h)", type: "number" },
+];
+const FERIAS_FIELDS: FieldDef[] = [
+  { name: "start_date", label: "Início do gozo", type: "date", required: true },
+  { name: "end_date", label: "Fim do gozo", type: "date", required: true },
+  { name: "days_entitled", label: "Dias de direito", type: "number", placeholder: "30" },
+  { name: "days_taken", label: "Dias gozados", type: "number" },
+  { name: "days_sold", label: "Dias vendidos", type: "number" },
+];
+const DECIMO_FIELDS: FieldDef[] = [
+  { name: "year", label: "Ano", type: "number", placeholder: "2026", required: true },
+  { name: "value_paid", label: "Valor pago (R$)", type: "number" },
+  { name: "is_paid", label: "Pago?", type: "checkbox" },
+  { name: "notes", label: "Observação", type: "textarea" },
+];
+const PLANO_FIELDS: FieldDef[] = [
+  { name: "plan_name", label: "Nome do plano", type: "text", required: true },
+  { name: "registration_code", label: "Matrícula", type: "text" },
+  { name: "start_date", label: "Início", type: "date" },
+  { name: "beneficiary_type", label: "Tipo", type: "text", placeholder: "TITULAR / DEPENDENTE" },
+  { name: "beneficiary_name", label: "Nome do beneficiário", type: "text" },
+  { name: "beneficiary_birth", label: "Nascimento", type: "date" },
+  { name: "beneficiary_cpf", label: "CPF beneficiário", type: "text" },
+  { name: "plan_value", label: "Valor mensal (R$)", type: "number" },
+  { name: "notes", label: "Observação", type: "textarea" },
+];
+const PDV_FIELDS: FieldDef[] = [
+  { name: "pdv_name", label: "Nome do PDV", type: "text", required: true },
+  // f10 (flag legada) — oculto da UI; mantido no schema/sync mas não editável aqui
+];
+
+// Tradução dos status do enum vacation_periods (paid/pending/etc) pra pt-BR.
+const VACATION_STATUS_LABEL: Record<string, string> = {
+  paid: "Pago",
+  pending: "Pendente",
+  approved: "Aprovado",
+  available: "Disponível",
+  partially_used: "Parcialmente usado",
+  used: "Usado",
+  expired: "Vencido",
+  in_progress: "Em gozo",
+  completed: "Concluído",
+};
 
 interface PendingEntry {
   id: string;
@@ -124,6 +183,7 @@ const CollaboratorModal = ({
     pis: "",
     discord_username: "",
     accounting_code: "",
+    internal_code: "",
     pix_key: "",
     birth_date: "",
     position_id: "",
@@ -149,6 +209,40 @@ const CollaboratorModal = ({
   const [showPasswordField, setShowPasswordField] = useState(false);
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isSyncingDetails, setIsSyncingDetails] = useState(false);
+
+  /**
+   * Dispara `sync-collaborator-details` pra esse colab: traz da agenda
+   * afastamentos, absenteismos, ferias, 13, planos, pdvs, exames, eventos
+   * e popula as tabelas locais. Após sucesso, invalida queries dos
+   * SubResourceTabs pra atualizar a UI.
+   */
+  const handleSyncDetails = async () => {
+    if (!collaboratorId) return;
+    setIsSyncingDetails(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("sync-collaborator-details", {
+        body: { collaboratorId },
+      });
+      if (error) throw error;
+      const errMsg = (data as { error?: string } | null)?.error;
+      if (errMsg) throw new Error(errMsg);
+      // Invalida queries do SubResourceTab (afastamentos, absenteismos, ferias, 13, planos, pdvs)
+      ["afastamentos", "absenteismos", "ferias", "decimo-terceiro", "planos", "pdvs"].forEach((kind) => {
+        queryClient.invalidateQueries({ queryKey: [`subresource-${kind}`, collaboratorId] });
+      });
+      // Invalida também queries dos tabs com componente próprio
+      queryClient.invalidateQueries({ queryKey: ["collaborator-timeline", collaboratorId] });
+      queryClient.invalidateQueries({ queryKey: ["collaborator-dependents", collaboratorId] });
+      queryClient.invalidateQueries({ queryKey: ["collaborator-medical-certs", collaboratorId] });
+      toast.success("Detalhes sincronizados da agenda.");
+    } catch (err) {
+      toast.error("Falha ao sincronizar: " + (err as Error).message);
+    } finally {
+      setIsSyncingDetails(false);
+    }
+  };
   const [isDeactivating, setIsDeactivating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [confirmDeactivate, setConfirmDeactivate] = useState(false);
@@ -191,7 +285,30 @@ const CollaboratorModal = ({
   // Benefit assignment state
   const [selectedBenefitId, setSelectedBenefitId] = useState("");
 
-  const canManage = hasAnyRole(["admin_gc", "gestor_gc"]);
+  const canManage = hasAnyRole(["admin", "admin_gc", "gestor_gc"]);
+
+  // Prefetch das queries das abas quando o modal abre — assim ao trocar pra
+  // aba Histórico/Dependentes/etc os dados já estão cacheados.
+  useEffect(() => {
+    if (!open || !collaboratorId) return;
+    const prefetch = (queryKey: string, table: string, orderByCol?: string, ascending = false) => {
+      queryClient.prefetchQuery({
+        queryKey: [queryKey, collaboratorId],
+        queryFn: async () => {
+          let q = supabase.from(table as never).select("*").eq("collaborator_id", collaboratorId);
+          if (orderByCol) q = q.order(orderByCol, { ascending });
+          const { data } = await q;
+          return data ?? [];
+        },
+        staleTime: 5 * 60 * 1000,
+      });
+    };
+    prefetch("collaborator-timeline", "collaborator_timeline_events", "effective_date");
+    prefetch("collaborator-dependents", "collaborator_dependents", "created_at", true);
+    prefetch("collaborator-medical-certs", "collaborator_medical_certificates", "issued_at");
+    prefetch("collaborator-uniform-sizes", "collaborator_uniform_sizes", "measured_at");
+    prefetch("collaborator-alimony", "collaborator_alimony_orders", "effective_from");
+  }, [open, collaboratorId, queryClient]);
 
   // Fetch collaborator data
   const { data: collaborator, isLoading: loadingCollaborator } = useQuery({
@@ -371,6 +488,7 @@ const CollaboratorModal = ({
           pis?: string | null;
           discord_username?: string | null;
           accounting_code?: string | null;
+          internal_code?: string | null;
           photo_url?: string | null;
         };
         setFormData({
@@ -384,6 +502,7 @@ const CollaboratorModal = ({
           pis: cExtra.pis || "",
           discord_username: cExtra.discord_username || "",
           accounting_code: cExtra.accounting_code || "",
+          internal_code: cExtra.internal_code || "",
           pix_key: c.pix_key || "",
           birth_date: c.birth_date || "",
           position_id: c.position_id || "",
@@ -421,6 +540,7 @@ const CollaboratorModal = ({
           pis: "",
           discord_username: "",
           accounting_code: "",
+          internal_code: "",
           pix_key: prefill?.pix_key ?? "",
           birth_date: prefill?.birth_date ?? "",
           position_id: prefill?.position_id ?? "",
@@ -804,6 +924,7 @@ const CollaboratorModal = ({
         pis: formData.pis.replace(/\D/g, "") || null,
         discord_username: formData.discord_username.trim() || null,
         accounting_code: formData.accounting_code.trim() || null,
+        internal_code: formData.internal_code.trim() || null,
         photo_url: formData.photo_url || null,
         pix_key: formData.pix_key.trim() || null,
         birth_date: formData.birth_date || null,
@@ -936,11 +1057,38 @@ const CollaboratorModal = ({
       toast.success("Colaborador desativado.");
       queryClient.invalidateQueries({ queryKey: ["collaborators"] });
       queryClient.invalidateQueries({ queryKey: ["collaborator", collaboratorId] });
+      queryClient.invalidateQueries({ queryKey: ["collaborator-timeline", collaboratorId] });
       onSuccess?.();
       setConfirmDeactivate(false);
       onOpenChange(false);
     } catch (error: any) {
       toast.error("Erro ao desativar: " + error.message);
+    } finally {
+      setIsDeactivating(false);
+    }
+  };
+
+  // Reativar colaborador (volta status pra ativo, limpa termination_date)
+  const handleReactivate = async () => {
+    if (!collaboratorId) return;
+    setIsDeactivating(true);
+    try {
+      const { error } = await supabase
+        .from("collaborators")
+        .update({
+          status: "ativo",
+          termination_date: null,
+        })
+        .eq("id", collaboratorId);
+      if (error) throw error;
+      toast.success("Colaborador reativado ✓");
+      queryClient.invalidateQueries({ queryKey: ["collaborators"] });
+      queryClient.invalidateQueries({ queryKey: ["collaborator", collaboratorId] });
+      queryClient.invalidateQueries({ queryKey: ["collaborator-timeline", collaboratorId] });
+      setFormData((prev) => ({ ...prev, status: "ativo" }));
+      onSuccess?.();
+    } catch (error: any) {
+      toast.error("Erro ao reativar: " + error.message);
     } finally {
       setIsDeactivating(false);
     }
@@ -1322,10 +1470,10 @@ const CollaboratorModal = ({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-5xl max-h-[90vh] p-0 flex flex-col overflow-hidden">
-          {/* Header */}
-          <DialogHeader className="shrink-0 px-6 pt-6 pb-4 border-b">
-            <DialogTitle className="text-xl">
+        <DialogContent className="max-w-5xl h-[85vh] p-0 flex flex-col overflow-hidden gap-0">
+          {/* a11y: título escondido mas presente no DOM */}
+          <DialogHeader className="sr-only">
+            <DialogTitle>
               {isNew ? "Novo Colaborador" : `Editar: ${formData.name || "Colaborador"}`}
             </DialogTitle>
           </DialogHeader>
@@ -1337,83 +1485,195 @@ const CollaboratorModal = ({
           ) : (
             /* Content with Tabs */
             <Tabs defaultValue="geral" className="flex-1 flex flex-col min-h-0 overflow-hidden">
-              {collaboratorId && (
-                <div className="shrink-0 px-6 pt-2">
-                  <TabsList className="flex-wrap h-auto">
-                    <TabsTrigger value="geral">Geral</TabsTrigger>
+              {/* Header compacto + Tabs */}
+              <div className="shrink-0 border-b">
+                <div className="flex items-center gap-3 px-6 pt-5 pb-3 pr-12">
+                  <h2 className="text-base font-semibold text-foreground truncate capitalize">
+                    {isNew ? "Novo Colaborador" : (formData.name || "Colaborador").toLowerCase()}
+                  </h2>
+                  {!isNew && formData.status && (
+                    <Badge
+                      variant="outline"
+                      className={
+                        formData.status === "ativo"
+                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 border-0 text-xs font-normal h-5 px-2"
+                          : formData.status === "inativo"
+                            ? "bg-muted text-muted-foreground border-0 text-xs font-normal h-5 px-2"
+                            : formData.status === "aguardando_documentacao"
+                              ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border-0 text-xs font-normal h-5 px-2"
+                              : formData.status === "validacao_pendente"
+                                ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 border-0 text-xs font-normal h-5 px-2"
+                                : "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300 border-0 text-xs font-normal h-5 px-2"
+                      }
+                    >
+                      {formData.status === "ativo"
+                        ? "Ativo"
+                        : formData.status === "inativo"
+                          ? "Inativo"
+                          : formData.status === "aguardando_documentacao"
+                            ? "Aguardando docs"
+                            : formData.status === "validacao_pendente"
+                              ? "Validação pendente"
+                              : "Reprovado"}
+                    </Badge>
+                  )}
+                </div>
+                {collaboratorId && (
+                  <div className="px-6 pb-3">
+                    <TabsList className="flex-wrap h-auto bg-transparent p-0 gap-1 justify-start">
+                    <TabsTrigger
+                      value="geral"
+                      className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none rounded-md gap-1.5 px-3 py-1.5 text-sm"
+                    >
+                      <IdentificationCard className="w-4 h-4" />
+                      Geral
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="financeiro"
+                      className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none rounded-md gap-1.5 px-3 py-1.5 text-sm"
+                    >
+                      <Wallet className="w-4 h-4" />
+                      Financeiro
+                    </TabsTrigger>
                     {["validacao_pendente", "reprovado"].includes(formData.status) && (
-                      <TabsTrigger value="validacao">Validação</TabsTrigger>
+                      <TabsTrigger
+                        value="validacao"
+                        className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none rounded-md gap-1.5 px-3 py-1.5 text-sm"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                        Validação
+                      </TabsTrigger>
                     )}
-                    <TabsTrigger value="historico">Histórico</TabsTrigger>
-                    <TabsTrigger value="dependentes">Dependentes</TabsTrigger>
-                    <TabsTrigger value="atestados">Atestados</TabsTrigger>
-                    <TabsTrigger value="fardamento">Fardamento</TabsTrigger>
-                    {canManage && (
-                      <TabsTrigger value="pensao">Pensão</TabsTrigger>
-                    )}
+                    <TabsTrigger
+                      value="saude"
+                      className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none rounded-md gap-1.5 px-3 py-1.5 text-sm"
+                    >
+                      <Stethoscope className="w-4 h-4" />
+                      Saúde & Ausências
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="ferias"
+                      className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none rounded-md gap-1.5 px-3 py-1.5 text-sm"
+                    >
+                      <Palmtree className="w-4 h-4" />
+                      Férias
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="lotacao"
+                      className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none rounded-md gap-1.5 px-3 py-1.5 text-sm"
+                    >
+                      <Storefront className="w-4 h-4" />
+                      PDV
+                    </TabsTrigger>
                   </TabsList>
                 </div>
               )}
+              </div>
 
-              <TabsContent value="geral" className="flex-1 min-h-0 overflow-hidden m-0 flex flex-col">
-                <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 divide-x min-h-0 overflow-hidden">
-              {/* Left Column - Dados Cadastrais */}
-              <div className="flex flex-col min-h-0 overflow-hidden">
+              <TabsContent value="geral" className="flex-1 min-h-0 overflow-hidden m-0 data-[state=active]:flex flex-col data-[state=inactive]:hidden">
+                <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
               <ScrollArea className="flex-1 min-h-0">
-                <div className="p-6 space-y-4">
-                  <h3 className="font-semibold text-lg flex items-center gap-2">
-                    <Users className="w-5 h-5 text-primary" />
-                    Dados Cadastrais
-                  </h3>
-
-                  {/* Foto */}
-                  <CollaboratorPhotoUploader
-                    collaboratorId={collaboratorId ?? null}
-                    companyId={currentCompany?.id ?? ""}
-                    photoUrl={formData.photo_url || null}
-                    name={formData.name}
-                    onChange={(path) =>
-                      setFormData((prev) => ({ ...prev, photo_url: path ?? "" }))
-                    }
-                    canEdit={canManage}
-                  />
-
-                  {/* Name */}
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Nome Completo *</Label>
-                    <Input
-                      id="name"
-                      value={formData.name}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                      placeholder="Nome do colaborador"
-                    />
+                <div className="p-6 space-y-6">
+                  <div>
+                    <h3 className="font-semibold text-lg flex items-center gap-2 mb-1">
+                      <Users className="w-5 h-5 text-primary" />
+                      Dados Cadastrais
+                    </h3>
+                    <p className="text-xs text-muted-foreground">Identidade, contato e documentos do colaborador.</p>
                   </div>
 
-                  {/* Sobrenome Softcom (apelido interno) */}
-                  <div className="space-y-2">
-                    <Label htmlFor="softcom_surname">Sobrenome Softcom</Label>
-                    <Input
-                      id="softcom_surname"
-                      value={formData.softcom_surname}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, softcom_surname: e.target.value }))}
-                      placeholder="Apelido interno (ex: Lucas P.)"
+                  {/* Foto + Nome/Sobrenome lado a lado */}
+                  <div className="flex items-start gap-6 pb-2">
+                    <CollaboratorPhotoUploader
+                      collaboratorId={collaboratorId ?? null}
+                      companyId={currentCompany?.id ?? ""}
+                      photoUrl={formData.photo_url || null}
+                      name={formData.name}
+                      onChange={(path) =>
+                        setFormData((prev) => ({ ...prev, photo_url: path ?? "" }))
+                      }
+                      canEdit={canManage}
                     />
+                    <div className="flex-1 min-w-0 grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2 md:col-span-2">
+                        <Label htmlFor="name">Nome Completo *</Label>
+                        <Input
+                          id="name"
+                          value={formData.name}
+                          onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                          placeholder="Nome do colaborador"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="softcom_surname">Sobrenome Softcom</Label>
+                        <Input
+                          id="softcom_surname"
+                          value={formData.softcom_surname}
+                          onChange={(e) => setFormData((prev) => ({ ...prev, softcom_surname: e.target.value }))}
+                          placeholder="Apelido interno (ex: Lucas P.)"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="internal_code">Código interno</Label>
+                        <Input
+                          id="internal_code"
+                          value={formData.internal_code}
+                          readOnly
+                          disabled
+                          placeholder="Preenchido automaticamente"
+                          className="bg-muted cursor-not-allowed"
+                        />
+                      </div>
+                    </div>
                   </div>
 
-                  {/* CPF */}
-                  <div className="space-y-2">
-                    <Label htmlFor="cpf">CPF *</Label>
-                    <Input
-                      id="cpf"
-                      value={formData.cpf}
-                      onChange={handleCPFChange}
-                      placeholder="000.000.000-00"
-                      maxLength={14}
-                    />
+                  {/* Documentos: CPF + RG + Data Nasc + PIS */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="cpf">CPF *</Label>
+                      <Input
+                        id="cpf"
+                        value={formData.cpf}
+                        onChange={handleCPFChange}
+                        placeholder="000.000.000-00"
+                        maxLength={14}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="rg">RG</Label>
+                      <Input
+                        id="rg"
+                        value={formData.rg}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, rg: e.target.value }))}
+                        placeholder="00.000.000-0"
+                        maxLength={20}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="birth_date">Data de Nascimento</Label>
+                      <Input
+                        id="birth_date"
+                        type="date"
+                        value={formData.birth_date}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, birth_date: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="pis">PIS / NIS</Label>
+                      <Input
+                        id="pis"
+                        value={formData.pis}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, pis: e.target.value }))
+                        }
+                        placeholder="000.00000.00-0"
+                        maxLength={20}
+                      />
+                    </div>
                   </div>
 
-                  {/* Email & Phone */}
-                  <div className="grid grid-cols-2 gap-4">
+                  {/* Contato: Email + Telefone + Telefone Recado + Discord */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="email">Email</Label>
                       <Input
@@ -1437,6 +1697,20 @@ const CollaboratorModal = ({
                         onChange={handlePhoneChange}
                         placeholder="(00) 00000-0000"
                         maxLength={15}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="discord_username">Discord</Label>
+                      <Input
+                        id="discord_username"
+                        value={formData.discord_username}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            discord_username: e.target.value,
+                          }))
+                        }
+                        placeholder="usuario#1234 ou @usuario"
                       />
                     </div>
                   </div>
@@ -1466,85 +1740,15 @@ const CollaboratorModal = ({
                     </div>
                   )}
 
-                  {/* RG + Data de Nascimento */}
-                  <div className="grid grid-cols-2 gap-4">
+                  {/* Pagamento: Chave PIX + Código contabilidade */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="rg">RG</Label>
+                      <Label htmlFor="pix_key">Chave PIX</Label>
                       <Input
-                        id="rg"
-                        value={formData.rg}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, rg: e.target.value }))}
-                        placeholder="00.000.000-0"
-                        maxLength={20}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="birth_date">Data de Nascimento</Label>
-                      <Input
-                        id="birth_date"
-                        type="date"
-                        value={formData.birth_date}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, birth_date: e.target.value }))}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Chave PIX */}
-                  <div className="space-y-2">
-                    <Label htmlFor="pix_key">Chave PIX</Label>
-                    <Input
-                      id="pix_key"
-                      value={formData.pix_key}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, pix_key: e.target.value }))}
-                      placeholder="CPF, e-mail, telefone ou chave aleatória"
-                    />
-                  </div>
-
-                  {/* PIS + Telefone de Recado */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="pis">PIS / NIS</Label>
-                      <Input
-                        id="pis"
-                        value={formData.pis}
-                        onChange={(e) =>
-                          setFormData((prev) => ({ ...prev, pis: e.target.value }))
-                        }
-                        placeholder="000.00000.00-0"
-                        maxLength={20}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="recado_phone">Telefone para recado</Label>
-                      <Input
-                        id="recado_phone"
-                        value={formData.recado_phone}
-                        onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            recado_phone: formatPhoneInput(e.target.value),
-                          }))
-                        }
-                        placeholder="(00) 00000-0000"
-                        maxLength={15}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Discord + Código contabilidade */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="discord_username">Discord</Label>
-                      <Input
-                        id="discord_username"
-                        value={formData.discord_username}
-                        onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            discord_username: e.target.value,
-                          }))
-                        }
-                        placeholder="usuario#1234 ou @usuario"
+                        id="pix_key"
+                        value={formData.pix_key}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, pix_key: e.target.value }))}
+                        placeholder="CPF, e-mail, telefone ou chave aleatória"
                       />
                     </div>
                     <div className="space-y-2">
@@ -1869,25 +2073,93 @@ const CollaboratorModal = ({
                     />
                   </div>
                 </div>
+
+                {/* Dependentes — colapsável na Geral. Alimenta `dependents_count` e impacta IRPF */}
+                {collaboratorId && (
+                  <div className="px-6 pb-6 pt-2">
+                    <details className="rounded-lg border bg-card p-4">
+                      <summary className="cursor-pointer select-none font-semibold text-foreground flex items-center gap-2">
+                        <Users className="w-4 h-4 text-primary" />
+                        Dependentes legais
+                        <span className="text-xs text-muted-foreground font-normal ml-auto">clique pra abrir</span>
+                      </summary>
+                      <div className="mt-4">
+                        <CollaboratorDependentsTab
+                          collaboratorId={collaboratorId}
+                          companyId={currentCompany?.id || ""}
+                          canEdit={canManage}
+                        />
+                      </div>
+                    </details>
+                  </div>
+                )}
+
+                {/* Fardamento — seção colapsável (uso baixa frequência) */}
+                {collaboratorId && (
+                  <div className="px-6 pb-6">
+                    <details className="rounded-lg border bg-card p-4">
+                      <summary className="cursor-pointer select-none font-semibold text-foreground flex items-center gap-2">
+                        <TShirt className="w-4 h-4 text-primary" />
+                        Fardamento
+                        <span className="text-xs text-muted-foreground font-normal ml-auto">clique pra abrir</span>
+                      </summary>
+                      <div className="mt-4">
+                        <CollaboratorUniformTab
+                          collaboratorId={collaboratorId}
+                          companyId={currentCompany?.id || ""}
+                          canEdit={canManage}
+                        />
+                      </div>
+                    </details>
+                  </div>
+                )}
               </ScrollArea>
               </div>
+              </TabsContent>
 
-              {/* Right Column - Financeiro */}
-              <div className="flex flex-col min-h-0 bg-muted/30">
-                {/* Financeiro Header */}
-                <div className="shrink-0 p-4 border-b bg-muted/50">
-                  <h3 className="font-semibold text-lg flex items-center gap-2">
-                    <Wallet className="w-5 h-5 text-primary" />
-                    Financeiro
-                  </h3>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Competência: {currentMonth.toString().padStart(2, "0")}/{currentYear}
-                  </p>
+              <TabsContent value="financeiro" className="flex-1 min-h-0 overflow-hidden m-0 data-[state=active]:flex flex-col data-[state=inactive]:hidden">
+              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                {/* Financeiro Header com Resumo KPI */}
+                <div className="shrink-0 px-6 py-4 border-b">
+                  <div className="flex items-start justify-between gap-4 flex-wrap">
+                    <div>
+                      <h3 className="font-semibold text-lg flex items-center gap-2">
+                        <Wallet className="w-5 h-5 text-primary" />
+                        Financeiro
+                      </h3>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Competência {currentMonth.toString().padStart(2, "0")}/{currentYear}
+                      </p>
+                    </div>
+                    <div className="flex items-stretch gap-4">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Líquido</span>
+                        <span className="font-mono text-sm font-semibold text-foreground">{formatCurrency(totals.total)}</span>
+                      </div>
+                      <div className="w-px bg-border" />
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">FGTS</span>
+                        <span className="font-mono text-sm font-semibold text-foreground">{formatCurrency(totals.taxTotal)}</span>
+                      </div>
+                      <div className="w-px bg-border" />
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Benefícios</span>
+                        <span className="font-mono text-sm font-semibold text-foreground">{formatCurrency(totals.benefitsTotal)}</span>
+                      </div>
+                      <div className="w-px bg-border" />
+                      <div className="flex flex-col rounded-md bg-primary/10 px-3 py-1.5 -my-1.5">
+                        <span className="text-[10px] uppercase tracking-wide text-primary/80">Custo empresa</span>
+                        <span className="font-mono text-base font-bold text-primary">{formatCurrency(totals.companyCost)}</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Scrollable Content */}
-                <ScrollArea className="flex-1">
-                  <div className="p-4 space-y-6">
+                <ScrollArea className="flex-1 min-h-0">
+                  <div className="p-6 space-y-6">
+                    {/* Lançamentos + Benefícios em duas colunas */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* Payroll Entries */}
                     <div>
                       <div className="flex items-center justify-between mb-3">
@@ -1905,9 +2177,14 @@ const CollaboratorModal = ({
                       
                       {(() => {
                         const allEntries = isNew ? pendingEntries : payrollEntries;
-                        const visibleEntries = allEntries.filter(
-                          (e: any) => e.type !== "beneficio",
-                        );
+                        const visibleEntries = allEntries.filter((e: any) => {
+                          if (e.type === "beneficio") return false;
+                          // FGTS só pra CLT. PJ/estagiário não tem encargo de FGTS.
+                          if (e.type === "fgts" && formData.regime !== "clt") return false;
+                          // Linhas zeradas/negativas viram ruído — esconde.
+                          if (!(Number(e.value) > 0)) return false;
+                          return true;
+                        });
                         if (visibleEntries.length === 0) {
                           return (
                             <div className="text-sm text-muted-foreground text-center py-6 bg-background rounded-lg border border-dashed">
@@ -1916,36 +2193,36 @@ const CollaboratorModal = ({
                           );
                         }
                         return (
-                          <div className="space-y-2">
+                          <div className="space-y-1.5">
                             {visibleEntries.map((entry: any) => (
                             <div
                               key={entry.id}
-                              className="p-3 rounded-lg bg-background border hover:border-primary/30 transition-colors"
+                              className="px-2.5 py-2 rounded-lg bg-background border hover:border-primary/30 transition-colors"
                             >
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex-1 min-w-0">
-                                  <div className="flex items-center justify-between mb-1.5">
-                                    <span className="text-sm font-medium truncate pr-2">
-                                      {entry.description || getEntryTypeLabel(entry.type)}
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="text-xs font-medium truncate pr-2">
+                                      {toTitleCase(entry.description) || getEntryTypeLabel(entry.type)}
                                     </span>
-                                    <span className={`font-mono text-sm font-semibold shrink-0 ${
-                                      ["inss", "irpf", "despesa", "custo", "fgts"].includes(entry.type)
+                                    <span className={`font-mono text-xs font-semibold shrink-0 ${
+                                      ["inss", "irpf", "despesa", "custo", "fgts", "desconto"].includes(entry.type)
                                         ? "text-destructive"
                                         : "text-green-600"
                                     }`}>
-                                      {["inss", "irpf", "despesa", "custo", "fgts"].includes(entry.type) ? "- " : "+ "}
+                                      {["inss", "irpf", "despesa", "custo", "fgts", "desconto"].includes(entry.type) ? "- " : "+ "}
                                       {formatCurrency(entry.value)}
                                     </span>
                                   </div>
-                                  <div className="flex items-center gap-1.5">
-                                    <Badge variant={getEntryTypeVariant(entry.type)} className="text-xs h-5 px-1.5">
+                                  <div className="flex items-center gap-1">
+                                    <Badge variant={getEntryTypeVariant(entry.type)} className="text-[10px] h-4 px-1.5">
                                       {getEntryTypeLabel(entry.type)}
                                     </Badge>
                                     {entry.is_fixed && (
-                                      <Badge variant="outline" className="text-xs h-5 px-1.5">Fixo</Badge>
+                                      <Badge variant="outline" className="text-[10px] h-4 px-1.5">Fixo</Badge>
                                     )}
                                     {entry.installment_number && (
-                                      <Badge variant="outline" className="text-xs h-5 px-1.5">
+                                      <Badge variant="outline" className="text-[10px] h-4 px-1.5">
                                         {entry.installment_number}/{entry.installment_total}
                                       </Badge>
                                     )}
@@ -1989,7 +2266,7 @@ const CollaboratorModal = ({
                           Nenhum benefício atribuído
                         </div>
                       ) : (
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                           {isNew
                             ? pendingBenefits.map((b) => {
                                 const description = getBenefitCalculationDescription(
@@ -2003,17 +2280,17 @@ const CollaboratorModal = ({
                                 return (
                                   <div
                                     key={b.id}
-                                    className="p-3 rounded-lg bg-background border hover:border-primary/30 transition-colors"
+                                    className="px-2.5 py-2 rounded-lg bg-background border hover:border-primary/30 transition-colors"
                                   >
                                     <div className="flex items-start justify-between gap-2">
                                       <div className="flex-1 min-w-0">
                                         <div className="flex items-center justify-between mb-1">
-                                          <span className="text-sm font-medium truncate pr-2">{b.benefit_name}</span>
-                                          <span className="font-mono text-sm font-semibold shrink-0">
+                                          <span className="text-xs font-medium truncate pr-2">{toTitleCase(b.benefit_name)}</span>
+                                          <span className="font-mono text-xs font-semibold shrink-0">
                                             {formatCurrency(b.monthly_value)}
                                           </span>
                                         </div>
-                                        <p className="text-xs text-muted-foreground">{description}</p>
+                                        <p className="text-[11px] text-muted-foreground">{description}</p>
                                       </div>
                                       {canManage && (
                                         <Button
@@ -2060,24 +2337,19 @@ const CollaboratorModal = ({
                                 return (
                                   <div
                                     key={assignment.id}
-                                    className="p-3 rounded-lg bg-background border hover:border-primary/30 transition-colors"
+                                    className="px-2.5 py-2 rounded-lg bg-background border hover:border-primary/30 transition-colors"
                                   >
                                     <div className="flex items-start justify-between gap-2">
                                       <div className="flex-1 min-w-0">
                                         <div className="flex items-center justify-between mb-1">
-                                          <span className="text-sm font-medium truncate pr-2">
-                                            {benefit.name}
-                                            {hasCustom && (
-                                              <span className="ml-1.5 text-[10px] uppercase tracking-wide text-amber-600">
-                                                · custom
-                                              </span>
-                                            )}
+                                          <span className="text-xs font-medium truncate pr-2">
+                                            {toTitleCase(benefit.name)}
                                           </span>
-                                          <span className="font-mono text-sm font-semibold shrink-0">
+                                          <span className="font-mono text-xs font-semibold shrink-0">
                                             {formatCurrency(monthlyValue)}
                                           </span>
                                         </div>
-                                        <p className="text-xs text-muted-foreground">{description}</p>
+                                        <p className="text-[11px] text-muted-foreground">{description}</p>
                                       </div>
                                       {canManage && (
                                         <div className="flex items-center gap-0.5 shrink-0">
@@ -2114,10 +2386,11 @@ const CollaboratorModal = ({
                         </div>
                       )}
                     </div>
+                    </div>{/* fim grid 2-cols Lançamentos + Benefícios */}
 
                     {/* Vacation History - only for existing collaborators */}
                     {!isNew && (
-                      <div>
+                      <div className="rounded-lg border bg-card p-4">
                         <div className="flex items-center justify-between mb-3">
                           <h4 className="font-medium text-sm flex items-center gap-2">
                             <Palmtree className="w-4 h-4 text-muted-foreground" />
@@ -2205,25 +2478,54 @@ const CollaboratorModal = ({
                   </div>
                 </ScrollArea>
 
-                {/* Total Cost Summary - Fixed at Bottom */}
-                <div className="shrink-0 p-4 border-t bg-primary/5">
-                  <div className="flex items-center gap-2 mb-1">
-                    <DollarSign className="w-5 h-5 text-primary" />
-                    <span className="text-sm font-medium">
-                      Resumo - {currentMonth.toString().padStart(2, "0")}/{currentYear}
-                    </span>
+                {/* 13º Salário + Pensão — agrupados no final da aba Financeiro */}
+                {collaboratorId && (
+                  <div className="px-6 pb-6 space-y-4 border-t pt-4">
+                    <details className="rounded-lg border bg-card p-4">
+                      <summary className="cursor-pointer select-none font-semibold text-foreground flex items-center gap-2">
+                        <Gift className="w-4 h-4 text-primary" />
+                        13º Salário
+                        <span className="text-xs text-muted-foreground font-normal ml-auto">clique pra abrir</span>
+                      </summary>
+                      <div className="mt-4">
+                        <SubResourceTab
+                          kind="decimo-terceiro"
+                          collaboratorId={collaboratorId}
+                          table="bonus_entries"
+                          orderBy={{ column: "created_at", ascending: false }}
+                          titleSingular="13º"
+                          icon={<Gift className="w-6 h-6 text-primary" />}
+                          emptyTitle="Sem lançamentos de 13º"
+                          emptyDescription="Nenhum lançamento de 13º registrado."
+                          canManage={canManage}
+                          fields={DECIMO_FIELDS}
+                          renderRow={(row: any) => ({
+                            title: `13º ${row.year ?? "—"}`,
+                            meta: `${row.is_paid ? "Pago" : "Pendente"}${row.value_paid ? ` · ${formatCurrency(row.value_paid)}` : ""}${row.notes ? " · " + toTitleCase(row.notes) : ""}`,
+                          })}
+                        />
+                      </div>
+                    </details>
+
+                    {canManage && (
+                      <details className="rounded-lg border bg-card p-4">
+                        <summary className="cursor-pointer select-none font-semibold text-foreground flex items-center gap-2">
+                          <Scales className="w-4 h-4 text-primary" />
+                          Pensão alimentícia
+                          <span className="text-xs text-muted-foreground font-normal ml-auto">clique pra abrir</span>
+                        </summary>
+                        <div className="mt-4">
+                          <CollaboratorAlimonyTab
+                            collaboratorId={collaboratorId}
+                            companyId={currentCompany?.id || ""}
+                            canEdit={canManage}
+                          />
+                        </div>
+                      </details>
+                    )}
                   </div>
-                  <div className="text-2xl font-bold text-primary">
-                    {formatCurrency(totals.companyCost)}
-                  </div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-muted-foreground">
-                    <span>Líquido: {formatCurrency(totals.total)}</span>
-                    <span>FGTS: {formatCurrency(totals.taxTotal)}</span>
-                    <span>Benefícios: {formatCurrency(totals.benefitsTotal)}</span>
-                  </div>
-                </div>
+                )}
               </div>
-                </div>
               </TabsContent>
 
               {["validacao_pendente", "reprovado"].includes(formData.status) && collaboratorId && (
@@ -2242,54 +2544,110 @@ const CollaboratorModal = ({
 
               {collaboratorId && (
                 <>
-                  <TabsContent
-                    value="historico"
-                    className="flex-1 min-h-0 overflow-auto m-0 p-4"
-                  >
-                    <CollaboratorTimelineTab collaboratorId={collaboratorId} />
+                  {/* Saúde & Ausências — 3 sub-tabs horizontais (Atestados removido, não existe na agenda) */}
+                  <TabsContent value="saude" className="flex-1 min-h-0 overflow-auto m-0 p-4">
+                    <Tabs defaultValue="afastamentos" className="w-full">
+                      <TabsList className="grid grid-cols-3 w-full max-w-xl mb-4">
+                        <TabsTrigger value="afastamentos">Afastamentos</TabsTrigger>
+                        <TabsTrigger value="absenteismos">Absenteísmo</TabsTrigger>
+                        <TabsTrigger value="planos">Planos</TabsTrigger>
+                      </TabsList>
+
+                      <TabsContent value="afastamentos" className="mt-0">
+                        <SubResourceTab
+                          kind="afastamentos"
+                          collaboratorId={collaboratorId}
+                          table="collaborator_leaves"
+                          orderBy={{ column: "start_date", ascending: false }}
+                          titleSingular="Afastamento"
+                          icon={<Bandaids className="w-6 h-6 text-primary" />}
+                          emptyTitle="Sem afastamentos"
+                          emptyDescription="Nenhum afastamento registrado pra esse colaborador."
+                          canManage={canManage}
+                          fields={AFASTAMENTO_FIELDS}
+                          renderRow={(row: any) => ({
+                            title: toTitleCase(row.description) || `Motivo ${row.reason_code ?? "—"}`,
+                            meta: `${formatDateBR(row.start_date)} → ${row.end_date ? formatDateBR(row.end_date) : "em aberto"}${row.has_certificate ? " · com atestado" : ""}`,
+                          })}
+                        />
+                      </TabsContent>
+
+                      <TabsContent value="absenteismos" className="mt-0">
+                        <SubResourceTab
+                          kind="absenteismos"
+                          collaboratorId={collaboratorId}
+                          table="collaborator_absences"
+                          orderBy={{ column: "occurred_on", ascending: false }}
+                          titleSingular="Absenteísmo"
+                          icon={<CalendarX className="w-6 h-6 text-primary" />}
+                          emptyTitle="Sem absenteísmos"
+                          emptyDescription="Nenhuma ocorrência de absenteísmo registrada."
+                          canManage={canManage}
+                          fields={ABSENTEISMO_FIELDS}
+                          renderRow={(row: any) => ({
+                            title: toTitleCase(row.reason) || "Sem motivo registrado",
+                            meta: `${formatDateBR(row.occurred_on)} · ${row.days ?? 0} dia(s)${row.has_certificate ? " · com atestado" : ""}`,
+                          })}
+                        />
+                      </TabsContent>
+
+                      <TabsContent value="planos" className="mt-0">
+                        <SubResourceTab
+                          kind="planos"
+                          collaboratorId={collaboratorId}
+                          table="collaborator_health_plans"
+                          orderBy={{ column: "start_date", ascending: false }}
+                          titleSingular="Plano"
+                          icon={<Stethoscope className="w-6 h-6 text-primary" />}
+                          emptyTitle="Sem planos"
+                          emptyDescription="Nenhum plano de saúde ou odontológico registrado."
+                          canManage={canManage}
+                          fields={PLANO_FIELDS}
+                          renderRow={(row: any) => ({
+                            title: toTitleCase(row.plan_name) || "Plano sem nome",
+                            meta: `${toTitleCase(row.beneficiary_type) || "—"}${row.beneficiary_name ? " · " + toTitleCase(row.beneficiary_name) : ""}${row.plan_value ? ` · ${formatCurrency(row.plan_value)}` : ""}`,
+                          })}
+                        />
+                      </TabsContent>
+                    </Tabs>
                   </TabsContent>
-                  <TabsContent
-                    value="dependentes"
-                    className="flex-1 min-h-0 overflow-auto m-0 p-4"
-                  >
-                    <CollaboratorDependentsTab
+
+                  <TabsContent value="ferias" className="flex-1 min-h-0 overflow-auto m-0 p-4">
+                    <SubResourceTab
+                      kind="ferias"
                       collaboratorId={collaboratorId}
-                      companyId={currentCompany?.id || ""}
-                      canEdit={canManage}
+                      table="vacation_periods"
+                      orderBy={{ column: "start_date", ascending: false }}
+                      titleSingular="Férias"
+                      icon={<Palmtree className="w-6 h-6 text-primary" />}
+                      emptyTitle="Sem períodos de férias"
+                      emptyDescription="Nenhum período de férias registrado."
+                      canManage={canManage}
+                      fields={FERIAS_FIELDS}
+                      renderRow={(row: any) => ({
+                        title: `${formatDateBR(row.start_date)} → ${formatDateBR(row.end_date)}`,
+                        meta: `${VACATION_STATUS_LABEL[row.status] ?? row.status ?? "—"}${row.notes ? " · " + toTitleCase(row.notes) : ""}`,
+                      })}
                     />
                   </TabsContent>
-                  <TabsContent
-                    value="atestados"
-                    className="flex-1 min-h-0 overflow-auto m-0 p-4"
-                  >
-                    <CollaboratorMedicalCertsTab
+
+                  <TabsContent value="lotacao" className="flex-1 min-h-0 overflow-auto m-0 p-4">
+                    <SubResourceTab
+                      kind="pdvs"
                       collaboratorId={collaboratorId}
-                      companyId={currentCompany?.id || ""}
-                      canEdit={canManage}
+                      table="collaborator_pdvs"
+                      orderBy={{ column: "created_at", ascending: false }}
+                      titleSingular="PDV"
+                      icon={<Storefront className="w-6 h-6 text-primary" />}
+                      emptyTitle="Sem PDVs"
+                      emptyDescription="Esse colaborador não atende nenhum PDV ainda."
+                      canManage={canManage}
+                      fields={PDV_FIELDS}
+                      renderRow={(row: any) => ({
+                        title: toTitleCase(row.pdv_name) || "PDV sem nome",
+                      })}
                     />
                   </TabsContent>
-                  <TabsContent
-                    value="fardamento"
-                    className="flex-1 min-h-0 overflow-auto m-0 p-4"
-                  >
-                    <CollaboratorUniformTab
-                      collaboratorId={collaboratorId}
-                      companyId={currentCompany?.id || ""}
-                      canEdit={canManage}
-                    />
-                  </TabsContent>
-                  {canManage && (
-                    <TabsContent
-                      value="pensao"
-                      className="flex-1 min-h-0 overflow-auto m-0 p-4"
-                    >
-                      <CollaboratorAlimonyTab
-                        collaboratorId={collaboratorId}
-                        companyId={currentCompany?.id || ""}
-                        canEdit={canManage}
-                      />
-                    </TabsContent>
-                  )}
                 </>
               )}
             </Tabs>
@@ -2308,6 +2666,21 @@ const CollaboratorModal = ({
                   Desativar
                 </Button>
               )}
+              {!isNew && canManage && formData.status === "inativo" && (
+                <Button
+                  variant="outline"
+                  className="text-emerald-700 border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 dark:text-emerald-300 dark:border-emerald-700/40 dark:hover:bg-emerald-900/20"
+                  onClick={handleReactivate}
+                  disabled={isDeactivating || isDeleting}
+                >
+                  {isDeactivating ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Power className="w-4 h-4 mr-2" />
+                  )}
+                  Reativar
+                </Button>
+              )}
               {!isNew && canManage && (
                 <Button
                   variant="outline"
@@ -2317,6 +2690,15 @@ const CollaboratorModal = ({
                 >
                   <Trash className="w-4 h-4 mr-2" />
                   Excluir
+                </Button>
+              )}
+              {!isNew && collaboratorId && (
+                <Button
+                  variant="outline"
+                  onClick={() => setIsHistoryOpen(true)}
+                >
+                  <Clock className="w-4 h-4 mr-2" />
+                  Ver histórico
                 </Button>
               )}
             </div>
@@ -2748,6 +3130,22 @@ const CollaboratorModal = ({
         onOpenChange={(v) => !v && setAdjustingPeriod(null)}
         period={adjustingPeriod}
       />
+
+      {/* Histórico — modal acionado pelo botão "Ver histórico" do footer */}
+      <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Clock className="w-5 h-5 text-primary" />
+              Histórico do colaborador
+            </DialogTitle>
+            <DialogDescription>
+              Eventos automáticos (admissão, mudanças de cargo/setor/empresa) + lançamentos sincronizados da agenda.
+            </DialogDescription>
+          </DialogHeader>
+          {collaboratorId && <CollaboratorTimelineTab collaboratorId={collaboratorId} />}
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

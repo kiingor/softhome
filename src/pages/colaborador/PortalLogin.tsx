@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { z } from "zod";
 import { Eye, EyeSlash as EyeOff, ArrowLeft, CircleNotch as Loader2 } from "@phosphor-icons/react";
-import { SoftHouseLogo } from "@/components/branding/SoftHouseLogo";
+import { BrandLogo } from "@/components/branding/BrandLogo";
 const loginSchema = z.object({
   email: z.string().email("Email inválido"),
   password: z.string().min(1, "Senha é obrigatória"),
@@ -134,7 +134,7 @@ const PortalLogin = () => {
         <div className="bg-card rounded-2xl shadow-card p-8 border border-border">
           <div className="text-center mb-8">
             <div className="inline-flex items-center gap-2 mb-4">
-              <SoftHouseLogo size="lg" />
+              <BrandLogo size="lg" />
             </div>
             <h1 className="text-2xl font-bold text-foreground">
               Portal do Colaborador

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import PermissionGuard from "@/components/dashboard/PermissionGuard";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useIsDeveloper } from "@/hooks/useIsDeveloper";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,13 +38,20 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { UserPlus, MagnifyingGlass as Search, Funnel as Filter, DotsThree as MoreHorizontal, Pencil as Edit, Trash as Trash2, Users, ArrowsClockwise as RefreshCw, UploadSimple } from "@phosphor-icons/react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { UserPlus, MagnifyingGlass as Search, Funnel as Filter, DotsThree as MoreHorizontal, Pencil as Edit, Trash as Trash2, Users, ArrowsClockwise as RefreshCw } from "@phosphor-icons/react";
 import { useDashboard } from "@/contexts/DashboardContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { formatCPF } from "@/lib/validators";
 import CollaboratorModal from "@/modules/core/components/collaborators/CollaboratorModal";
-import { CollaboratorsImportDialog } from "@/modules/core/components/collaborators/import/CollaboratorsImportDialog";
 import { TableSkeleton } from "@/components/ui/table-skeleton";
 
 interface Collaborator {
@@ -76,10 +84,40 @@ interface Position {
   name: string;
 }
 
+interface SyncResult {
+  inserted: number;
+  updated: number;
+  deactivated: number;
+  fetched: number;
+  errors: Array<{ external_id: string; name: string; cpf: string | null; error: string }>;
+  successes: Array<{ external_id: string; name: string; action: "inserted" | "updated" }>;
+  financials?: {
+    processed: number;
+    salaryCreated: number;
+    salaryUpdated: number;
+    inssGenerated?: number;
+    irpfGenerated?: number;
+    fgtsGenerated?: number;
+    payrollUpserted: number;
+    assignmentsUpserted: number;
+    benefitsCreated: number;
+    errors: number;
+    errorDetails?: Array<{ collaboratorName: string; external_id: string; tipo: string; error: string }>;
+  } | null;
+  details?: {
+    processed: number;
+    totals: Record<string, number>;
+    errors: number;
+    errorDetails?: Array<{ collaboratorName: string; kind: string; error: string }>;
+  } | null;
+}
+
 const ColaboradoresPage = () => {
   const { currentCompany } = useDashboard();
   const { toast } = useToast();
   const { canCreate, canEdit, canDelete, isAdmin } = usePermissions("colaboradores");
+  // Cadastro manual de colaborador é controle de dev: fluxo padrão é via sync da agenda.
+  const isDeveloper = useIsDeveloper();
 
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
@@ -88,10 +126,15 @@ const ColaboradoresPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
+  // Sync com agenda Softcom Cloud
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isSyncConfirmOpen, setIsSyncConfirmOpen] = useState(false);
+  const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
+  const canSync = canCreate || isAdmin;
+
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [importOpen, setImportOpen] = useState(false);
 
   // Deep-link via ?openId=<uuid> (usado pelo GlobalSearch e outros lugares)
   const [searchParams, setSearchParams] = useSearchParams();
@@ -346,6 +389,43 @@ const ColaboradoresPage = () => {
 
   const totalPages = Math.ceil(totalCount / pageSize);
 
+  const handleSync = async () => {
+    if (!currentCompany?.id) return;
+    setIsSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-collaborators', {
+        body: {
+          companyId: currentCompany.id,
+          includeFinancials: true,
+          includeDetails: true,
+        },
+      });
+      if (error) throw error;
+      const errMsg = (data as { error?: string } | null)?.error;
+      if (errMsg) throw new Error(errMsg);
+      const r = data as SyncResult;
+      setSyncResult({
+        inserted: r.inserted ?? 0,
+        updated: r.updated ?? 0,
+        deactivated: r.deactivated ?? 0,
+        fetched: r.fetched ?? 0,
+        errors: r.errors ?? [],
+        successes: r.successes ?? [],
+        financials: r.financials ?? null,
+        details: r.details ?? null,
+      });
+      loadCollaborators();
+    } catch (err) {
+      toast({
+        title: 'Não foi possível sincronizar agora',
+        description: (err as Error).message,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   return (
     <PermissionGuard module="colaboradores">
       <div className="space-y-6 page-content">
@@ -356,19 +436,235 @@ const ColaboradoresPage = () => {
               {totalCount} colaborador{totalCount !== 1 ? "es" : ""} cadastrado{totalCount !== 1 ? "s" : ""}
             </p>
           </div>
-          {(canCreate || isAdmin) && (
+          {(canSync || isDeveloper) && (
             <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={() => setImportOpen(true)}>
-                <UploadSimple className="w-4 h-4 mr-2" />
-                Importar
-              </Button>
-              <Button variant="hero" onClick={handleNewCollaborator}>
-                <UserPlus className="w-4 h-4 mr-2" />
-                Novo Colaborador
-              </Button>
+              {canSync && (
+                <Button
+                  variant="outline"
+                  onClick={() => setIsSyncConfirmOpen(true)}
+                  disabled={isSyncing || !currentCompany?.id}
+                  title="Importa colaboradores da agenda (api.softcom.cloud)"
+                >
+                  <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+                  {isSyncing ? 'Sincronizando...' : 'Sincronizar'}
+                </Button>
+              )}
+              {/* Cadastro manual é controle de dev (cadastro padrão vem do sync). */}
+              {isDeveloper && (
+                <Button variant="hero" onClick={handleNewCollaborator}>
+                  <UserPlus className="w-4 h-4 mr-2" />
+                  Novo Colaborador
+                </Button>
+              )}
             </div>
           )}
         </div>
+
+        <AlertDialog open={isSyncConfirmOpen} onOpenChange={setIsSyncConfirmOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Sincronizar colaboradores com a agenda?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Vou importar todos os colaboradores que estão em <strong>api.softcom.cloud</strong> e marcar como inativos os que sumirem de lá. Colaboradores criados manualmente aqui não são tocados.
+                <br /><br />
+                Sincronize <strong>Empresas</strong>, <strong>Setores</strong> e <strong>Cargos</strong> primeiro pra que os vínculos venham corretos. Pode continuar?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={handleSync}>Sincronizar agora</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <Dialog open={!!syncResult} onOpenChange={(open) => !open && setSyncResult(null)}>
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Resultado da sincronização</DialogTitle>
+              <DialogDescription>
+                {syncResult?.fetched ?? 0} colaborador{(syncResult?.fetched ?? 0) !== 1 ? 'es' : ''} processado{(syncResult?.fetched ?? 0) !== 1 ? 's' : ''} da agenda (api.softcom.cloud).
+              </DialogDescription>
+            </DialogHeader>
+
+            {syncResult && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className="rounded-lg border p-3">
+                    <div className="text-xs text-muted-foreground">Novos</div>
+                    <div className="text-2xl font-bold text-emerald-600">{syncResult.inserted}</div>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <div className="text-xs text-muted-foreground">Atualizados</div>
+                    <div className="text-2xl font-bold text-blue-600">{syncResult.updated}</div>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <div className="text-xs text-muted-foreground">Desativados</div>
+                    <div className="text-2xl font-bold text-amber-600">{syncResult.deactivated}</div>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <div className="text-xs text-muted-foreground">Com erro</div>
+                    <div className="text-2xl font-bold text-rose-600">{syncResult.errors.length}</div>
+                  </div>
+                </div>
+
+                {syncResult.financials && (
+                  <div className="rounded-lg border p-3 bg-muted/30 space-y-3">
+                    <div>
+                      <div className="font-medium mb-2">Financeiro aplicado</div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
+                        <div>
+                          <span className="text-muted-foreground">Colabs processados:</span>{" "}
+                          <strong>{syncResult.financials.processed}</strong>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Salários (criados/atualizados):</span>{" "}
+                          <strong>{syncResult.financials.salaryCreated}/{syncResult.financials.salaryUpdated}</strong>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Lançamentos folha:</span>{" "}
+                          <strong>{syncResult.financials.payrollUpserted}</strong>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">INSS gerado:</span>{" "}
+                          <strong>{syncResult.financials.inssGenerated ?? 0}</strong>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">IRPF gerado:</span>{" "}
+                          <strong>{syncResult.financials.irpfGenerated ?? 0}</strong>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">FGTS gerado:</span>{" "}
+                          <strong>{syncResult.financials.fgtsGenerated ?? 0}</strong>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Benefícios criados no catálogo:</span>{" "}
+                          <strong>{syncResult.financials.benefitsCreated}</strong>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Atribuições de benefício:</span>{" "}
+                          <strong>{syncResult.financials.assignmentsUpserted}</strong>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Erros financeiros:</span>{" "}
+                          <strong className={syncResult.financials.errors > 0 ? "text-rose-600" : ""}>{syncResult.financials.errors}</strong>
+                        </div>
+                      </div>
+                    </div>
+
+                    {syncResult.financials.errorDetails && syncResult.financials.errorDetails.length > 0 && (
+                      <details open className="rounded border bg-rose-50 dark:bg-rose-950/30">
+                        <summary className="cursor-pointer p-2 font-medium text-sm select-none">
+                          Erros financeiros ({syncResult.financials.errorDetails.length})
+                        </summary>
+                        <div className="divide-y text-xs">
+                          {syncResult.financials.errorDetails.map((e, idx) => (
+                            <div key={idx} className="p-2">
+                              <div className="font-medium">{e.collaboratorName} <span className="text-muted-foreground">· {e.tipo}</span></div>
+                              <div className="text-rose-600">{e.error}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    )}
+                  </div>
+                )}
+
+                {syncResult.details && (
+                  <div className="rounded-lg border p-3 bg-muted/30 space-y-3">
+                    <div>
+                      <div className="font-medium mb-2">Detalhes das sub-abas (afastamentos, férias, planos, PDV...)</div>
+                      <div className="text-sm text-muted-foreground mb-2">
+                        {syncResult.details.processed} colaborador(es) processado(s)
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
+                        {Object.entries(syncResult.details.totals).map(([kind, total]) => (
+                          <div key={kind}>
+                            <span className="text-muted-foreground capitalize">
+                              {kind === "healthPlans" ? "Planos" :
+                               kind === "healthPlanDeductions" ? "Descontos plano (folha)" :
+                               kind === "timelineEvents" ? "Eventos (histórico)" :
+                               kind === "absences" ? "Absenteísmo" :
+                               kind === "leaves" ? "Afastamentos" :
+                               kind === "vacations" ? "Férias" :
+                               kind === "exams" ? "Exames" :
+                               kind === "internships" ? "Estágios" :
+                               kind === "emails" ? "E-mails" :
+                               kind === "pdvs" ? "PDVs" : kind}:
+                            </span>{" "}
+                            <strong>{total}</strong>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {syncResult.details.errorDetails && syncResult.details.errorDetails.length > 0 && (
+                      <details open className="rounded border bg-rose-50 dark:bg-rose-950/30">
+                        <summary className="cursor-pointer p-2 font-medium text-sm select-none">
+                          Erros nos detalhes ({syncResult.details.errorDetails.length})
+                        </summary>
+                        <div className="divide-y text-xs">
+                          {syncResult.details.errorDetails.map((e, idx) => (
+                            <div key={idx} className="p-2">
+                              <div className="font-medium">{e.collaboratorName} <span className="text-muted-foreground">· {e.kind}</span></div>
+                              <div className="text-rose-600">{e.error}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    )}
+                  </div>
+                )}
+
+                {syncResult.errors.length > 0 && (
+                  <details open className="rounded-lg border">
+                    <summary className="cursor-pointer p-3 font-medium select-none bg-rose-50 dark:bg-rose-950/30 rounded-t-lg">
+                      Erros ({syncResult.errors.length})
+                    </summary>
+                    <div className="divide-y">
+                      {syncResult.errors.map((e) => (
+                        <div key={e.external_id} className="p-3 text-sm">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <span className="font-medium">{e.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              ID na agenda: {e.external_id}
+                              {e.cpf ? ` · CPF: ${e.cpf}` : ''}
+                            </span>
+                          </div>
+                          <div className="text-rose-600 text-xs">{e.error}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
+
+                {syncResult.successes.length > 0 && (
+                  <details className="rounded-lg border">
+                    <summary className="cursor-pointer p-3 font-medium select-none bg-emerald-50 dark:bg-emerald-950/30 rounded-t-lg">
+                      Sincronizados com sucesso ({syncResult.successes.length})
+                    </summary>
+                    <div className="divide-y max-h-64 overflow-y-auto">
+                      {syncResult.successes.map((s) => (
+                        <div key={s.external_id} className="p-2 text-sm flex items-center justify-between gap-2">
+                          <span>{s.name}</span>
+                          <span className="text-xs">
+                            <span className={s.action === 'inserted' ? 'text-emerald-600' : 'text-blue-600'}>
+                              {s.action === 'inserted' ? 'novo' : 'atualizado'}
+                            </span>
+                            <span className="text-muted-foreground ml-2">#{s.external_id}</span>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button onClick={() => setSyncResult(null)}>Fechar</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Search and Filters */}
         <Card className="border border-border">
@@ -476,7 +772,7 @@ const ColaboradoresPage = () => {
                   ? "Tente ajustar os filtros de busca."
                   : "Comece cadastrando seu primeiro colaborador."}
               </p>
-              {!searchTerm && statusFilter === "all" && storeFilter === "all" && teamFilter === "all" && (
+              {!searchTerm && statusFilter === "all" && storeFilter === "all" && teamFilter === "all" && isDeveloper && (
                 <Button variant="hero" onClick={handleNewCollaborator}>
                   <UserPlus className="w-4 h-4 mr-2" />
                   Cadastrar Colaborador
@@ -644,16 +940,6 @@ const ColaboradoresPage = () => {
           collaboratorId={editingId}
           onSuccess={handleModalSuccess}
         />
-
-        {/* Importação em massa */}
-        {currentCompany && (
-          <CollaboratorsImportDialog
-            open={importOpen}
-            onOpenChange={setImportOpen}
-            companyId={currentCompany.id}
-            onImportFinished={() => loadCollaborators()}
-          />
-        )}
 
         {/* Delete Confirmation Dialog */}
         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

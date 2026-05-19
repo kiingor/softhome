@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/sheet";
 import { House as Home, FileText, Gift, Download, SignOut as LogOut, List as Menu, TreePalm as Palmtree, ClipboardText as ClipboardCheck } from "@phosphor-icons/react";
 import { useState } from "react";
-import { SoftHouseLogo } from "@/components/branding/SoftHouseLogo";
+import { BrandLogo } from "@/components/branding/BrandLogo";
 import { PortalNotificationBell } from "@/components/portal/PortalNotificationBell";
 
 interface PortalLayoutProps {
@@ -86,7 +86,7 @@ const PortalLayout = ({ children }: PortalLayoutProps) => {
                 className="hidden md:flex items-center gap-2.5 shrink-0"
                 aria-label="Portal do Colaborador"
               >
-                <SoftHouseLogo size="sm" />
+                <BrandLogo size="sm" />
                 <span className="font-bold text-foreground whitespace-nowrap hidden xl:inline">
                   Portal do Colaborador
                 </span>
@@ -184,7 +184,7 @@ const PortalLayout = ({ children }: PortalLayoutProps) => {
                 <SheetContent side="right" className="w-72">
                   <SheetHeader className="border-b border-border pb-4 mb-4">
                     <SheetTitle className="flex items-center gap-3">
-                      <SoftHouseLogo size="sm" />
+                      <BrandLogo size="sm" />
                       <span className="font-bold text-foreground">
                         Portal do Colaborador
                       </span>

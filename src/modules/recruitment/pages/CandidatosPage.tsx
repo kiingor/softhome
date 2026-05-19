@@ -223,14 +223,14 @@ export default function CandidatosPage() {
                         </span>
                       </div>
                     </TableCell>
-                    <TableCell className="text-sm max-w-xs">
+                    <TableCell className="text-sm max-w-[280px] align-top">
                       {c.notes ? (
-                        <span
-                          className="text-muted-foreground line-clamp-2 block"
+                        <p
+                          className="text-muted-foreground line-clamp-2 break-words"
                           title="Clique pra ver completo"
                         >
                           {c.notes}
-                        </span>
+                        </p>
                       ) : (
                         <span className="text-muted-foreground/60">—</span>
                       )}

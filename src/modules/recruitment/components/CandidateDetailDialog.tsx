@@ -33,9 +33,9 @@ export function CandidateDetailDialog({ candidate, open, onOpenChange }: Props) 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+      <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col p-0 gap-0">
+        <DialogHeader className="shrink-0 px-6 pt-6 pb-4 border-b">
+          <DialogTitle className="flex items-center gap-2 flex-wrap">
             {candidate.name}
             {candidate.cv_processed_at && (
               <Badge
@@ -57,7 +57,7 @@ export function CandidateDetailDialog({ candidate, open, onOpenChange }: Props) 
           )}
         </DialogHeader>
 
-        <div className="space-y-4 text-sm">
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4 text-sm">
           <section className="space-y-2">
             <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Contato
@@ -141,7 +141,7 @@ export function CandidateDetailDialog({ candidate, open, onOpenChange }: Props) 
           </section>
         </div>
 
-        <DialogFooter className="flex-wrap gap-2">
+        <DialogFooter className="shrink-0 flex-wrap gap-2 px-6 py-4 border-t">
           {candidate.cv_url && (
             <Button
               variant="outline"

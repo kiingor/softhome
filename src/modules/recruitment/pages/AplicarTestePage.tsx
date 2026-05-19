@@ -14,7 +14,7 @@ import {
   type PublicApplicationTest,
 } from "../services/application-tests.service";
 import { ApplicationTestRunner } from "../components/ApplicationTestRunner";
-import { SoftHouseLogo } from "@/components/branding/SoftHouseLogo";
+import { BrandLogo } from "@/components/branding/BrandLogo";
 import { getTestDefinition } from "@/modules/admission/lib/tests";
 import type { Answers } from "@/modules/admission/lib/tests/types";
 
@@ -116,9 +116,9 @@ export default function AplicarTestePage() {
           <CardContent className="p-8 space-y-6">
             <div className="text-center space-y-2">
               <div className="inline-flex items-center gap-2 mb-2">
-                <SoftHouseLogo size="md" />
+                <BrandLogo size="md" />
                 <span className="text-lg font-extrabold tracking-tight text-foreground">
-                  SoftHouse
+                  DNA Softcom
                 </span>
               </div>
               <h1 className="text-2xl font-bold text-foreground">
@@ -167,9 +167,9 @@ export default function AplicarTestePage() {
       <div className="max-w-2xl mx-auto">
         <div className="text-center mb-6">
           <div className="inline-flex items-center gap-2">
-            <SoftHouseLogo size="md" />
+            <BrandLogo size="md" />
             <span className="text-lg font-extrabold tracking-tight text-foreground">
-              SoftHouse
+              DNA Softcom
             </span>
           </div>
         </div>
@@ -186,7 +186,7 @@ export default function AplicarTestePage() {
         </Card>
 
         <p className="text-xs text-muted-foreground text-center mt-6">
-          Powered by SoftHouse — Sistema interno de Gente & Cultura
+          Powered by DNA Softcom — Sistema interno de Gente & Cultura
         </p>
       </div>
     </div>

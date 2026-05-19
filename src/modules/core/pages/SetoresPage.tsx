@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Users, Pencil, Trash as Trash2, Copy, DotsThreeVertical, MagnifyingGlass } from "@phosphor-icons/react";
+import { Plus, Users, Pencil, Trash as Trash2, Copy, DotsThreeVertical, MagnifyingGlass, ArrowsClockwise } from "@phosphor-icons/react";
 import { supabase } from '@/integrations/supabase/client';
 import { useDashboard } from '@/contexts/DashboardContext';
 import PermissionGuard from '@/components/dashboard/PermissionGuard';
@@ -73,10 +73,14 @@ export default function SetoresPage() {
   const { currentCompany, stores } = useDashboard();
   const selectedCompanyId = currentCompany?.id;
   const queryClient = useQueryClient();
+  const { canCreate, isAdmin } = usePermissions('setores');
+  const canSync = canCreate || isAdmin;
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
   const [deletingTeam, setDeletingTeam] = useState<Team | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isSyncConfirmOpen, setIsSyncConfirmOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -199,6 +203,36 @@ export default function SetoresPage() {
     }
   };
 
+  const handleSync = async () => {
+    if (!selectedCompanyId) return;
+    setIsSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-teams', {
+        body: { companyId: selectedCompanyId },
+      });
+      if (error) throw error;
+      const errMsg = (data as { error?: string } | null)?.error;
+      if (errMsg) throw new Error(errMsg);
+      const r = data as {
+        inserted: number;
+        updated: number;
+        deactivated: number;
+        fetched: number;
+      };
+      const parts = [
+        `${r.inserted} novo(s)`,
+        `${r.updated} atualizado(s)`,
+      ];
+      if (r.deactivated > 0) parts.push(`${r.deactivated} desativado(s)`);
+      toast.success(`Sincronização concluída: ${parts.join(', ')}.`);
+      queryClient.invalidateQueries({ queryKey: ['teams'] });
+    } catch (err) {
+      toast.error('Não foi possível sincronizar agora: ' + (err as Error).message);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   return (
     <PermissionGuard module="setores">
       <div className="space-y-6 page-content">
@@ -210,13 +244,43 @@ export default function SetoresPage() {
             </p>
           </div>
 
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={() => handleOpenDialog()}>
-                <Plus className="mr-2 h-4 w-4" />
-                Novo Setor
-              </Button>
-            </DialogTrigger>
+          <div className="flex items-center gap-2">
+            {canSync && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsSyncConfirmOpen(true)}
+                  disabled={isSyncing || !selectedCompanyId}
+                  title="Importa setores da agenda (sincronize Empresas primeiro pra vincular à filial correta)"
+                >
+                  <ArrowsClockwise className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                  {isSyncing ? 'Sincronizando...' : 'Sincronizar'}
+                </Button>
+
+                <AlertDialog open={isSyncConfirmOpen} onOpenChange={setIsSyncConfirmOpen}>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Sincronizar setores com a agenda?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Vou importar os setores que estão em <strong>api.softcom.cloud</strong> e marcar como inativos os que sumirem de lá. Setores criados manualmente aqui não são tocados. Pode continuar?
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleSync}>Sincronizar agora</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </>
+            )}
+
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button onClick={() => handleOpenDialog()}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Novo Setor
+                </Button>
+              </DialogTrigger>
             <DialogContent>
               <form onSubmit={handleSubmit}>
                 <DialogHeader>
@@ -303,7 +367,8 @@ export default function SetoresPage() {
                 </DialogFooter>
               </form>
             </DialogContent>
-          </Dialog>
+            </Dialog>
+          </div>
         </div>
 
         <Card className="animate-scale-in">

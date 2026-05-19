@@ -36,8 +36,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import BenefitForm, { BENEFIT_CATEGORY_LABELS, type BenefitCategory } from "@/components/benefits/BenefitForm";
-import { formatCurrency } from "@/lib/formatters";
-import { DayAbbrev, dayLabels } from "@/lib/workingDays";
+import { formatCurrency, toTitleCase } from "@/lib/formatters";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const BeneficiosPage = () => {
   const { currentCompany } = useDashboard();
@@ -77,21 +77,26 @@ const BeneficiosPage = () => {
     );
   });
 
-  // Fetch assignments count per benefit
-  const { data: assignmentCounts = {} } = useQuery({
-    queryKey: ["benefits-assignment-counts", currentCompany?.id],
+  // Fetch assignments com nomes dos colaboradores (pra mostrar no hover)
+  const { data: assignmentsByBenefit = {} } = useQuery({
+    queryKey: ["benefits-assignments-by-benefit", currentCompany?.id],
     queryFn: async () => {
       if (!currentCompany?.id || benefits.length === 0) return {};
       const { data, error } = await supabase
         .from("benefits_assignments")
-        .select("benefit_id");
+        .select("benefit_id, collaborator:collaborators(full_name)");
       if (error) throw error;
-      
-      const counts: Record<string, number> = {};
-      data.forEach((a: any) => {
-        counts[a.benefit_id] = (counts[a.benefit_id] || 0) + 1;
+
+      const byBenefit: Record<string, string[]> = {};
+      (data as unknown as Array<{ benefit_id: string; collaborator: { full_name: string } | null }>).forEach((a) => {
+        const name = a.collaborator?.full_name;
+        if (!name) return;
+        if (!byBenefit[a.benefit_id]) byBenefit[a.benefit_id] = [];
+        byBenefit[a.benefit_id].push(toTitleCase(name));
       });
-      return counts;
+      // Ordena alfabeticamente pra facilitar leitura
+      for (const id of Object.keys(byBenefit)) byBenefit[id].sort();
+      return byBenefit;
     },
     enabled: !!currentCompany?.id && benefits.length > 0,
   });
@@ -173,7 +178,7 @@ const BeneficiosPage = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["benefits"] });
-      queryClient.invalidateQueries({ queryKey: ["benefits-assignment-counts"] });
+      queryClient.invalidateQueries({ queryKey: ["benefits-assignments-by-benefit"] });
       setDeletingBenefit(null);
       toast.success("Benefício removido!");
     },
@@ -205,14 +210,6 @@ const BeneficiosPage = () => {
 
   const getValueTypeLabel = (type: string) => {
     return type === "monthly" ? "Mensal" : "Diário";
-  };
-
-  const getApplicableDaysLabel = (days: string[] | null) => {
-    if (!days || days.length === 0) return "-";
-    if (days.length === 5 && ["mon", "tue", "wed", "thu", "fri"].every(d => days.includes(d))) {
-      return "Seg-Sex";
-    }
-    return days.map((d) => dayLabels[d as DayAbbrev] || d).join(", ");
   };
 
   return (
@@ -283,81 +280,99 @@ const BeneficiosPage = () => {
                 <p className="text-sm">Tente outro termo de busca</p>
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Categoria</TableHead>
-                    <TableHead>Descrição</TableHead>
-                    <TableHead className="text-right">Valor</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Dias Aplicáveis</TableHead>
-                    <TableHead className="text-center">Atribuições</TableHead>
-                    {canManage && <TableHead className="w-[100px]">Ações</TableHead>}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredBenefits.map((benefit: any) => {
-                    const assignmentCount = assignmentCounts[benefit.id] || 0;
-                    return (
-                      <TableRow key={benefit.id}>
-                        <TableCell className="font-medium">
-                          {benefit.name}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="text-xs">
-                            {BENEFIT_CATEGORY_LABELS[(benefit.category ?? "other") as BenefitCategory]}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground max-w-[200px] truncate">
-                          {benefit.description || "-"}
-                        </TableCell>
-                        <TableCell className="text-right font-mono">
-                          {formatCurrency(benefit.value || 0)}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={benefit.value_type === "monthly" ? "default" : "secondary"}>
-                            {getValueTypeLabel(benefit.value_type)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground text-sm">
-                          {benefit.value_type === "daily" 
-                            ? getApplicableDaysLabel(benefit.applicable_days)
-                            : "-"}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Badge variant="outline">{assignmentCount}</Badge>
-                        </TableCell>
-                        {canManage && (
-                          <TableCell>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8">
-                                  <DotsThreeVertical className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => setEditingBenefit(benefit)}>
-                                  <Pencil className="w-4 h-4 mr-2" />
-                                  Editar
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  className="text-destructive focus:text-destructive"
-                                  onClick={() => setDeletingBenefit(benefit)}
-                                >
-                                  <Trash2 className="w-4 h-4 mr-2" />
-                                  Excluir
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+              <TooltipProvider delayDuration={150}>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nome</TableHead>
+                      <TableHead>Categoria</TableHead>
+                      {/* Descrição oculta em telas menores — reaparece a partir de lg */}
+                      <TableHead className="hidden lg:table-cell">Descrição</TableHead>
+                      <TableHead className="text-right">Valor</TableHead>
+                      <TableHead>Tipo</TableHead>
+                      <TableHead className="text-center">Atribuições</TableHead>
+                      {canManage && <TableHead className="w-[100px]">Ações</TableHead>}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredBenefits.map((benefit: any) => {
+                      const assignees = assignmentsByBenefit[benefit.id] ?? [];
+                      const assignmentCount = assignees.length;
+                      return (
+                        <TableRow key={benefit.id}>
+                          <TableCell className="font-medium">
+                            {toTitleCase(benefit.name)}
                           </TableCell>
-                        )}
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                          <TableCell>
+                            <Badge variant="outline" className="text-xs">
+                              {BENEFIT_CATEGORY_LABELS[(benefit.category ?? "other") as BenefitCategory]}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="hidden lg:table-cell text-muted-foreground max-w-[200px] truncate">
+                            {benefit.description || "-"}
+                          </TableCell>
+                          <TableCell className="text-right font-mono">
+                            {formatCurrency(benefit.value || 0)}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={benefit.value_type === "monthly" ? "default" : "secondary"}>
+                              {getValueTypeLabel(benefit.value_type)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {assignmentCount === 0 ? (
+                              <Badge variant="outline">0</Badge>
+                            ) : (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Badge variant="outline" className="cursor-help">
+                                    {assignmentCount}
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent side="left" className="max-w-xs">
+                                  <div className="text-xs font-medium mb-1">
+                                    {assignmentCount === 1 ? "1 colaborador" : `${assignmentCount} colaboradores`}
+                                  </div>
+                                  <ul className="text-xs space-y-0.5 max-h-60 overflow-y-auto">
+                                    {assignees.map((name) => (
+                                      <li key={name}>{name}</li>
+                                    ))}
+                                  </ul>
+                                </TooltipContent>
+                              </Tooltip>
+                            )}
+                          </TableCell>
+                          {canManage && (
+                            <TableCell>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                                    <DotsThreeVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => setEditingBenefit(benefit)}>
+                                    <Pencil className="w-4 h-4 mr-2" />
+                                    Editar
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive"
+                                    onClick={() => setDeletingBenefit(benefit)}
+                                  >
+                                    <Trash2 className="w-4 h-4 mr-2" />
+                                    Excluir
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TooltipProvider>
             )}
           </CardContent>
         </Card>

@@ -1,6 +1,6 @@
 // Tipos do módulo Folha (controle, NÃO cálculo CLT).
 //
-// CLAUDE.md princípio 2: SoftHouse não calcula folha.
+// CLAUDE.md princípio 2: o DNA Softcom não calcula folha.
 // Apenas controla lançamentos e exporta organizado pro contador.
 
 import type { Database } from "@/integrations/supabase/types";
@@ -25,7 +25,7 @@ export type PayrollAlertSeverity =
   Database["public"]["Enums"]["payroll_alert_severity"];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Tipos de lançamento ATIVOS no SoftHouse (decisão Q1 da Fase 4)
+// Tipos de lançamento ATIVOS no DNA Softcom (decisão Q1 da Fase 4)
 // Os outros valores do enum são órfãos legacy meurh; não usar pra novos
 // lançamentos. UI mostra só estes.
 // ─────────────────────────────────────────────────────────────────────────────

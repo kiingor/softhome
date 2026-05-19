@@ -1,6 +1,6 @@
 {
-  "name": "softhouse",
-  "description": "Sistema interno de Gente & Cultura da Softcom",
+  "name": "dna-softcom",
+  "description": "DNA Softcom — sistema interno de Gente & Cultura",
   "private": true,
   "version": "0.1.0",
   "type": "module",

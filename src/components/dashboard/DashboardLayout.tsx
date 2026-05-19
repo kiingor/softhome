@@ -4,7 +4,7 @@ import { DashboardProvider, useDashboard } from "@/contexts/DashboardContext";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import GlobalSearch from "@/components/GlobalSearch";
-import { SoftHouseLogo } from "@/components/branding/SoftHouseLogo";
+import { BrandLogo } from "@/components/branding/BrandLogo";
 
 const DashboardLayoutContent = () => {
   const { user, isLoading } = useDashboard();
@@ -26,7 +26,7 @@ const DashboardLayoutContent = () => {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <SoftHouseLogo size="lg" pulse className="mx-auto mb-4" />
+          <BrandLogo size="lg" pulse className="mx-auto mb-4" />
           <p className="text-muted-foreground">Carregando...</p>
         </div>
       </div>

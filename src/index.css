@@ -4,7 +4,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* SoftHouse — design tokens (ver docs/DESIGN_SYSTEM.md) */
+/* DNA Softcom — design tokens (ver docs/DESIGN_SYSTEM.md) */
 
 @layer base {
   :root {

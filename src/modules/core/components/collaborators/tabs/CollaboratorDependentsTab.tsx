@@ -24,6 +24,8 @@ import {
 import { Plus, Trash, CircleNotch as Loader2, Users } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { formatCPFInput } from "@/lib/validators";
+import { EmptyState } from "@/shared/components/EmptyState";
+import { TabContentSkeleton } from "@/shared/components/TabContentSkeleton";
 
 interface Props {
   collaboratorId: string;
@@ -83,6 +85,7 @@ export function CollaboratorDependentsTab({
       if (error) throw error;
       return (data ?? []) as Dependent[];
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const create = useMutation({
@@ -136,33 +139,40 @@ export function CollaboratorDependentsTab({
   });
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <TabContentSkeleton rows={3} />;
   }
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          Dependentes legais e familiares. Quem é dependente para IRPF afeta o
-          cálculo da folha automaticamente.
-        </p>
-        {canEdit && (
-          <Button size="sm" onClick={() => setIsOpen(true)}>
-            <Plus className="w-4 h-4 mr-1" />
-            Adicionar
-          </Button>
-        )}
-      </div>
+      {dependents.length > 0 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">
+            Dependentes legais e familiares. Quem é dependente para IRPF afeta o
+            cálculo da folha automaticamente.
+          </p>
+          {canEdit && (
+            <Button size="sm" onClick={() => setIsOpen(true)}>
+              <Plus className="w-4 h-4 mr-1" />
+              Adicionar
+            </Button>
+          )}
+        </div>
+      )}
 
       {dependents.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
-          <Users className="w-12 h-12 mx-auto mb-3 opacity-40" />
-          <p className="text-sm">Sem dependentes cadastrados.</p>
-        </div>
+        <EmptyState
+          icon={<Users className="w-8 h-8 text-primary" />}
+          title="Sem dependentes por aqui"
+          description="Cadastra dependentes legais e familiares. Quem é IRPF afeta o cálculo da folha automaticamente."
+          action={
+            canEdit && (
+              <Button onClick={() => setIsOpen(true)}>
+                <Plus className="w-4 h-4 mr-2" />
+                Adicionar dependente
+              </Button>
+            )
+          }
+        />
       ) : (
         <div className="space-y-2">
           {dependents.map((d) => (

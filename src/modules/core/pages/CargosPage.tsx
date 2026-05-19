@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash as Trash2, Briefcase, Info, FileText, Copy, DotsThreeVertical, MagnifyingGlass } from "@phosphor-icons/react";
+import { Plus, Pencil, Trash as Trash2, Briefcase, Info, FileText, Copy, DotsThreeVertical, MagnifyingGlass, ArrowsClockwise } from "@phosphor-icons/react";
 import { supabase } from '@/integrations/supabase/client';
 import { useDashboard } from '@/contexts/DashboardContext';
 import PermissionGuard from '@/components/dashboard/PermissionGuard';
@@ -67,13 +67,16 @@ export default function CargosPage() {
   const { currentCompany } = useDashboard();
   const selectedCompanyId = currentCompany?.id;
   const queryClient = useQueryClient();
-  const { canCreate, canEdit, canDelete } = usePermissions("cargos");
+  const { canCreate, canEdit, canDelete, isAdmin } = usePermissions("cargos");
+  const canSync = canCreate || isAdmin;
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPosition, setEditingPosition] = useState<Position | null>(null);
   const [dialogTab, setDialogTab] = useState('dados');
   const [searchQuery, setSearchQuery] = useState('');
   const [teamFilter, setTeamFilter] = useState<string>('all');
   const [formData, setFormData] = useState(EMPTY_FORM);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isSyncConfirmOpen, setIsSyncConfirmOpen] = useState(false);
 
   // Document state
   const [isDocDialogOpen, setIsDocDialogOpen] = useState(false);
@@ -256,6 +259,36 @@ export default function CargosPage() {
     }
   };
 
+  const handleSync = async () => {
+    if (!selectedCompanyId) return;
+    setIsSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-positions', {
+        body: { companyId: selectedCompanyId },
+      });
+      if (error) throw error;
+      const errMsg = (data as { error?: string } | null)?.error;
+      if (errMsg) throw new Error(errMsg);
+      const r = data as {
+        inserted: number;
+        updated: number;
+        deactivated: number;
+        fetched: number;
+      };
+      const parts = [
+        `${r.inserted} novo(s)`,
+        `${r.updated} atualizado(s)`,
+      ];
+      if (r.deactivated > 0) parts.push(`${r.deactivated} desativado(s)`);
+      toast.success(`Sincronização concluída: ${parts.join(', ')}.`);
+      queryClient.invalidateQueries({ queryKey: ['positions'] });
+    } catch (err) {
+      toast.error('Não foi possível sincronizar agora: ' + (err as Error).message);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const fileTypeLabels: Record<string, string> = {
     pdf: 'PDF',
     image: 'Imagem',
@@ -282,9 +315,39 @@ export default function CargosPage() {
             <h1 className="text-3xl font-bold tracking-tight">Cargos</h1>
             <p className="text-muted-foreground">Gerencie os cargos, salários e documentos obrigatórios</p>
           </div>
-          {canCreate && (
-            <Button onClick={() => handleOpenDialog()}><Plus className="mr-2 h-4 w-4" />Novo Cargo</Button>
-          )}
+          <div className="flex items-center gap-2">
+            {canSync && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsSyncConfirmOpen(true)}
+                  disabled={isSyncing || !selectedCompanyId}
+                  title="Importa cargos da agenda (api.softcom.cloud)"
+                >
+                  <ArrowsClockwise className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                  {isSyncing ? 'Sincronizando...' : 'Sincronizar'}
+                </Button>
+
+                <AlertDialog open={isSyncConfirmOpen} onOpenChange={setIsSyncConfirmOpen}>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Sincronizar cargos com a agenda?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Vou importar os cargos que estão em <strong>api.softcom.cloud</strong> e marcar como inativos os que sumirem de lá. Cargos criados manualmente aqui não são tocados. Pode continuar?
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleSync}>Sincronizar agora</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </>
+            )}
+            {canCreate && (
+              <Button onClick={() => handleOpenDialog()}><Plus className="mr-2 h-4 w-4" />Novo Cargo</Button>
+            )}
+          </div>
         </div>
 
         <Card className="animate-scale-in">
