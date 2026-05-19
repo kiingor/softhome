@@ -1,6 +1,6 @@
 # `src/modules/`
 
-Cada subpasta agrupa **um módulo do produto** SoftHouse. Convenção:
+Cada subpasta agrupa **um módulo do produto** DNA Softcom. Convenção:
 
 ```
 modules/<modulo>/

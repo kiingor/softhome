@@ -111,11 +111,14 @@ export const UsersAccessTab = () => {
           .select("*")
           .eq("company_id", currentCompany!.id)
           .order("created_at", { ascending: false }),
+        // Carrega user_id E email dos colaboradores pra filtragem dupla:
+        // remove company_users que (a) estão linkados a um colab (user_id)
+        // OU (b) têm email que bate com algum colaborador. Evita aparecer
+        // duplicado mesmo se sync/import populou ambas as tabelas.
         supabase
           .from("collaborators")
-          .select("user_id")
-          .eq("company_id", currentCompany!.id)
-          .not("user_id", "is", null),
+          .select("user_id, email")
+          .eq("company_id", currentCompany!.id),
         supabase
           .from("companies")
           .select("owner_id")
@@ -131,10 +134,18 @@ export const UsersAccessTab = () => {
           .map((c) => (c as { user_id: string | null }).user_id)
           .filter((id): id is string => !!id),
       );
-
-      const filtered = (usersRes.data as CompanyUser[]).filter(
-        (u) => !u.user_id || !collabUserIds.has(u.user_id),
+      const collabEmails = new Set(
+        (collabsRes.data ?? [])
+          .map((c) => (c as { email: string | null }).email?.toLowerCase().trim())
+          .filter((e): e is string => !!e),
       );
+
+      const filtered = (usersRes.data as CompanyUser[]).filter((u) => {
+        const linkedToCollab = u.user_id && collabUserIds.has(u.user_id);
+        const emailMatchesCollab =
+          u.email && collabEmails.has(u.email.toLowerCase().trim());
+        return !linkedToCollab && !emailMatchesCollab;
+      });
 
       // Garante que o owner da empresa apareça mesmo se não estiver em company_users
       const ownerId = (companyRes.data as { owner_id: string | null } | null)

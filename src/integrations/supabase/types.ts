@@ -1954,36 +1954,71 @@ export type Database = {
           accounting_code: string | null
           address: string | null
           admission_date: string | null
+          agenda: string | null
+          bank_account: string | null
           birth_date: string | null
           city: string | null
+          commission_license: number | null
+          commission_monthly: number | null
+          commission_tef_install: number | null
+          commission_tef_monthly: number | null
+          commission_upgrade: number | null
           company_id: string
+          contracted_cnpj: string | null
           contracted_store_id: string | null
           cpf: string
           created_at: string
+          ctps: string | null
+          ctps_series: string | null
+          ctps_uf: string | null
+          current_salary: number | null
           dependents_count: number
+          discord_id: string | null
           discord_username: string | null
           district: string | null
+          education_level: string | null
           email: string | null
+          ethnicity: string | null
+          external_id: string | null
+          gender: string | null
+          has_agenda_access: boolean
           id: string
+          indicator_group: string | null
+          inspira_date: string | null
+          inspira_value: number | null
+          internal_code: string | null
+          internal_location: string | null
           is_apprentice: boolean
+          is_godfather: boolean
+          is_homeoffice: boolean
+          is_manager_director: boolean
+          is_manager_leader: boolean
+          is_manager_support: boolean
           is_pcd: boolean
           is_temp: boolean
           name: string
           notes: string | null
           phone: string | null
+          phone_extension: string | null
           photo_url: string | null
           pis: string | null
           pix_key: string | null
           position: string | null
           position_id: string | null
           postal_code: string | null
+          radios_freeform: string | null
           recado_phone: string | null
           regime: Database["public"]["Enums"]["collaborator_regime"]
           rg: string | null
+          rg_issuer: string | null
+          sales_group: string | null
           softcom_surname: string | null
           state: string | null
           status: Database["public"]["Enums"]["collaborator_status"]
           store_id: string | null
+          subsector: string | null
+          supervisor_id: string | null
+          support_username: string | null
           team_id: string | null
           termination_date: string | null
           updated_at: string
@@ -1994,35 +2029,70 @@ export type Database = {
           address?: string | null
           admission_date?: string | null
           birth_date?: string | null
+          agenda?: string | null
+          bank_account?: string | null
           city?: string | null
+          commission_license?: number | null
+          commission_monthly?: number | null
+          commission_tef_install?: number | null
+          commission_tef_monthly?: number | null
+          commission_upgrade?: number | null
           company_id: string
+          contracted_cnpj?: string | null
           contracted_store_id?: string | null
           cpf: string
           created_at?: string
+          ctps?: string | null
+          ctps_series?: string | null
+          ctps_uf?: string | null
+          current_salary?: number | null
           dependents_count?: number
+          discord_id?: string | null
           discord_username?: string | null
           district?: string | null
+          education_level?: string | null
           email?: string | null
+          ethnicity?: string | null
+          external_id?: string | null
+          gender?: string | null
+          has_agenda_access?: boolean
           id?: string
+          indicator_group?: string | null
+          inspira_date?: string | null
+          inspira_value?: number | null
+          internal_code?: string | null
+          internal_location?: string | null
           is_apprentice?: boolean
+          is_godfather?: boolean
+          is_homeoffice?: boolean
+          is_manager_director?: boolean
+          is_manager_leader?: boolean
+          is_manager_support?: boolean
           is_pcd?: boolean
           is_temp?: boolean
           name: string
           notes?: string | null
           phone?: string | null
+          phone_extension?: string | null
           photo_url?: string | null
           pis?: string | null
           pix_key?: string | null
           position?: string | null
           position_id?: string | null
           postal_code?: string | null
+          radios_freeform?: string | null
           recado_phone?: string | null
           regime?: Database["public"]["Enums"]["collaborator_regime"]
           rg?: string | null
+          rg_issuer?: string | null
+          sales_group?: string | null
           softcom_surname?: string | null
           state?: string | null
           status?: Database["public"]["Enums"]["collaborator_status"]
           store_id?: string | null
+          subsector?: string | null
+          supervisor_id?: string | null
+          support_username?: string | null
           team_id?: string | null
           termination_date?: string | null
           updated_at?: string
@@ -2032,36 +2102,71 @@ export type Database = {
           accounting_code?: string | null
           address?: string | null
           admission_date?: string | null
+          agenda?: string | null
+          bank_account?: string | null
           birth_date?: string | null
           city?: string | null
+          commission_license?: number | null
+          commission_monthly?: number | null
+          commission_tef_install?: number | null
+          commission_tef_monthly?: number | null
+          commission_upgrade?: number | null
           company_id?: string
+          contracted_cnpj?: string | null
           contracted_store_id?: string | null
           cpf?: string
           created_at?: string
+          ctps?: string | null
+          ctps_series?: string | null
+          ctps_uf?: string | null
+          current_salary?: number | null
           dependents_count?: number
+          discord_id?: string | null
           discord_username?: string | null
           district?: string | null
+          education_level?: string | null
           email?: string | null
+          ethnicity?: string | null
+          external_id?: string | null
+          gender?: string | null
+          has_agenda_access?: boolean
           id?: string
+          indicator_group?: string | null
+          inspira_date?: string | null
+          inspira_value?: number | null
+          internal_code?: string | null
+          internal_location?: string | null
           is_apprentice?: boolean
+          is_godfather?: boolean
+          is_homeoffice?: boolean
+          is_manager_director?: boolean
+          is_manager_leader?: boolean
+          is_manager_support?: boolean
           is_pcd?: boolean
           is_temp?: boolean
           name?: string
           notes?: string | null
           phone?: string | null
+          phone_extension?: string | null
           photo_url?: string | null
           pis?: string | null
           pix_key?: string | null
           position?: string | null
           position_id?: string | null
           postal_code?: string | null
+          radios_freeform?: string | null
           recado_phone?: string | null
           regime?: Database["public"]["Enums"]["collaborator_regime"]
           rg?: string | null
+          rg_issuer?: string | null
+          sales_group?: string | null
           softcom_surname?: string | null
           state?: string | null
           status?: Database["public"]["Enums"]["collaborator_status"]
           store_id?: string | null
+          subsector?: string | null
+          supervisor_id?: string | null
+          support_username?: string | null
           team_id?: string | null
           termination_date?: string | null
           updated_at?: string
@@ -3256,10 +3361,12 @@ export type Database = {
           company_id: string
           created_at: string
           exam_periodicity_months: number | null
+          external_id: string | null
           fgts_percent: number | null
           id: string
           inss_percent: number | null
           irpf_percent: number | null
+          is_active: boolean
           level: number | null
           name: string
           risk_group: string | null
@@ -3270,10 +3377,12 @@ export type Database = {
           company_id: string
           created_at?: string
           exam_periodicity_months?: number | null
+          external_id?: string | null
           fgts_percent?: number | null
           id?: string
           inss_percent?: number | null
           irpf_percent?: number | null
+          is_active?: boolean
           level?: number | null
           name: string
           risk_group?: string | null
@@ -3284,10 +3393,12 @@ export type Database = {
           company_id?: string
           created_at?: string
           exam_periodicity_months?: number | null
+          external_id?: string | null
           fgts_percent?: number | null
           id?: string
           inss_percent?: number | null
           irpf_percent?: number | null
+          is_active?: boolean
           level?: number | null
           name?: string
           risk_group?: string | null
@@ -3431,7 +3542,9 @@ export type Database = {
           cnpj: string | null
           company_id: string
           created_at: string
+          external_id: string | null
           id: string
+          is_active: boolean
           store_code: string | null
           store_name: string
         }
@@ -3440,7 +3553,9 @@ export type Database = {
           cnpj?: string | null
           company_id: string
           created_at?: string
+          external_id?: string | null
           id?: string
+          is_active?: boolean
           store_code?: string | null
           store_name: string
         }
@@ -3449,7 +3564,9 @@ export type Database = {
           cnpj?: string | null
           company_id?: string
           created_at?: string
+          external_id?: string | null
           id?: string
+          is_active?: boolean
           store_code?: string | null
           store_name?: string
         }
@@ -3556,7 +3673,9 @@ export type Database = {
           company_id: string
           created_at: string
           description: string | null
+          external_id: string | null
           id: string
+          is_active: boolean
           name: string
           store_id: string | null
         }
@@ -3564,7 +3683,9 @@ export type Database = {
           company_id: string
           created_at?: string
           description?: string | null
+          external_id?: string | null
           id?: string
+          is_active?: boolean
           name: string
           store_id?: string | null
         }
@@ -3572,7 +3693,9 @@ export type Database = {
           company_id?: string
           created_at?: string
           description?: string | null
+          external_id?: string | null
           id?: string
+          is_active?: boolean
           name?: string
           store_id?: string | null
         }

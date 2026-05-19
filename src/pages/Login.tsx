@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { z } from "zod";
 import { Eye, EyeSlash as EyeOff } from "@phosphor-icons/react";
-import { SoftHouseLogo } from "@/components/branding/SoftHouseLogo";
+import { BrandLogo } from "@/components/branding/BrandLogo";
 const loginSchema = z.object({
   email: z.string().email("Email inválido"),
   password: z.string().min(1, "Senha é obrigatória"),
@@ -75,7 +75,7 @@ const Login = () => {
 
       toast({
         title: "Login realizado! 🎉",
-        description: "Bem-vindo de volta ao SoftHouse!",
+        description: "Bem-vindo de volta ao DNA Softcom!",
       });
 
       navigate("/dashboard");
@@ -96,11 +96,11 @@ const Login = () => {
         <div className="bg-card rounded-2xl shadow-card p-8 border border-border">
           <div className="text-center mb-8">
             <div className="inline-flex items-center gap-2 mb-4">
-              <SoftHouseLogo size="lg" />
+              <BrandLogo size="lg" />
             </div>
             <h1 className="text-2xl font-bold text-foreground">Bem-vindo de volta</h1>
             <p className="text-muted-foreground mt-2">
-              Entre na sua conta SoftHouse
+              Entre na sua conta DNA Softcom
             </p>
           </div>
 

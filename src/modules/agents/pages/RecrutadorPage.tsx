@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useDashboard } from "@/contexts/DashboardContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -38,6 +39,7 @@ interface InFlightAssistantSummary {
 
 export default function RecrutadorPage() {
   const queryClient = useQueryClient();
+  const { currentCompany } = useDashboard();
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
@@ -127,6 +129,7 @@ export default function RecrutadorPage() {
       const result = await recruiterSearch.mutateAsync({
         sessionId: activeSessionId,
         query,
+        companyId: currentCompany?.id ?? null,
       });
       // Define active session se foi criada agora
       if (!activeSessionId) setActiveSessionId(result.sessionId);

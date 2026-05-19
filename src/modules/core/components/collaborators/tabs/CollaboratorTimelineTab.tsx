@@ -2,7 +2,9 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CircleNotch as Loader2, Clock } from "@phosphor-icons/react";
+import { Clock } from "@phosphor-icons/react";
+import { EmptyState } from "@/shared/components/EmptyState";
+import { TabContentSkeleton } from "@/shared/components/TabContentSkeleton";
 
 interface Props {
   collaboratorId: string;
@@ -21,6 +23,7 @@ interface TimelineEvent {
 const EVENT_LABELS: Record<string, string> = {
   admission: "Admissão",
   termination: "Desligamento",
+  reactivation: "Reativação",
   store_change: "Mudou de loja",
   position_change: "Mudou de cargo",
   team_change: "Mudou de time",
@@ -33,12 +36,97 @@ const EVENT_LABELS: Record<string, string> = {
 const EVENT_COLORS: Record<string, string> = {
   admission: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
   termination: "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300",
+  reactivation: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
   store_change: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
   position_change: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
   team_change: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
   regime_change: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300",
   migration: "bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-300",
 };
+
+const REGIME_LABELS: Record<string, string> = {
+  clt: "CLT",
+  pj: "PJ",
+  estagiario: "Estagiário",
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  ativo: "Ativo",
+  inativo: "Inativo",
+  aguardando_documentacao: "Aguardando documentação",
+  validacao_pendente: "Validação pendente",
+  reprovado: "Reprovado",
+};
+
+function fmtBRL(value: number): string {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(value);
+}
+
+/**
+ * Humaniza o JSON cru de from_value/to_value baseado no tipo de evento.
+ * Cada event_type tem um shape conhecido; fallback amigável quando não bate.
+ */
+function humanizeValue(
+  eventType: string,
+  raw: Record<string, unknown> | null,
+): string {
+  if (!raw) return "—";
+  const v = raw as Record<string, unknown>;
+
+  switch (eventType) {
+    case "store_change":
+      return (
+        (v.store_name as string) ||
+        (v.name as string) ||
+        (v.store_code as string) ||
+        "—"
+      );
+    case "position_change":
+      return (
+        (v.position_name as string) ||
+        (v.position as string) ||
+        (v.name as string) ||
+        "—"
+      );
+    case "team_change":
+      return (v.team_name as string) || (v.name as string) || "—";
+    case "regime_change":
+      return REGIME_LABELS[v.regime as string] || (v.regime as string) || "—";
+    case "salary_change": {
+      const n = Number(v.salary ?? v.amount ?? v.value);
+      return Number.isFinite(n) ? fmtBRL(n) : "—";
+    }
+    case "migration":
+      return (
+        (v.company_name as string) ||
+        (v.cnpj as string) ||
+        (v.name as string) ||
+        "—"
+      );
+    case "admission":
+    case "termination":
+    case "reactivation":
+      return (
+        STATUS_LABELS[v.status as string] || (v.status as string) || "—"
+      );
+    default: {
+      // fallback: junta valores legíveis (string/number) ignorando ids/timestamps
+      const parts = Object.entries(v)
+        .filter(
+          ([k, val]) =>
+            !k.endsWith("_id") &&
+            !k.endsWith("_at") &&
+            (typeof val === "string" || typeof val === "number") &&
+            String(val).trim() !== "",
+        )
+        .map(([, val]) => String(val));
+      return parts.length > 0 ? parts.join(" · ") : "—";
+    }
+  }
+}
 
 export function CollaboratorTimelineTab({ collaboratorId }: Props) {
   const { data: events = [], isLoading } = useQuery({
@@ -53,25 +141,20 @@ export function CollaboratorTimelineTab({ collaboratorId }: Props) {
       if (error) throw error;
       return (data ?? []) as TimelineEvent[];
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <TabContentSkeleton rows={4} />;
   }
 
   if (events.length === 0) {
     return (
-      <div className="text-center py-12 text-muted-foreground">
-        <Clock className="w-12 h-12 mx-auto mb-3 opacity-40" />
-        <p className="text-sm">Sem eventos registrados.</p>
-        <p className="text-xs mt-1">
-          Mudanças de loja, cargo, time ou regime aparecem aqui automaticamente.
-        </p>
-      </div>
+      <EmptyState
+        icon={<Clock className="w-8 h-8 text-primary" />}
+        title="Histórico ainda em branco"
+        description="Mudanças de loja, cargo, time, regime e salário aparecem aqui automaticamente."
+      />
     );
   }
 
@@ -95,16 +178,18 @@ export function CollaboratorTimelineTab({ collaboratorId }: Props) {
                   </span>
                 </div>
                 {(evt.from_value || evt.to_value) && (
-                  <div className="text-sm text-muted-foreground">
+                  <div className="text-sm flex items-center gap-1.5 flex-wrap mt-0.5">
                     {evt.from_value && (
-                      <span className="text-foreground/70">
-                        De: <code className="text-xs">{JSON.stringify(evt.from_value)}</code>
+                      <span className="text-muted-foreground line-through decoration-muted-foreground/40">
+                        {humanizeValue(evt.event_type, evt.from_value)}
                       </span>
                     )}
-                    {evt.from_value && evt.to_value && <span> → </span>}
+                    {evt.from_value && evt.to_value && (
+                      <span className="text-muted-foreground">→</span>
+                    )}
                     {evt.to_value && (
-                      <span className="text-foreground/70">
-                        Para: <code className="text-xs">{JSON.stringify(evt.to_value)}</code>
+                      <span className="text-foreground font-medium">
+                        {humanizeValue(evt.event_type, evt.to_value)}
                       </span>
                     )}
                   </div>

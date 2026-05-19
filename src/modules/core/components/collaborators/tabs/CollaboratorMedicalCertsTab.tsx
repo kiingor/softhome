@@ -21,6 +21,8 @@ import {
   Trash,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
+import { EmptyState } from "@/shared/components/EmptyState";
+import { TabContentSkeleton } from "@/shared/components/TabContentSkeleton";
 
 interface Props {
   collaboratorId: string;
@@ -71,6 +73,7 @@ export function CollaboratorMedicalCertsTab({
       if (error) throw error;
       return (data ?? []) as MedicalCert[];
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const create = useMutation({
@@ -153,32 +156,39 @@ export function CollaboratorMedicalCertsTab({
   };
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <TabContentSkeleton rows={3} />;
   }
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          Atestados médicos. CID e dados são protegidos por LGPD (acesso só RH).
-        </p>
-        {canEdit && (
-          <Button size="sm" onClick={() => setIsOpen(true)}>
-            <Plus className="w-4 h-4 mr-1" />
-            Registrar
-          </Button>
-        )}
-      </div>
+      {certs.length > 0 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">
+            Atestados médicos. CID e dados são protegidos por LGPD (acesso só RH).
+          </p>
+          {canEdit && (
+            <Button size="sm" onClick={() => setIsOpen(true)}>
+              <Plus className="w-4 h-4 mr-1" />
+              Registrar
+            </Button>
+          )}
+        </div>
+      )}
 
       {certs.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
-          <Stethoscope className="w-12 h-12 mx-auto mb-3 opacity-40" />
-          <p className="text-sm">Sem atestados registrados.</p>
-        </div>
+        <EmptyState
+          icon={<Stethoscope className="w-8 h-8 text-primary" />}
+          title="Nenhum atestado registrado"
+          description="Atestados médicos com CID e dados protegidos por LGPD. Acesso só pra RH."
+          action={
+            canEdit && (
+              <Button onClick={() => setIsOpen(true)}>
+                <Plus className="w-4 h-4 mr-2" />
+                Registrar atestado
+              </Button>
+            )
+          }
+        />
       ) : (
         <div className="space-y-2">
           {certs.map((c) => (

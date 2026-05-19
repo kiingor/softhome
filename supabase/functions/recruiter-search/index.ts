@@ -108,14 +108,16 @@ serve(async (req) => {
   // Parse body
   let sessionId: string | null;
   let query: string;
+  let bodyCompanyId: string | null;
   try {
     const body = await req.json();
     sessionId = body.sessionId ?? null;
     query = String(body.query ?? "").trim();
+    bodyCompanyId = body.companyId ? String(body.companyId) : null;
     if (!query) throw new Error("missing query");
   } catch {
     return jsonResponse(
-      { error: "Body must include { query: string, sessionId?: uuid }" },
+      { error: "Body must include { query: string, sessionId?: uuid, companyId?: uuid }" },
       400,
     );
   }
@@ -138,17 +140,62 @@ serve(async (req) => {
     );
   }
 
-  // Determina company_id do user (gestor_gc usa a sua; admin_gc usa a primeira encontrada via profiles)
-  const { data: profile } = await sbUser
-    .from("profiles")
-    .select("company_id")
-    .eq("user_id", user.id)
-    .maybeSingle();
-  const companyId = (profile as { company_id: string | null } | null)
-    ?.company_id;
+  // Determina company_id:
+  //   1. Se o client mandou (body.companyId), valida acesso e usa essa.
+  //      Admin_gc bypassa (acessa qualquer company).
+  //   2. Senão, cai pra profile.company_id (gestor_gc/rh têm a sua única).
+  //   3. Como último fallback pra admin/owner sem profile, pega a primeira
+  //      company da qual o user é owner.
+  const isAdminUser =
+    roleStrings.includes("admin_gc") || roleStrings.includes("admin");
+
+  let companyId: string | null = null;
+
+  if (bodyCompanyId) {
+    if (isAdminUser) {
+      companyId = bodyCompanyId; // admin escolhe livremente
+    } else {
+      const { data: belongs } = await sbUser.rpc("user_belongs_to_company", {
+        _company_id: bodyCompanyId,
+        _user_id: user.id,
+      });
+      if (!belongs) {
+        return jsonResponse(
+          { error: "Você não tem acesso a essa empresa." },
+          403,
+        );
+      }
+      companyId = bodyCompanyId;
+    }
+  }
+
+  if (!companyId) {
+    const { data: profile } = await sbUser
+      .from("profiles")
+      .select("company_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    companyId = (profile as { company_id: string | null } | null)
+      ?.company_id ?? null;
+  }
+
+  if (!companyId && isAdminUser) {
+    // Admin/owner sem profile populado — pega 1ª company que ele é dono
+    const { data: owned } = await sbAdmin
+      .from("companies")
+      .select("id")
+      .eq("owner_id", user.id)
+      .limit(1)
+      .maybeSingle();
+    companyId = (owned as { id: string } | null)?.id ?? null;
+  }
+
   if (!companyId) {
     return jsonResponse(
-      { error: "Usuário sem company_id no profile" },
+      {
+        error:
+          "Sem empresa selecionada. Escolhe uma no seletor do topo e tenta de novo.",
+      },
       400,
     );
   }

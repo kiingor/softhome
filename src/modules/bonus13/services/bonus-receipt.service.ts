@@ -121,7 +121,7 @@ export function generateBonusReceiptPdf({
   doc.setFontSize(9);
   doc.setTextColor(120);
   doc.text(
-    "Recibo gerado por SoftHouse — sistema interno de Gente & Cultura da Softcom.",
+    "Recibo gerado por DNA Softcom — sistema interno de Gente & Cultura da Softcom.",
     105,
     pageHeight - 20,
     { align: "center" },

@@ -12,6 +12,8 @@ import {
   TShirt,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
+import { EmptyState } from "@/shared/components/EmptyState";
+import { TabContentSkeleton } from "@/shared/components/TabContentSkeleton";
 
 interface Props {
   collaboratorId: string;
@@ -55,6 +57,7 @@ export function CollaboratorUniformTab({
       if (error) throw error;
       return (data ?? []) as UniformSize[];
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const current = history[0] ?? null;
@@ -92,26 +95,26 @@ export function CollaboratorUniformTab({
   });
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <TabContentSkeleton rows={3} />;
   }
+
+  const isEmpty = !current && !showForm;
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          Tamanhos atuais. Cada nova medição preserva o histórico.
-        </p>
-        {canEdit && !showForm && (
-          <Button size="sm" onClick={() => setShowForm(true)}>
-            <Plus className="w-4 h-4 mr-1" />
-            Nova medição
-          </Button>
-        )}
-      </div>
+      {!isEmpty && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">
+            Tamanhos atuais. Cada nova medição preserva o histórico.
+          </p>
+          {canEdit && !showForm && (
+            <Button size="sm" onClick={() => setShowForm(true)}>
+              <Plus className="w-4 h-4 mr-1" />
+              Nova medição
+            </Button>
+          )}
+        </div>
+      )}
 
       {showForm && (
         <Card>
@@ -179,11 +182,20 @@ export function CollaboratorUniformTab({
         </Card>
       )}
 
-      {!current && !showForm ? (
-        <div className="text-center py-12 text-muted-foreground">
-          <TShirt className="w-12 h-12 mx-auto mb-3 opacity-40" />
-          <p className="text-sm">Nenhuma medição registrada.</p>
-        </div>
+      {isEmpty ? (
+        <EmptyState
+          icon={<TShirt className="w-8 h-8 text-primary" />}
+          title="Sem medição registrada"
+          description="Anota os tamanhos atuais. Cada nova medição preserva o histórico anterior."
+          action={
+            canEdit && (
+              <Button onClick={() => setShowForm(true)}>
+                <Plus className="w-4 h-4 mr-2" />
+                Registrar medição
+              </Button>
+            )
+          }
+        />
       ) : (
         <div className="space-y-2">
           {history.map((u, idx) => (

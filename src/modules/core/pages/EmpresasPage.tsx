@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Buildings as Building2, Pencil, Trash as Trash2, Copy, CalendarBlank, DotsThreeVertical, MagnifyingGlass } from "@phosphor-icons/react";
+import { Plus, Buildings as Building2, Pencil, Trash as Trash2, Copy, CalendarBlank, DotsThreeVertical, MagnifyingGlass, ArrowsClockwise } from "@phosphor-icons/react";
 import { useNavigate } from "react-router-dom";
 import {
   DropdownMenu,
@@ -68,9 +68,13 @@ export default function EmpresasPage() {
   const selectedCompanyId = currentCompany?.id;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { canCreate, isAdmin } = usePermissions('empresas');
+  const canSync = canCreate || isAdmin;
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingStore, setEditingStore] = useState<Store | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isSyncConfirmOpen, setIsSyncConfirmOpen] = useState(false);
   const [formData, setFormData] = useState({
     store_name: '',
     store_code: '',
@@ -212,6 +216,36 @@ export default function EmpresasPage() {
       .slice(0, 18);
   };
 
+  const handleSync = async () => {
+    if (!selectedCompanyId) return;
+    setIsSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-stores', {
+        body: { companyId: selectedCompanyId },
+      });
+      if (error) throw error;
+      const errMsg = (data as { error?: string } | null)?.error;
+      if (errMsg) throw new Error(errMsg);
+      const r = data as {
+        inserted: number;
+        updated: number;
+        deactivated: number;
+        fetched: number;
+      };
+      const parts = [
+        `${r.inserted} nova(s)`,
+        `${r.updated} atualizada(s)`,
+      ];
+      if (r.deactivated > 0) parts.push(`${r.deactivated} desativada(s)`);
+      toast.success(`Sincronização concluída: ${parts.join(', ')}.`);
+      queryClient.invalidateQueries({ queryKey: ['stores'] });
+    } catch (err) {
+      toast.error('Não foi possível sincronizar agora: ' + (err as Error).message);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   return (
     <PermissionGuard module="empresas">
       <div className="space-y-6 page-content">
@@ -223,13 +257,43 @@ export default function EmpresasPage() {
             </p>
           </div>
 
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={() => handleOpenDialog()}>
-                <Plus className="mr-2 h-4 w-4" />
-                Nova Empresa
-              </Button>
-            </DialogTrigger>
+          <div className="flex items-center gap-2">
+            {canSync && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsSyncConfirmOpen(true)}
+                  disabled={isSyncing || !selectedCompanyId}
+                  title="Importa empresas da agenda (api.softcom.cloud)"
+                >
+                  <ArrowsClockwise className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                  {isSyncing ? 'Sincronizando...' : 'Sincronizar'}
+                </Button>
+
+                <AlertDialog open={isSyncConfirmOpen} onOpenChange={setIsSyncConfirmOpen}>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Sincronizar empresas com a agenda?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Vou importar as empresas que estão em <strong>api.softcom.cloud</strong> e marcar como inativas as que sumirem de lá. Empresas criadas manualmente aqui não são tocadas. Pode continuar?
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleSync}>Sincronizar agora</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </>
+            )}
+
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button onClick={() => handleOpenDialog()}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Nova Empresa
+                </Button>
+              </DialogTrigger>
             <DialogContent>
               <form onSubmit={handleSubmit}>
                 <DialogHeader>
@@ -312,7 +376,8 @@ export default function EmpresasPage() {
                 </DialogFooter>
               </form>
             </DialogContent>
-          </Dialog>
+            </Dialog>
+          </div>
         </div>
 
         <Card className="animate-scale-in">

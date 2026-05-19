@@ -111,66 +111,70 @@ export function CollaboratorPhotoUploader({
     onChange(null);
   };
 
-  return (
-    <div className="flex items-center gap-4">
-      <Avatar className="h-20 w-20 ring-2 ring-border">
-        {signedUrl ? (
-          <AvatarImage src={signedUrl} alt={name} />
-        ) : (
-          <AvatarFallback className="text-xl">
-            {initials(name) || "?"}
-          </AvatarFallback>
-        )}
-      </Avatar>
+  const canUpload = canEdit && !!collaboratorId && !isUploading;
 
-      {canEdit && (
-        <div className="flex flex-col gap-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            className="hidden"
-            onChange={handleFile}
-          />
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={handleSelectFile}
-            disabled={isUploading || !collaboratorId}
-            title={!collaboratorId ? "Salve o colaborador primeiro" : "Trocar foto"}
-          >
-            {isUploading ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Enviando...
-              </>
-            ) : (
-              <>
-                <Camera className="w-4 h-4 mr-2" />
-                {photoUrl ? "Trocar foto" : "Adicionar foto"}
-              </>
-            )}
-          </Button>
-          {photoUrl && (
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              className="text-destructive hover:text-destructive"
-              onClick={handleRemove}
-              disabled={isUploading}
-            >
-              <Trash className="w-4 h-4 mr-2" />
-              Remover
-            </Button>
+  return (
+    <div className="flex flex-col items-center gap-1 shrink-0">
+      <div className="relative">
+        <Avatar className="h-32 w-32 ring-2 ring-border">
+          {signedUrl ? (
+            <AvatarImage src={signedUrl} alt={name} />
+          ) : (
+            <AvatarFallback className="text-3xl">
+              {initials(name) || "?"}
+            </AvatarFallback>
           )}
-          {!collaboratorId && (
-            <p className="text-xs text-muted-foreground">
-              Salve o colaborador para anexar a foto.
-            </p>
+        </Avatar>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="hidden"
+          onChange={handleFile}
+        />
+        <button
+          type="button"
+          onClick={handleSelectFile}
+          disabled={!canUpload}
+          title={
+            !canEdit
+              ? "Sem permissão pra editar"
+              : !collaboratorId
+                ? "Salve o colaborador primeiro"
+                : photoUrl
+                  ? "Trocar foto"
+                  : "Adicionar foto"
+          }
+          aria-label={photoUrl ? "Trocar foto" : "Adicionar foto"}
+          className="absolute bottom-1 right-1 h-9 w-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-md ring-2 ring-background transition hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          {isUploading ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Camera className="w-4 h-4" weight="fill" />
           )}
-        </div>
+        </button>
+      </div>
+
+      {canEdit && photoUrl && (
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+          onClick={handleRemove}
+          disabled={isUploading}
+        >
+          <Trash className="w-3.5 h-3.5 mr-1" />
+          Remover
+        </Button>
+      )}
+
+      {canEdit && !collaboratorId && (
+        <p className="text-[10px] text-center text-muted-foreground max-w-[120px] leading-tight">
+          Salva o colaborador pra anexar a foto.
+        </p>
       )}
     </div>
   );

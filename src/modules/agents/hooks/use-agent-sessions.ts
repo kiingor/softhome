@@ -141,14 +141,18 @@ export function useRecruiterSearch() {
     mutationFn: async ({
       sessionId,
       query,
+      companyId,
     }: {
       sessionId: string | null;
       query: string;
+      /** Opcional. Manda o currentCompany.id do contexto pra evitar fallback
+       * frágil no backend (admin sem profile.company_id estourava aqui). */
+      companyId?: string | null;
     }) => {
       const { data, error } = await supabase.functions.invoke<RecruiterSearchResponse>(
         "recruiter-search",
         {
-          body: { sessionId, query },
+          body: { sessionId, query, companyId: companyId ?? undefined },
         },
       );
       if (error) {

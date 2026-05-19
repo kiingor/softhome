@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { ModuleType } from "@/hooks/usePermissions";
-import { SoftHouseLogo } from "@/components/branding/SoftHouseLogo";
+import { BrandLogo } from "@/components/branding/BrandLogo";
 
 interface MenuItem {
   icon: React.ComponentType<{ className?: string }>;
@@ -94,9 +94,9 @@ export default function DashboardSidebar() {
       {/* Header com logo */}
       <div className="h-16 px-6 border-b border-border flex items-center">
         <div className="flex items-center gap-3">
-          <SoftHouseLogo size="md" />
+          <BrandLogo size="md" />
           <div>
-            <h1 className="font-extrabold text-foreground tracking-tight">SoftHouse</h1>
+            <h1 className="font-extrabold text-foreground tracking-tight">DNA Softcom</h1>
             <p className="text-xs text-muted-foreground">Gente & Cultura</p>
           </div>
         </div>

@@ -1,14 +1,21 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import {
   HoverCard,
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
-import { CircleNotch as Loader2, Info, Copy } from "@phosphor-icons/react";
+import {
+  CircleNotch as Loader2,
+  Info,
+  Copy,
+  MagnifyingGlass,
+  X as XIcon,
+} from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/formatters";
 import {
@@ -36,7 +43,8 @@ interface PaymentRecord {
 export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) {
   const queryClient = useQueryClient();
 
-  // Lista flat de lançamentos pagáveis, com valores LÍQUIDOS após impostos.
+  // Lista flat de lançamentos pagáveis, com valores LÍQUIDOS após impostos
+  // e descontos.
   // Regras:
   // - só proventos (`isEarning`)
   // - benefícios entram só se is_payable=true (categoria 'adicional');
@@ -45,6 +53,10 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
   // - INSS/IRPF descontam do que vai pra mão do colaborador:
   //     · INSS desconta integralmente do salário base
   //     · IRPF distribui proporcionalmente entre salário base + gratificações
+  // - descontos (type='desconto', ex: plano de saúde): descontam INTEGRAL
+  //   do salário base (são valores fixos que o colab paga). Se não houver
+  //   salário base no período, ficam fora do cálculo do líquido (não tem
+  //   onde abater).
   // - estornos: par positivo+negativo do mesmo (collab,tipo) somam ≤ 0 → some
   const { payableEntries, taxBreakdownByEntry } = useMemo(() => {
     const earningOnly = entries.filter(
@@ -80,11 +92,26 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
       taxesByCollab.set(cid, cur);
     }
 
+    // Descontos manuais (plano de saúde, adiantamento, etc) por colaborador
+    type Discount = { label: string; value: number };
+    const discountsByCollab = new Map<string, Discount[]>();
+    for (const e of entries) {
+      if (e.type !== "desconto") continue;
+      const v = Number(e.value);
+      if (!(v > 0)) continue;
+      const arr = discountsByCollab.get(e.collaborator_id) ?? [];
+      arr.push({
+        label: e.description ?? ENTRY_TYPE_LABELS[e.type] ?? "Desconto",
+        value: v,
+      });
+      discountsByCollab.set(e.collaborator_id, arr);
+    }
+
     // Aplica deduções nas entries:
-    //   salary base: bruto − INSS − IRPF_share_salary
+    //   salary base: bruto − INSS − IRPF_share_salary − Σ descontos
     //   gratificação: bruto − IRPF_share_grat
     // IRPF_share = irpf × bruto_dele / (bruto_salary + sum_grats)
-    type EntryTax = { inss: number; irpf: number };
+    type EntryTax = { inss: number; irpf: number; discounts: Discount[] };
     const breakdownByEntry = new Map<string, EntryTax>();
     const adjustedEntries: PayrollEntryWithCollaborator[] = [];
 
@@ -122,17 +149,30 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
         });
       }
 
+      const collabDiscounts = discountsByCollab.get(collabId) ?? [];
+      const totalDiscount = collabDiscounts.reduce((s, d) => s + d.value, 0);
+
       for (const e of list) {
         const irpfShare = irpfShares.get(e.id) ?? 0;
         let inssShare = 0;
-        if (e.type === "salario_base") inssShare = taxes.inss;
-        const adjusted = Number(e.value) - inssShare - irpfShare;
+        let discountShare = 0;
+        let discountsForEntry: Discount[] = [];
+        if (e.type === "salario_base") {
+          inssShare = taxes.inss;
+          discountShare = totalDiscount;
+          discountsForEntry = collabDiscounts;
+        }
+        const adjusted = Number(e.value) - inssShare - irpfShare - discountShare;
         if (adjusted <= 0) continue; // não exibe linhas zeradas/negativas
         adjustedEntries.push({
           ...e,
           value: adjusted,
         } as PayrollEntryWithCollaborator);
-        breakdownByEntry.set(e.id, { inss: inssShare, irpf: irpfShare });
+        breakdownByEntry.set(e.id, {
+          inss: inssShare,
+          irpf: irpfShare,
+          discounts: discountsForEntry,
+        });
       }
     }
 
@@ -218,6 +258,20 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
     },
   });
 
+  // Busca por nome do colaborador. Normaliza acento pra "joao" achar "João".
+  // ̀-ͯ = bloco de combining diacritics (gerados pelo NFD).
+  const [searchTerm, setSearchTerm] = useState("");
+  const normalized = (s: string) =>
+    s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
+  const filteredEntries = useMemo(() => {
+    const q = normalized(searchTerm.trim());
+    if (!q) return payableEntries;
+    return payableEntries.filter((e) =>
+      normalized(e.collaborator?.name ?? "").includes(q),
+    );
+  }, [payableEntries, searchTerm]);
+
   const total = payableEntries.length;
   const paidCount = payableEntries.filter((e) =>
     paymentByEntry.get(e.id)?.paid_at,
@@ -228,6 +282,7 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
     return rec?.paid_at ? s + Number(e.value) : s;
   }, 0);
   const progressPct = total === 0 ? 0 : Math.round((paidCount / total) * 100);
+  const isFiltering = searchTerm.trim().length > 0;
 
   if (isLoading) {
     return (
@@ -267,9 +322,40 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
         <Progress value={progressPct} className="h-2" />
       </div>
 
+      {/* Busca por colaborador */}
+      <div className="relative">
+        <MagnifyingGlass className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+        <Input
+          type="text"
+          placeholder="Buscar colaborador..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-8 pr-8 h-9"
+        />
+        {isFiltering && (
+          <button
+            type="button"
+            onClick={() => setSearchTerm("")}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition focus:outline-none focus:ring-2 focus:ring-primary/40 rounded"
+            aria-label="Limpar busca"
+            title="Limpar busca"
+          >
+            <XIcon className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+      {isFiltering && (
+        <p className="text-xs text-muted-foreground px-1 -mt-2">
+          {filteredEntries.length === 0
+            ? "Nenhum colaborador com esse nome."
+            : `Mostrando ${filteredEntries.length} de ${total} lançamento(s).`}
+        </p>
+      )}
+
       {/* Lista flat de lançamentos */}
+      {filteredEntries.length > 0 && (
       <div className="border rounded-md divide-y divide-border">
-        {payableEntries.map((entry) => {
+        {filteredEntries.map((entry) => {
           const rec = paymentByEntry.get(entry.id);
           const isPaid = !!rec?.paid_at;
           const value = Number(entry.value);
@@ -357,8 +443,12 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
               <div className="text-right shrink-0 flex items-center gap-1.5">
                 {(() => {
                   const tax = taxBreakdownByEntry.get(entry.id);
-                  if (!tax || (tax.inss === 0 && tax.irpf === 0)) return null;
-                  const grossValue = Number(entry.value) + tax.inss + tax.irpf;
+                  const totalDiscount = tax?.discounts.reduce((s, d) => s + d.value, 0) ?? 0;
+                  if (!tax || (tax.inss === 0 && tax.irpf === 0 && totalDiscount === 0)) {
+                    return null;
+                  }
+                  const grossValue =
+                    Number(entry.value) + tax.inss + tax.irpf + totalDiscount;
                   return (
                     <HoverCard openDelay={150} closeDelay={100}>
                       <HoverCardTrigger asChild>
@@ -371,7 +461,7 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
                           <Info className="w-3.5 h-3.5" weight="fill" />
                         </button>
                       </HoverCardTrigger>
-                      <HoverCardContent align="end" className="w-60 text-xs">
+                      <HoverCardContent align="end" className="w-64 text-xs">
                         <div className="space-y-1.5">
                           <div className="flex items-center justify-between gap-2">
                             <span className="text-muted-foreground">Bruto</span>
@@ -395,6 +485,19 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
                               </span>
                             </div>
                           )}
+                          {tax.discounts.map((d, i) => (
+                            <div
+                              key={i}
+                              className="flex items-center justify-between gap-2 text-rose-700 dark:text-rose-300"
+                            >
+                              <span className="truncate" title={d.label}>
+                                − {d.label}
+                              </span>
+                              <span className="font-mono shrink-0">
+                                {formatCurrency(d.value)}
+                              </span>
+                            </div>
+                          ))}
                           <div className="border-t border-border pt-1.5 flex items-center justify-between gap-2 font-medium">
                             <span>Líquido</span>
                             <span className="font-mono text-orange-700 dark:text-orange-300">
@@ -424,6 +527,7 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
           );
         })}
       </div>
+      )}
     </div>
   );
 }
