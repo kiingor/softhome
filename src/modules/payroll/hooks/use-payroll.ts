@@ -17,6 +17,9 @@ import type {
 } from "../schemas/payroll.schema";
 import { calculateMonthlyBenefitValue, type DayAbbrev } from "@/lib/workingDays";
 import { calcAllTaxes } from "@/lib/payroll/cltCalc";
+import { calcVacation, type VacationCalcResult } from "@/lib/payroll/vacationCalc";
+import { getCollabsToSkipNextMonth } from "@/lib/payroll/vacationSkipRules";
+import { postVacationToPayroll } from "@/hooks/useVacations";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Lista de períodos da empresa atual (dashboard mensal)
@@ -94,28 +97,89 @@ export function usePayrollPeriods() {
           .eq("company_id", companyId)
           .eq("status", "ativo");
 
+        // Decisão de produto: recibo de férias cai no mês do gozo, JUNTO
+        // com o salário normal. Por isso NÃO proratamos salário aqui — o
+        // recibo é tratado como adicional, não como substituição.
+        // (Se quiser voltar pra CLT estrito, ver vacationDaysInMonth helper.)
+
+        // Anti-duplicação: a sync (apply-financials) cria salário/INSS/IRPF/
+        // FGTS com external_id 'salario-base'/'inss-base'/'irpf-base'/'fgts-base'
+        // e month/year do mês corrente da sync. Se o auto-populate roda no
+        // mesmo mês, geraria entries duplicadas (sem external_id). Antes de
+        // inserir, montamos um Map<collab_id, Set<type>> do que JÁ existe
+        // neste mês, e pulamos esses tipos por colab.
+        const { data: existingByMonth } = await supabase
+          .from("payroll_entries")
+          .select("collaborator_id, type")
+          .eq("company_id", companyId)
+          .eq("month", month)
+          .eq("year", year)
+          .in("type", ["salario_base", "inss", "irpf", "fgts"]);
+        const coveredByCollab = new Map<string, Set<string>>();
+        for (const e of existingByMonth ?? []) {
+          const cid = (e as { collaborator_id: string }).collaborator_id;
+          const set = coveredByCollab.get(cid) ?? new Set<string>();
+          set.add((e as { type: string }).type);
+          coveredByCollab.set(cid, set);
+        }
+
+        // Regra de produto: recibo de férias (lançado no mês do gozo) cobre
+        // também o salário do MÊS SEGUINTE. Lista colabs cujo RECIBO foi
+        // lançado no mês anterior → pula salário+encargos deste mês.
+        //
+        // Filtra por payroll_month/year (mês do LANÇAMENTO do recibo) e não
+        // por end_date — assim cobre o caso de "Adiantar Férias" também
+        // (gozo em Set, adianta o recibo pra Ago → ao abrir folha de Set,
+        // queremos pular o colab mesmo que end_date continue em Set).
+        const prevMonthAuto = month === 1 ? 12 : month - 1;
+        const prevYearAuto = month === 1 ? year - 1 : year;
+        const { data: vacPostedPrev } = await supabase
+          .from("vacation_requests")
+          .select("collaborator_id, payroll_month, payroll_year")
+          .eq("company_id", companyId)
+          .eq("status", "approved")
+          .eq("payroll_month", prevMonthAuto)
+          .eq("payroll_year", prevYearAuto);
+        const skipSalaryNext = getCollabsToSkipNextMonth(
+          (vacPostedPrev ?? []) as Array<{
+            collaborator_id: string;
+            payroll_month: number | null;
+            payroll_year: number | null;
+          }>,
+          month,
+          year,
+        );
+
         const autoEntries: PayrollEntry[] = [];
         for (const c of collaborators ?? []) {
-          const salary =
+          const fullSalary =
             (c.position as { salary?: number } | null)?.salary ?? 0;
-          if (salary <= 0) continue;
+          if (fullSalary <= 0) continue;
+          // Pula colab que teve gozo no mês anterior (recibo já cobriu)
+          if (skipSalaryNext.has(c.id)) continue;
           const deps = (c as { dependents_count?: number }).dependents_count ?? 0;
+          const covered = coveredByCollab.get(c.id) ?? new Set<string>();
+
+          const salary = fullSalary;
           const taxes = calcAllTaxes({ grossSalary: salary, dependents: deps });
+          const salaryDesc = "Salário base";
 
-          autoEntries.push({
-            company_id: companyId,
-            collaborator_id: c.id,
-            store_id: c.store_id,
-            type: "salario_base" as const,
-            description: "Salário base",
-            value: salary,
-            is_fixed: true,
-            is_payable: true,
-            month,
-            year,
-          } as PayrollEntry);
+          if (!covered.has("salario_base")) {
+            autoEntries.push({
+              company_id: companyId,
+              collaborator_id: c.id,
+              store_id: c.store_id,
+              type: "salario_base" as const,
+              description: salaryDesc,
+              value: salary,
+              is_fixed: true,
+              is_payable: true,
+              month,
+              year,
+            } as PayrollEntry);
+          }
 
-          if (taxes.inss > 0) {
+          if (taxes.inss > 0 && !covered.has("inss")) {
             autoEntries.push({
               company_id: companyId,
               collaborator_id: c.id,
@@ -129,7 +193,7 @@ export function usePayrollPeriods() {
               year,
             } as PayrollEntry);
           }
-          if (taxes.fgts > 0) {
+          if (taxes.fgts > 0 && !covered.has("fgts")) {
             autoEntries.push({
               company_id: companyId,
               collaborator_id: c.id,
@@ -143,7 +207,7 @@ export function usePayrollPeriods() {
               year,
             } as PayrollEntry);
           }
-          if (taxes.irpf > 0) {
+          if (taxes.irpf > 0 && !covered.has("irpf")) {
             autoEntries.push({
               company_id: companyId,
               collaborator_id: c.id,
@@ -273,11 +337,239 @@ export function usePayrollPeriods() {
         }
       }
 
-      return period as PayrollPeriod;
+      const { month: openMonth, year: openYear } = periodToMonthYear(
+        values.reference_month,
+      );
+
+      // ─────────────────────────────────────────────────────────────────────
+      // Carry-over de lançamentos recorrentes do mês anterior.
+      // Copia gratificacao, bonificacao e desconto (is_fixed=true) do último
+      // mês disponível. Útil pra grats/bonifs que vêm da agenda mas só foram
+      // sincronizadas uma vez.
+      //
+      // Decisão de produto: recibo de férias cai no mês do gozo junto com o
+      // salário, então a gratificação/bonificação recorrente DEVE continuar
+      // no mês do gozo também (não pula).
+      //
+      // EXCEÇÃO: colabs cujo gozo ENDED no mês anterior → folha deste mês
+      // fica VAZIA pra ele (regra: recibo já cobriu o próximo mês).
+      // ─────────────────────────────────────────────────────────────────────
+      const prevMonth = openMonth === 1 ? 12 : openMonth - 1;
+      const prevYear = openMonth === 1 ? openYear - 1 : openYear;
+      const CARRY_OVER_TYPES = ["gratificacao", "bonificacao", "desconto"] as const;
+
+      // Lista colabs cujo recibo de férias foi lançado no mês anterior
+      // (pular carry-over). Filtra por payroll_month/year — mesmo critério
+      // do skip de salário acima, garante consistência com adiantamento.
+      const { data: vacPostedPrevCarry } = await supabase
+        .from("vacation_requests")
+        .select("collaborator_id, payroll_month, payroll_year")
+        .eq("company_id", companyId)
+        .eq("status", "approved")
+        .eq("payroll_month", prevMonth)
+        .eq("payroll_year", prevYear);
+      const skipCarryOverFor = getCollabsToSkipNextMonth(
+        (vacPostedPrevCarry ?? []) as Array<{
+          collaborator_id: string;
+          payroll_month: number | null;
+          payroll_year: number | null;
+        }>,
+        openMonth,
+        openYear,
+      );
+
+      let recurringCopied = 0;
+      if (values.auto_populate) {
+        const { data: prevRecurring } = await supabase
+          .from("payroll_entries")
+          .select("collaborator_id, store_id, type, description, value")
+          .eq("company_id", companyId)
+          .eq("month", prevMonth)
+          .eq("year", prevYear)
+          .eq("is_fixed", true)
+          .in("type", CARRY_OVER_TYPES as unknown as string[]);
+
+        if (prevRecurring && prevRecurring.length > 0) {
+          // Evita duplicar — se já existe entry desse tipo+desc pro colab neste mês, pula.
+          const { data: alreadyHere } = await supabase
+            .from("payroll_entries")
+            .select("collaborator_id, type, description")
+            .eq("company_id", companyId)
+            .eq("month", openMonth)
+            .eq("year", openYear)
+            .in("type", CARRY_OVER_TYPES as unknown as string[]);
+          const seen = new Set(
+            (alreadyHere ?? []).map(
+              (r) =>
+                `${(r as { collaborator_id: string }).collaborator_id}::${(r as { type: string }).type}::${(r as { description: string | null }).description ?? ""}`,
+            ),
+          );
+
+          const carryOverRows = prevRecurring
+            .filter((r) => {
+              const collab = (r as { collaborator_id: string }).collaborator_id;
+              // Skip se colab teve gozo terminando no mês anterior
+              if (skipCarryOverFor.has(collab)) return false;
+              const key = `${collab}::${(r as { type: string }).type}::${(r as { description: string | null }).description ?? ""}`;
+              return !seen.has(key);
+            })
+            .map((r) => ({
+              company_id: companyId,
+              collaborator_id: (r as { collaborator_id: string }).collaborator_id,
+              store_id: (r as { store_id: string | null }).store_id,
+              type: (r as { type: string }).type,
+              description: (r as { description: string | null }).description,
+              value: Number((r as { value: number }).value),
+              is_fixed: true,
+              is_payable: true,
+              month: openMonth,
+              year: openYear,
+            }));
+
+          if (carryOverRows.length > 0) {
+            const { error: coErr } = await supabase
+              .from("payroll_entries")
+              .insert(carryOverRows as unknown as PayrollEntry[]);
+            if (!coErr) recurringCopied = carryOverRows.length;
+            else console.error("Carry-over falhou:", coErr.message);
+          }
+        }
+      }
+
+      // ─────────────────────────────────────────────────────────────────────
+      // Lança férias aprovadas desse mês. Casos cobertos:
+      //   1. posted=false + payroll_month match → caso normal
+      //   2. posted=false + payroll_month null + start_date deriva pra cá
+      //      → fallback pra requests aprovadas antes da migration
+      //   3. posted=true + payroll_month match MAS entries não existem mais
+      //      → órfão (folha foi deletada e recriada) → re-lança
+      // ─────────────────────────────────────────────────────────────────────
+      const { data: allApproved } = await supabase
+        .from("vacation_requests")
+        .select("id, collaborator_id, calculation_snapshot, days_count, sell_days, start_date, payroll_month, payroll_year, posted_to_payroll, payroll_entry_ids")
+        .eq("company_id", companyId)
+        .eq("status", "approved");
+
+      // 1+2: pendentes deste mês
+      const initialPending = (allApproved ?? []).filter((v) => {
+        if ((v as { posted_to_payroll: boolean }).posted_to_payroll) return false;
+        const pmonth = (v as { payroll_month: number | null }).payroll_month;
+        const pyear = (v as { payroll_year: number | null }).payroll_year;
+        if (pmonth === openMonth && pyear === openYear) return true;
+        if (pmonth == null && (v as { start_date: string }).start_date) {
+          const d = new Date((v as { start_date: string }).start_date);
+          d.setDate(d.getDate() - 2);
+          return d.getMonth() + 1 === openMonth && d.getFullYear() === openYear;
+        }
+        return false;
+      });
+
+      // 3: órfãos — posted=true desse mês mas entries não existem mais
+      const candidatePosted = (allApproved ?? []).filter((v) => {
+        if (!(v as { posted_to_payroll: boolean }).posted_to_payroll) return false;
+        const pmonth = (v as { payroll_month: number | null }).payroll_month;
+        const pyear = (v as { payroll_year: number | null }).payroll_year;
+        return pmonth === openMonth && pyear === openYear;
+      });
+
+      const orphanIdsCheck = candidatePosted.flatMap(
+        (v) => (v as { payroll_entry_ids: string[] | null }).payroll_entry_ids ?? [],
+      );
+      let existingEntryIds = new Set<string>();
+      if (orphanIdsCheck.length > 0) {
+        const { data: existing } = await supabase
+          .from("payroll_entries")
+          .select("id")
+          .in("id", orphanIdsCheck);
+        existingEntryIds = new Set((existing ?? []).map((e) => e.id as string));
+      }
+      const orphans = candidatePosted.filter((v) => {
+        const ids = (v as { payroll_entry_ids: string[] | null }).payroll_entry_ids ?? [];
+        if (ids.length === 0) return true; // posted mas sem ids = órfão garantido
+        return ids.some((id) => !existingEntryIds.has(id));
+      });
+
+      const pendingVacations = [...initialPending, ...orphans];
+
+      let vacationsPosted = 0;
+      if (pendingVacations && pendingVacations.length > 0) {
+        // Pra cada pendente: precisa do store_id atual do colab (snapshot
+        // não captura). Pré-carrega.
+        const collabIds = Array.from(
+          new Set(pendingVacations.map((v) => v.collaborator_id as string)),
+        );
+        const { data: collabs } = await supabase
+          .from("collaborators")
+          .select("id, store_id, current_salary, dependents_count")
+          .in("id", collabIds);
+        const collabById = new Map(
+          (collabs ?? []).map((c) => [
+            c.id as string,
+            c as { id: string; store_id: string | null; current_salary: number | null; dependents_count: number | null },
+          ]),
+        );
+
+        for (const v of pendingVacations) {
+          const collab = collabById.get(v.collaborator_id as string);
+          if (!collab) continue;
+
+          // Usa o snapshot se existir; senão recalcula como fallback.
+          let calc: VacationCalcResult | null =
+            (v.calculation_snapshot as unknown as VacationCalcResult | null) ?? null;
+          if (!calc) {
+            const salary = Number(collab.current_salary ?? 0);
+            if (!(salary > 0)) continue; // sem como calcular
+            calc = calcVacation({
+              salary,
+              daysTaken: v.days_count as number,
+              daysSold: (v.sell_days as number | null) ?? 0,
+              dependents: Number(collab.dependents_count ?? 0),
+            });
+          }
+
+          try {
+            const entryIds = await postVacationToPayroll({
+              requestId: v.id as string,
+              companyId,
+              collaboratorId: v.collaborator_id as string,
+              storeId: collab.store_id,
+              month: openMonth,
+              year: openYear,
+              calc,
+            });
+            await supabase
+              .from("vacation_requests")
+              .update({
+                posted_to_payroll: true,
+                payroll_entry_ids: entryIds.length > 0 ? entryIds : null,
+              })
+              .eq("id", v.id as string);
+            vacationsPosted++;
+          } catch (e) {
+            // Não derruba a abertura do período por causa de 1 férias com erro.
+            console.error(`Falha ao lançar férias ${v.id} na folha:`, e);
+          }
+        }
+      }
+
+      return { period: period as PayrollPeriod, vacationsPosted, recurringCopied };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["payroll-periods"] });
-      toast.success("Período aberto ✓");
+      queryClient.invalidateQueries({ queryKey: ["vacation-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["payroll-entries"] });
+      const parts: string[] = ["Período aberto ✓"];
+      if (result.recurringCopied > 0) {
+        parts.push(
+          `${result.recurringCopied} lançamento${result.recurringCopied === 1 ? "" : "s"} recorrente${result.recurringCopied === 1 ? "" : "s"} copiado${result.recurringCopied === 1 ? "" : "s"} do mês anterior`,
+        );
+      }
+      if (result.vacationsPosted > 0) {
+        parts.push(
+          `${result.vacationsPosted} férias pendente${result.vacationsPosted === 1 ? "" : "s"} lançada${result.vacationsPosted === 1 ? "" : "s"}`,
+        );
+      }
+      toast.success(parts.join(" · "));
     },
     onError: (err: Error) => {
       toast.error(err.message ?? "Não rolou. Tenta de novo?");
@@ -298,14 +590,37 @@ export function usePayrollPeriods() {
       if (!companyId) throw new Error("Empresa não encontrada");
       const { month, year } = periodToMonthYear(reference_month);
 
-      // Remove entries primeiro (sem FK period_id → precisa filtrar por mês/ano)
+      // 1. Reset vacation_requests do mês — apagar as payroll_entries faz
+      //    com que os payroll_entry_ids guardados na request fiquem órfãos.
+      //    Marcamos posted_to_payroll=false pra que, ao reabrir o período,
+      //    o trigger de pending re-lance os 4-6 lançamentos automaticamente.
+      await supabase
+        .from("vacation_requests")
+        .update({ posted_to_payroll: false, payroll_entry_ids: null })
+        .eq("company_id", companyId)
+        .eq("payroll_month", month)
+        .eq("payroll_year", year)
+        .eq("status", "approved");
+
+      // 2. Remove entries do período — SELETIVO.
+      //    Preserva entries criadas pela sync (têm external_id da agenda:
+      //    salario-base, inss-base, fgts-base, irpf-base, plano-saude-*,
+      //    e os ids numéricos dos adicionais sincronizados). Re-abrir a
+      //    folha não perde grat/boni/desconto que vieram da agenda.
+      //
+      //    Apaga:
+      //      - entries sem external_id (auto-populate, carry-over, manuais)
+      //      - entries com prefixo 'ferias-' (do recibo de férias) —
+      //        precisam ser re-postadas pelo openPeriod via vacation flag.
       await supabase
         .from("payroll_entries")
         .delete()
         .eq("company_id", companyId)
         .eq("month", month)
-        .eq("year", year);
+        .eq("year", year)
+        .or("external_id.is.null,external_id.like.ferias-%");
 
+      // 3. Remove o período
       const { error } = await supabase
         .from("payroll_periods")
         .delete()
@@ -315,6 +630,7 @@ export function usePayrollPeriods() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payroll-periods"] });
       queryClient.invalidateQueries({ queryKey: ["payroll-entries"] });
+      queryClient.invalidateQueries({ queryKey: ["vacation-requests"] });
       toast.success("Período removido ✓");
     },
     onError: (err: Error) => {
@@ -666,7 +982,7 @@ export function usePayrollEntries(periodId: string | undefined) {
       const { data, error } = await supabase
         .from("payroll_entries")
         .select(
-          "*, collaborator:collaborators(id, name, cpf, regime, status, pix_key, softcom_surname)"
+          "*, collaborator:collaborators(id, name, cpf, regime, status, pix_key, softcom_surname, store_id, team_id)"
         )
         .eq("company_id", companyId)
         .eq("month", month)

@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import PermissionGuard from "@/components/dashboard/PermissionGuard";
 import { useDashboard } from "@/contexts/DashboardContext";
-import { useVacationRequests, useVacationPeriods, useUpdateVacationRequest, useDeleteVacationRequest, vacationRequestStatusLabels, vacationRequestStatusColors, vacationPeriodStatusLabels, vacationPeriodStatusColors, VacationRequest, VacationPeriod } from "@/hooks/useVacations";
+import { useVacationRequests, useVacationPeriods, useUpdateVacationRequest, useDeleteVacationRequest, useApproveVacationRequest, vacationRequestStatusLabels, vacationRequestStatusColors, vacationPeriodStatusLabels, vacationPeriodStatusColors, VacationRequest, VacationPeriod } from "@/hooks/useVacations";
 import VacationRequestModal from "@/components/ferias/VacationRequestModal";
 import VacationCalendar from "@/components/ferias/VacationCalendar";
 import { VacationBalanceBulkImportDialog } from "@/modules/core/components/ferias/VacationBalanceBulkImportDialog";
@@ -20,7 +20,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Plus, Clock, Users, CalendarCheck, Warning as AlertTriangle, MagnifyingGlass as Search, Check, X, CircleNotch as Loader2, Calendar, Trash as Trash2, Eye, UserCheck, UploadSimple, DotsThreeVertical, Pencil } from "@phosphor-icons/react";
+import { Plus, Clock, Users, CalendarCheck, Warning as AlertTriangle, MagnifyingGlass as Search, Check, X, CircleNotch as Loader2, Calendar, Trash as Trash2, Eye, UserCheck, UploadSimple, DotsThreeVertical, Pencil, FilePdf } from "@phosphor-icons/react";
+import { downloadVacationReceiptPdf } from "@/modules/ferias/services/vacation-receipt.service";
 import { format, parseISO, isAfter, addDays } from "date-fns";
 import { toast } from "sonner";
 
@@ -32,6 +33,7 @@ const FeriasPage = () => {
   const { data: periods = [], isLoading: loadingPeriods } = useVacationPeriods();
   const updateRequest = useUpdateVacationRequest();
   const deleteRequest = useDeleteVacationRequest();
+  const approveRequest = useApproveVacationRequest();
 
   // Fetch all active collaborators for overview tab
   const { data: allCollaborators = [] } = useQuery({
@@ -125,13 +127,11 @@ const FeriasPage = () => {
   }, [allCollaborators, periods, requests, searchTerm]);
 
   const handleApprove = async (request: VacationRequest) => {
-    await updateRequest.mutateAsync({
-      id: request.id,
-      status: "approved",
-      approved_by: user?.id,
-      approved_at: new Date().toISOString(),
-    });
-    toast.success("Férias aprovadas!");
+    if (!user?.id) return;
+    // useApproveVacationRequest faz snapshot do cálculo + lança na folha
+    // (se já aberta) ou marca como pendente (lança quando folha do mês abrir).
+    // Toast com o detalhamento sai do próprio hook.
+    await approveRequest.mutateAsync({ requestId: request.id, approvedBy: user.id });
   };
 
   const handleReject = async () => {
@@ -156,6 +156,15 @@ const FeriasPage = () => {
   const handleStartVacation = async (request: VacationRequest) => {
     await updateRequest.mutateAsync({ id: request.id, status: "in_progress" });
     toast.success("Férias iniciadas!");
+  };
+
+  const handleGenerateReceipt = async (request: VacationRequest) => {
+    try {
+      await downloadVacationReceiptPdf({ requestId: request.id });
+      toast.success("Recibo gerado ✓");
+    } catch (e) {
+      toast.error("Erro ao gerar recibo: " + (e as Error).message);
+    }
   };
 
   const isLoading = loadingRequests || loadingPeriods;
@@ -456,6 +465,17 @@ const FeriasPage = () => {
                               {r.status === "in_progress" && (
                                 <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => handleComplete(r)}>
                                   Concluir
+                                </Button>
+                              )}
+                              {(r.status === "approved" || r.status === "in_progress" || r.status === "completed") && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-primary"
+                                  title="Gerar recibo de férias (PDF)"
+                                  onClick={() => handleGenerateReceipt(r)}
+                                >
+                                  <FilePdf className="w-4 h-4" />
                                 </Button>
                               )}
                               {(r.status === "pending" || r.status === "approved") && (

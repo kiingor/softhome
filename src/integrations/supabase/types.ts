@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       admission_documents: {
@@ -917,6 +892,7 @@ export type Database = {
           base_salary: number
           collaborator_id: string
           created_at: string
+          external_id: string | null
           gratificacao_sum: number
           gross_value: number
           id: string
@@ -933,6 +909,7 @@ export type Database = {
           base_salary?: number
           collaborator_id: string
           created_at?: string
+          external_id?: string | null
           gratificacao_sum?: number
           gross_value?: number
           id?: string
@@ -949,6 +926,7 @@ export type Database = {
           base_salary?: number
           collaborator_id?: string
           created_at?: string
+          external_id?: string | null
           gratificacao_sum?: number
           gross_value?: number
           id?: string
@@ -1097,6 +1075,7 @@ export type Database = {
           job_id: string
           rejected_reason: string | null
           stage: string
+          tests_session_token: string | null
           updated_at: string
         }
         Insert: {
@@ -1111,6 +1090,7 @@ export type Database = {
           job_id: string
           rejected_reason?: string | null
           stage?: string
+          tests_session_token?: string | null
           updated_at?: string
         }
         Update: {
@@ -1125,6 +1105,7 @@ export type Database = {
           job_id?: string
           rejected_reason?: string | null
           stage?: string
+          tests_session_token?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -1343,6 +1324,73 @@ export type Database = {
           },
         ]
       }
+      collaborator_absences: {
+        Row: {
+          bank_hours: number
+          collaborator_id: string
+          company_id: string
+          created_at: string
+          days: number | null
+          external_id: string | null
+          has_certificate: boolean
+          id: string
+          notes: string | null
+          occurred_on: string | null
+          reason: string | null
+          updated_at: string
+        }
+        Insert: {
+          bank_hours?: number
+          collaborator_id: string
+          company_id: string
+          created_at?: string
+          days?: number | null
+          external_id?: string | null
+          has_certificate?: boolean
+          id?: string
+          notes?: string | null
+          occurred_on?: string | null
+          reason?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bank_hours?: number
+          collaborator_id?: string
+          company_id?: string
+          created_at?: string
+          days?: number | null
+          external_id?: string | null
+          has_certificate?: boolean
+          id?: string
+          notes?: string | null
+          occurred_on?: string | null
+          reason?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collaborator_absences_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collaborator_absences_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "collaborator_absences_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       collaborator_alimony_orders: {
         Row: {
           beneficiary_bank_info: string | null
@@ -1507,6 +1555,7 @@ export type Database = {
           company_id: string
           cpf: string | null
           created_at: string
+          external_id: string | null
           id: string
           is_health_plan_dependent: boolean
           is_irpf_dependent: boolean
@@ -1524,6 +1573,7 @@ export type Database = {
           company_id: string
           cpf?: string | null
           created_at?: string
+          external_id?: string | null
           id?: string
           is_health_plan_dependent?: boolean
           is_irpf_dependent?: boolean
@@ -1541,6 +1591,7 @@ export type Database = {
           company_id?: string
           cpf?: string | null
           created_at?: string
+          external_id?: string | null
           id?: string
           is_health_plan_dependent?: boolean
           is_irpf_dependent?: boolean
@@ -1646,6 +1697,58 @@ export type Database = {
           },
         ]
       }
+      collaborator_emails: {
+        Row: {
+          collaborator_id: string
+          company_id: string
+          created_at: string
+          email: string
+          external_id: string | null
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          collaborator_id: string
+          company_id: string
+          created_at?: string
+          email: string
+          external_id?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          collaborator_id?: string
+          company_id?: string
+          created_at?: string
+          email?: string
+          external_id?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collaborator_emails_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collaborator_emails_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "collaborator_emails_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       collaborator_emergency_contacts: {
         Row: {
           collaborator_id: string
@@ -1700,6 +1803,301 @@ export type Database = {
           },
           {
             foreignKeyName: "collaborator_emergency_contacts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      collaborator_extras: {
+        Row: {
+          collaborator_id: string
+          company_id: string
+          created_at: string
+          description: string | null
+          external_id: string | null
+          extra_type: string | null
+          id: string
+          inspira_group: string | null
+          inspira_type: string | null
+          is_disabled: boolean
+          posted_at: string | null
+          posted_by_username: string | null
+          updated_at: string
+          value: number | null
+        }
+        Insert: {
+          collaborator_id: string
+          company_id: string
+          created_at?: string
+          description?: string | null
+          external_id?: string | null
+          extra_type?: string | null
+          id?: string
+          inspira_group?: string | null
+          inspira_type?: string | null
+          is_disabled?: boolean
+          posted_at?: string | null
+          posted_by_username?: string | null
+          updated_at?: string
+          value?: number | null
+        }
+        Update: {
+          collaborator_id?: string
+          company_id?: string
+          created_at?: string
+          description?: string | null
+          external_id?: string | null
+          extra_type?: string | null
+          id?: string
+          inspira_group?: string | null
+          inspira_type?: string | null
+          is_disabled?: boolean
+          posted_at?: string | null
+          posted_by_username?: string | null
+          updated_at?: string
+          value?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collaborator_extras_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collaborator_extras_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "collaborator_extras_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      collaborator_health_plans: {
+        Row: {
+          beneficiary_birth: string | null
+          beneficiary_cpf: string | null
+          beneficiary_name: string | null
+          beneficiary_type: string | null
+          collaborator_id: string
+          company_id: string
+          created_at: string
+          disabled_at: string | null
+          external_id: string | null
+          id: string
+          is_disabled: boolean
+          notes: string | null
+          plan_name: string | null
+          plan_value: number | null
+          registration_code: string | null
+          start_date: string | null
+          updated_at: string
+        }
+        Insert: {
+          beneficiary_birth?: string | null
+          beneficiary_cpf?: string | null
+          beneficiary_name?: string | null
+          beneficiary_type?: string | null
+          collaborator_id: string
+          company_id: string
+          created_at?: string
+          disabled_at?: string | null
+          external_id?: string | null
+          id?: string
+          is_disabled?: boolean
+          notes?: string | null
+          plan_name?: string | null
+          plan_value?: number | null
+          registration_code?: string | null
+          start_date?: string | null
+          updated_at?: string
+        }
+        Update: {
+          beneficiary_birth?: string | null
+          beneficiary_cpf?: string | null
+          beneficiary_name?: string | null
+          beneficiary_type?: string | null
+          collaborator_id?: string
+          company_id?: string
+          created_at?: string
+          disabled_at?: string | null
+          external_id?: string | null
+          id?: string
+          is_disabled?: boolean
+          notes?: string | null
+          plan_name?: string | null
+          plan_value?: number | null
+          registration_code?: string | null
+          start_date?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collaborator_health_plans_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collaborator_health_plans_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "collaborator_health_plans_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      collaborator_internships: {
+        Row: {
+          collaborator_id: string
+          company_id: string
+          created_at: string
+          end_date: string | null
+          external_id: string | null
+          flagged: boolean
+          id: string
+          is_renewal: boolean
+          notification_sent: boolean
+          start_date: string | null
+          updated_at: string
+        }
+        Insert: {
+          collaborator_id: string
+          company_id: string
+          created_at?: string
+          end_date?: string | null
+          external_id?: string | null
+          flagged?: boolean
+          id?: string
+          is_renewal?: boolean
+          notification_sent?: boolean
+          start_date?: string | null
+          updated_at?: string
+        }
+        Update: {
+          collaborator_id?: string
+          company_id?: string
+          created_at?: string
+          end_date?: string | null
+          external_id?: string | null
+          flagged?: boolean
+          id?: string
+          is_renewal?: boolean
+          notification_sent?: boolean
+          start_date?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collaborator_internships_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collaborator_internships_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "collaborator_internships_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      collaborator_leaves: {
+        Row: {
+          collaborator_id: string
+          company_id: string
+          compensated: number | null
+          created_at: string
+          description: string | null
+          end_date: string | null
+          external_id: string | null
+          has_certificate: boolean
+          id: string
+          posted_at: string | null
+          posted_by_username: string | null
+          reason_code: number | null
+          start_date: string | null
+          trip_id: number | null
+          updated_at: string
+        }
+        Insert: {
+          collaborator_id: string
+          company_id: string
+          compensated?: number | null
+          created_at?: string
+          description?: string | null
+          end_date?: string | null
+          external_id?: string | null
+          has_certificate?: boolean
+          id?: string
+          posted_at?: string | null
+          posted_by_username?: string | null
+          reason_code?: number | null
+          start_date?: string | null
+          trip_id?: number | null
+          updated_at?: string
+        }
+        Update: {
+          collaborator_id?: string
+          company_id?: string
+          compensated?: number | null
+          created_at?: string
+          description?: string | null
+          end_date?: string | null
+          external_id?: string | null
+          has_certificate?: boolean
+          id?: string
+          posted_at?: string | null
+          posted_by_username?: string | null
+          reason_code?: number | null
+          start_date?: string | null
+          trip_id?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collaborator_leaves_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collaborator_leaves_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "collaborator_leaves_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
@@ -1821,6 +2219,71 @@ export type Database = {
           },
         ]
       }
+      collaborator_pdvs: {
+        Row: {
+          collaborator_id: string
+          company_id: string
+          created_at: string
+          external_id: string | null
+          f10: number
+          id: string
+          pdv_name: string | null
+          store_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          collaborator_id: string
+          company_id: string
+          created_at?: string
+          external_id?: string | null
+          f10?: number
+          id?: string
+          pdv_name?: string | null
+          store_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          collaborator_id?: string
+          company_id?: string
+          created_at?: string
+          external_id?: string | null
+          f10?: number
+          id?: string
+          pdv_name?: string | null
+          store_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collaborator_pdvs_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collaborator_pdvs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "collaborator_pdvs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collaborator_pdvs_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       collaborator_timeline_events: {
         Row: {
           collaborator_id: string
@@ -1829,6 +2292,7 @@ export type Database = {
           created_by: string | null
           effective_date: string
           event_type: Database["public"]["Enums"]["collaborator_timeline_event_type"]
+          external_id: string | null
           from_value: Json | null
           id: string
           reason: string | null
@@ -1841,6 +2305,7 @@ export type Database = {
           created_by?: string | null
           effective_date?: string
           event_type: Database["public"]["Enums"]["collaborator_timeline_event_type"]
+          external_id?: string | null
           from_value?: Json | null
           id?: string
           reason?: string | null
@@ -1853,6 +2318,7 @@ export type Database = {
           created_by?: string | null
           effective_date?: string
           event_type?: Database["public"]["Enums"]["collaborator_timeline_event_type"]
+          external_id?: string | null
           from_value?: Json | null
           id?: string
           reason?: string | null
@@ -2028,6 +2494,8 @@ export type Database = {
           accounting_code?: string | null
           address?: string | null
           admission_date?: string | null
+          agenda?: string | null
+          bank_account?: string | null
           birth_date?: string | null
           agenda?: string | null
           bank_account?: string | null
@@ -2206,6 +2674,13 @@ export type Database = {
             columns: ["store_id"]
             isOneToOne: false
             referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collaborators_supervisor_id_fkey"
+            columns: ["supervisor_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
             referencedColumns: ["id"]
           },
           {
@@ -2793,6 +3268,7 @@ export type Database = {
           created_by: string | null
           due_date: string
           exam_type: string
+          external_id: string | null
           id: string
           notes: string | null
           position_id: string | null
@@ -2811,6 +3287,7 @@ export type Database = {
           created_by?: string | null
           due_date: string
           exam_type: string
+          external_id?: string | null
           id?: string
           notes?: string | null
           position_id?: string | null
@@ -2829,6 +3306,7 @@ export type Database = {
           created_by?: string | null
           due_date?: string
           exam_type?: string
+          external_id?: string | null
           id?: string
           notes?: string | null
           position_id?: string | null
@@ -3050,6 +3528,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           description: string | null
+          external_id: string | null
           id: string
           installment_group_id: string | null
           installment_number: number | null
@@ -3069,6 +3548,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          external_id?: string | null
           id?: string
           installment_group_id?: string | null
           installment_number?: number | null
@@ -3088,6 +3568,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          external_id?: string | null
           id?: string
           installment_group_id?: string | null
           installment_number?: number | null
@@ -3808,6 +4289,7 @@ export type Database = {
           days_sold: number
           days_taken: number
           end_date: string
+          external_id: string | null
           id: string
           manual_adjustment_at: string | null
           manual_adjustment_by: string | null
@@ -3824,6 +4306,7 @@ export type Database = {
           days_sold?: number
           days_taken?: number
           end_date: string
+          external_id?: string | null
           id?: string
           manual_adjustment_at?: string | null
           manual_adjustment_by?: string | null
@@ -3840,6 +4323,7 @@ export type Database = {
           days_sold?: number
           days_taken?: number
           end_date?: string
+          external_id?: string | null
           id?: string
           manual_adjustment_at?: string | null
           manual_adjustment_by?: string | null
@@ -3875,16 +4359,24 @@ export type Database = {
         Row: {
           approved_at: string | null
           approved_by: string | null
+          bonifications: number
+          calculation_snapshot: Json | null
           collaborator_id: string
           company_id: string
           created_at: string
           days_count: number
           end_date: string
+          gratifications: number
           id: string
           notes: string | null
           paid_at: string | null
           paid_by: string | null
           paid_value: number | null
+          payment_date: string | null
+          payroll_entry_ids: string[] | null
+          payroll_month: number | null
+          payroll_year: number | null
+          posted_to_payroll: boolean
           rejection_reason: string | null
           requested_by: string | null
           sell_days: number
@@ -3896,16 +4388,24 @@ export type Database = {
         Insert: {
           approved_at?: string | null
           approved_by?: string | null
+          bonifications?: number
+          calculation_snapshot?: Json | null
           collaborator_id: string
           company_id: string
           created_at?: string
           days_count: number
           end_date: string
+          gratifications?: number
           id?: string
           notes?: string | null
           paid_at?: string | null
           paid_by?: string | null
           paid_value?: number | null
+          payment_date?: string | null
+          payroll_entry_ids?: string[] | null
+          payroll_month?: number | null
+          payroll_year?: number | null
+          posted_to_payroll?: boolean
           rejection_reason?: string | null
           requested_by?: string | null
           sell_days?: number
@@ -3917,16 +4417,24 @@ export type Database = {
         Update: {
           approved_at?: string | null
           approved_by?: string | null
+          bonifications?: number
+          calculation_snapshot?: Json | null
           collaborator_id?: string
           company_id?: string
           created_at?: string
           days_count?: number
           end_date?: string
+          gratifications?: number
           id?: string
           notes?: string | null
           paid_at?: string | null
           paid_by?: string | null
           paid_value?: number | null
+          payment_date?: string | null
+          payroll_entry_ids?: string[] | null
+          payroll_month?: number | null
+          payroll_year?: number | null
+          posted_to_payroll?: boolean
           rejection_reason?: string | null
           requested_by?: string | null
           sell_days?: number
@@ -4213,6 +4721,7 @@ export type Database = {
           days_sold: number
           days_taken: number
           end_date: string
+          external_id: string | null
           id: string
           manual_adjustment_at: string | null
           manual_adjustment_by: string | null
@@ -4235,6 +4744,16 @@ export type Database = {
         Args: { _company_id: string; _module: string; _user_id: string }
         Returns: boolean
       }
+      complete_application_test_in_session: {
+        Args: {
+          p_answers: Json
+          p_auto_score: number
+          p_result_summary: Json
+          p_test_id: string
+          p_token: string
+        }
+        Returns: Json
+      }
       generate_vacation_periods: {
         Args: {
           _admission_date: string
@@ -4254,6 +4773,10 @@ export type Database = {
           status: Database["public"]["Enums"]["admission_test_status"]
           test_slug: string
         }[]
+      }
+      get_application_tests_session: {
+        Args: { p_token: string }
+        Returns: Json
       }
       get_user_permissions: {
         Args: { _company_id: string; _module: string; _user_id: string }
@@ -4305,6 +4828,14 @@ export type Database = {
           content: string
           similarity: number
         }[]
+      }
+      save_application_test_progress_in_session: {
+        Args: { p_answers: Json; p_test_id: string; p_token: string }
+        Returns: Json
+      }
+      start_application_test_in_session: {
+        Args: { p_test_id: string; p_token: string }
+        Returns: Json
       }
       user_belongs_to_company: {
         Args: { _company_id: string; _user_id: string }
@@ -4408,6 +4939,7 @@ export type Database = {
         | "admission"
         | "termination"
         | "manual"
+        | "reactivation"
       holiday_type: "national" | "state" | "municipal" | "manual"
       job_opening_status: "draft" | "open" | "paused" | "filled" | "cancelled"
       journey_milestone_kind: "d30" | "d60" | "d90" | "d180" | "annual"
@@ -4447,6 +4979,7 @@ export type Database = {
         | "bonificacao"
         | "desconto"
         | "gratificacao"
+        | "ferias"
       payroll_period_status: "open" | "closed" | "exported"
       plan_tier: "essencial" | "crescer" | "profissional" | "empresa_plus"
     }
@@ -4574,9 +5107,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       admission_document_status: [
@@ -4684,6 +5214,7 @@ export const Constants = {
         "admission",
         "termination",
         "manual",
+        "reactivation",
       ],
       holiday_type: ["national", "state", "municipal", "manual"],
       job_opening_status: ["draft", "open", "paused", "filled", "cancelled"],
@@ -4726,10 +5257,12 @@ export const Constants = {
         "bonificacao",
         "desconto",
         "gratificacao",
+        "ferias",
       ],
       payroll_period_status: ["open", "closed", "exported"],
       plan_tier: ["essencial", "crescer", "profissional", "empresa_plus"],
     },
   },
 } as const
-<claude-code-hint v="1" type="plugin" value="supabase@claude-plugins-official" />
+A new version of Supabase CLI is available: v2.100.1 (currently installed v)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli

@@ -65,6 +65,8 @@ export const ENTRY_TYPE_COLORS: Record<string, string> = {
     "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900/60",
   desconto:
     "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900/60",
+  ferias:
+    "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-900/60",
   inss: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/60",
   irpf: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/60",
   fgts: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/60",
@@ -80,6 +82,7 @@ export const ENTRY_TYPE_LABELS: Record<string, string> = {
   bonificacao: "Bonificação",
   gratificacao: "Gratificação",
   desconto: "Desconto",
+  ferias: "Férias",
   // Legacy (orphans)
   custo: "Custo (legacy)",
   despesa: "Despesa (legacy)",
@@ -96,6 +99,7 @@ export const EARNINGS_TYPES = [
   "bonificacao",
   "gratificacao",
   "atestado",
+  "ferias",
 ] as const;
 
 export const DEDUCTION_TYPES = [
@@ -169,6 +173,8 @@ export interface PayrollEntryWithCollaborator extends PayrollEntry {
     status: string;
     pix_key?: string | null;
     softcom_surname?: string | null;
+    store_id?: string | null;
+    team_id?: string | null;
   } | null;
 }
 

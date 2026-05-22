@@ -1,8 +1,17 @@
 import { Fragment, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -31,6 +40,7 @@ import {
   CaretRight,
   CaretDown,
   Info,
+  Calendar,
   ArrowsClockwise as RefreshCw,
 } from "@phosphor-icons/react";
 import {
@@ -40,6 +50,7 @@ import {
 } from "@/components/ui/hover-card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PaymentsTab } from "../components/PaymentsTab";
+import { VacationAdvanceDialog } from "../components/VacationAdvanceDialog";
 import { toast } from "sonner";
 import { useDashboard } from "@/contexts/DashboardContext";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -57,6 +68,7 @@ import {
   ALERT_KIND_LABELS,
   ALERT_SEVERITY_COLORS,
   formatPeriodLabel,
+  periodToMonthYear,
   isEarning,
   isDeduction,
 } from "../types";
@@ -87,12 +99,67 @@ export default function PeriodDetailPage() {
   const { data: alerts = [] } = usePayrollAlerts(id);
 
   const [isNewEntryOpen, setIsNewEntryOpen] = useState(false);
+  const [vacationAdvanceOpen, setVacationAdvanceOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<"close" | "reopen" | null>(
     null
   );
   const [reversingEntry, setReversingEntry] = useState<string | null>(null);
   const [reverseReason, setReverseReason] = useState("");
   const [expandedCollabs, setExpandedCollabs] = useState<Set<string>>(new Set());
+
+  // Filtros de empresa (store) e setor (team). 'all' = sem filtro.
+  const [storeFilter, setStoreFilter] = useState<string>("all");
+  const [teamFilter, setTeamFilter] = useState<string>("all");
+
+  // Carrega lookups da company atual pra popular os dropdowns.
+  const { data: stores = [] } = useQuery({
+    queryKey: ["folha-stores-lookup", currentCompany?.id],
+    queryFn: async () => {
+      if (!currentCompany?.id) return [];
+      const { data, error } = await supabase
+        .from("stores")
+        .select("id, store_name")
+        .eq("company_id", currentCompany.id)
+        .order("store_name");
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!currentCompany?.id,
+  });
+
+  const { data: teams = [] } = useQuery({
+    queryKey: ["folha-teams-lookup", currentCompany?.id],
+    queryFn: async () => {
+      if (!currentCompany?.id) return [];
+      const { data, error } = await supabase
+        .from("teams")
+        .select("id, name")
+        .eq("company_id", currentCompany.id)
+        .order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!currentCompany?.id,
+  });
+
+  // Aplica filtros — usa entry.store_id (preferência) ou colab.store_id como fallback;
+  // team_id vem só do collaborator.
+  const filteredEntries = useMemo(() => {
+    if (storeFilter === "all" && teamFilter === "all") return entries;
+    return entries.filter((e) => {
+      if (storeFilter !== "all") {
+        const sid = e.store_id ?? e.collaborator?.store_id ?? null;
+        if (sid !== storeFilter) return false;
+      }
+      if (teamFilter !== "all") {
+        const tid = e.collaborator?.team_id ?? null;
+        if (tid !== teamFilter) return false;
+      }
+      return true;
+    });
+  }, [entries, storeFilter, teamFilter]);
+
+  const isFiltering = storeFilter !== "all" || teamFilter !== "all";
 
   const toggleCollab = (id: string) => {
     setExpandedCollabs((prev) => {
@@ -109,7 +176,7 @@ export default function PeriodDetailPage() {
   const TAX_TYPES = new Set(["inss", "irpf", "fgts"]);
 
   const groupedByCollab = useMemo(() => {
-    type DisplayEntry = (typeof entries)[number] & {
+    type DisplayEntry = (typeof filteredEntries)[number] & {
       _adjustedValue?: number;
       _taxesApplied?: { inss?: number; irpf?: number; fgts?: number };
     };
@@ -121,7 +188,7 @@ export default function PeriodDetailPage() {
       net: number;
     };
     const map = new Map<string, Group>();
-    for (const e of entries) {
+    for (const e of filteredEntries) {
       const collabId = e.collaborator_id ?? "_orphan";
       if (!map.has(collabId)) {
         map.set(collabId, {
@@ -201,7 +268,7 @@ export default function PeriodDetailPage() {
     return [...map.values()].sort((a, b) =>
       a.name.localeCompare(b.name, "pt-BR"),
     );
-  }, [entries]);
+  }, [filteredEntries]);
 
   const allExpanded =
     groupedByCollab.length > 0 &&
@@ -219,20 +286,20 @@ export default function PeriodDetailPage() {
     let earnings = 0;
     let deductions = 0;
     const byCollab = new Set<string>();
-    for (const e of entries) {
+    for (const e of filteredEntries) {
       const v = Number(e.value);
       if (isEarning(e.type)) earnings += v;
       else if (isDeduction(e.type)) deductions += v;
       byCollab.add(e.collaborator_id);
     }
     return {
-      total: entries.length,
+      total: filteredEntries.length,
       earnings,
       deductions,
       net: earnings - deductions,
       collaborators: byCollab.size,
     };
-  }, [entries]);
+  }, [filteredEntries]);
 
   if (isLoading || !period) {
     return (
@@ -265,14 +332,18 @@ export default function PeriodDetailPage() {
   };
 
   const handleExport = () => {
-    if (entries.length === 0) {
-      toast.error("Nada pra exportar — período sem lançamentos.");
+    if (filteredEntries.length === 0) {
+      toast.error(
+        isFiltering
+          ? "Nada pra exportar com esses filtros. Limpa os filtros pra exportar o período inteiro."
+          : "Nada pra exportar — período sem lançamentos.",
+      );
       return;
     }
     try {
       const filesCount = exportPayrollExcel({
         period,
-        entries,
+        entries: filteredEntries,
         companyName: currentCompany?.company_name ?? "Empresa",
         cnpj: null, // TODO: companies.cnpj quando disponível no context
       });
@@ -315,7 +386,7 @@ export default function PeriodDetailPage() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={handleExport} disabled={entries.length === 0}>
+            <Button variant="outline" onClick={handleExport} disabled={filteredEntries.length === 0}>
               <Download className="w-4 h-4 mr-2" />
               Exportar Excel
             </Button>
@@ -324,6 +395,14 @@ export default function PeriodDetailPage() {
                 <Button onClick={() => setIsNewEntryOpen(true)}>
                   <Plus className="w-4 h-4 mr-2" />
                   Novo lançamento
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setVacationAdvanceOpen(true)}
+                  title="Puxa férias aprovadas pra esta folha"
+                >
+                  <Calendar className="w-4 h-4 mr-2" />
+                  Adiantar férias
                 </Button>
                 <Button
                   variant="outline"
@@ -353,6 +432,55 @@ export default function PeriodDetailPage() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Filtros: Empresa + Setor */}
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-muted-foreground font-medium">Empresa</label>
+          <Select value={storeFilter} onValueChange={setStoreFilter}>
+            <SelectTrigger className="w-[200px] h-9">
+              <SelectValue placeholder="Todas" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as empresas</SelectItem>
+              {stores.map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  {s.store_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-muted-foreground font-medium">Setor</label>
+          <Select value={teamFilter} onValueChange={setTeamFilter}>
+            <SelectTrigger className="w-[200px] h-9">
+              <SelectValue placeholder="Todos" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os setores</SelectItem>
+              {teams.map((t) => (
+                <SelectItem key={t.id} value={t.id}>
+                  {t.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {isFiltering && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setStoreFilter("all");
+              setTeamFilter("all");
+            }}
+            className="h-9 text-xs"
+          >
+            Limpar filtros
+          </Button>
+        )}
       </div>
 
       {/* Stats */}
@@ -433,7 +561,7 @@ export default function PeriodDetailPage() {
               <CardContent>
                 <PaymentsTab
                   periodId={period.id}
-                  entries={entries}
+                  entries={filteredEntries}
                   canManage={canManagePayments}
                 />
               </CardContent>
@@ -461,13 +589,34 @@ export default function PeriodDetailPage() {
                 </Button>
               )}
             </div>
+          ) : filteredEntries.length === 0 ? (
+            <div className="text-center py-12 space-y-2">
+              <p className="text-sm text-muted-foreground">
+                Nenhum lançamento com esses filtros.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setStoreFilter("all");
+                  setTeamFilter("all");
+                }}
+              >
+                Limpar filtros
+              </Button>
+            </div>
           ) : (
             <>
               <div className="flex items-center justify-between mb-2 px-1">
                 <p className="text-xs text-muted-foreground">
                   {groupedByCollab.length} colaborador
-                  {groupedByCollab.length === 1 ? "" : "es"} · {entries.length}{" "}
-                  lançamento{entries.length === 1 ? "" : "s"}
+                  {groupedByCollab.length === 1 ? "" : "es"} · {filteredEntries.length}{" "}
+                  lançamento{filteredEntries.length === 1 ? "" : "s"}
+                  {isFiltering && (
+                    <span className="ml-1">
+                      (de {entries.length} no total)
+                    </span>
+                  )}
                 </p>
                 <Button
                   variant="ghost"
@@ -648,6 +797,16 @@ export default function PeriodDetailPage() {
         onSubmit={handleNewEntry}
         isSubmitting={createEntry.isPending}
       />
+
+      {currentCompany?.id && (
+        <VacationAdvanceDialog
+          open={vacationAdvanceOpen}
+          onOpenChange={setVacationAdvanceOpen}
+          companyId={currentCompany.id}
+          targetMonth={periodToMonthYear(period.reference_month).month}
+          targetYear={periodToMonthYear(period.reference_month).year}
+        />
+      )}
 
       {/* Confirmar recalcular encargos */}
       <AlertDialog

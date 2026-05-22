@@ -180,6 +180,31 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({ children }
           setRoles(["admin_gc"]);
         }
       }
+
+      // admin_gc é cross-company por design (não fica preso a CNPJ).
+      // Se o user tem role admin_gc mas não tem profile.company_id nem é
+      // owner de nenhuma company, ainda assim precisa de currentCompany
+      // pra que os hooks que dependem de companyId (useSidebarPermissions,
+      // usePermissions, useMultiplePermissions, queries da UI) funcionem.
+      // Carregamos TODAS as companies visíveis pra ele (a policy admin_gc
+      // já libera SELECT em companies) e usamos a primeira como default.
+      const rolesArr = (rolesData ?? []) as AppRole[];
+      if (rolesArr.includes("admin_gc")) {
+        const { data: allCompanies } = await supabase
+          .from("companies")
+          .select("*")
+          .order("company_name", { ascending: true });
+
+        if (allCompanies && allCompanies.length > 0) {
+          setCompanies(prev => {
+            const existingIds = new Set(prev.map(c => c.id));
+            const newCompanies = allCompanies.filter(c => !existingIds.has(c.id));
+            return [...prev, ...newCompanies];
+          });
+          // Só sobrescreve currentCompany se ainda não tinha um setado
+          setCurrentCompany(prev => prev ?? allCompanies[0]);
+        }
+      }
     } catch (error) {
       console.error("Error loading user data:", error);
     } finally {
