@@ -53,6 +53,14 @@ const MAX_PAGES = 2000;
 // ─────────────────────────────────────────────────────────────────────────────
 const TEST_ONLY_COLAB_IDS: number[] | null = null;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// TEMP TEST — DESLIGADO em produção (null = sync normal de TODOS os colabs).
+// Pra debugar: troca null por [384, 816, ...] e a sync vai processar SÓ
+// esses colabs. Útil pra rodar o fluxo do início ao fim sem mexer nos
+// outros 299.
+// ─────────────────────────────────────────────────────────────────────────────
+const TEST_ONLY_COLAB_IDS: number[] | null = null;
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS_HEADERS });
   if (req.method !== "POST") return jsonResponse({ error: "Method not allowed" }, 405);
@@ -170,6 +178,7 @@ async function runCollaboratorsSync(
   await updateJob(sbAdmin, jobId, { current_step: "Buscando colaboradores na agenda..." });
 
   try {
+    // TEMP TEST — atalho que pula a paginação e busca só N colabs (debug).
     if (TEST_ONLY_COLAB_IDS != null && TEST_ONLY_COLAB_IDS.length > 0) {
       for (const id of TEST_ONLY_COLAB_IDS) {
         try {
