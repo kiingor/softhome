@@ -2497,6 +2497,8 @@ export type Database = {
           agenda?: string | null
           bank_account?: string | null
           birth_date?: string | null
+          agenda?: string | null
+          bank_account?: string | null
           city?: string | null
           commission_license?: number | null
           commission_monthly?: number | null

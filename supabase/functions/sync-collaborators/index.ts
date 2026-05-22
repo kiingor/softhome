@@ -99,7 +99,7 @@ serve(async (req) => {
   // ───────────────────────────────────────────────────────────────────────────
   const remote: RemoteColaborador[] = [];
   try {
-    // TEMP TEST — REMOVER: atalho que pula a paginação e busca só N colabs.
+    // TEMP TEST — atalho que pula a paginação e busca só N colabs (debug).
     if (TEST_ONLY_COLAB_IDS != null && TEST_ONLY_COLAB_IDS.length > 0) {
       for (const id of TEST_ONLY_COLAB_IDS) {
         try {
@@ -208,8 +208,8 @@ serve(async (req) => {
   }
 
   // Desativar quem sumiu da API (status='inativo')
-  // TEMP TEST: pula a desativação quando TEST_ONLY_COLAB_IDS está ligado —
-  // senão marcaríamos os 299 colabs ausentes do remote como inativos.
+  // Skip defensivo quando TEST_ONLY_COLAB_IDS está ligado — senão marcaríamos
+  // os 299 colabs ausentes do remote como inativos.
   let deactivated = 0;
   if (TEST_ONLY_COLAB_IDS == null || TEST_ONLY_COLAB_IDS.length === 0) {
     const idsToDeactivate: string[] = [];
