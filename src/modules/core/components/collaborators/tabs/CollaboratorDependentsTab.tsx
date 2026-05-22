@@ -41,6 +41,7 @@ interface Dependent {
   kinship: string;
   is_irpf_dependent: boolean;
   is_health_plan_dependent: boolean;
+  is_invalid: boolean;
   notes: string | null;
 }
 
@@ -72,6 +73,7 @@ export function CollaboratorDependentsTab({
     kinship: "filho",
     is_irpf_dependent: false,
     is_health_plan_dependent: false,
+    is_invalid: false,
   });
 
   const { data: dependents = [], isLoading } = useQuery({
@@ -88,19 +90,52 @@ export function CollaboratorDependentsTab({
     staleTime: 5 * 60 * 1000,
   });
 
+  // Mutations vão via edge function collaborator-subresource (PUSH → agenda → local).
+  // Flags is_irpf_dependent e is_health_plan_dependent são INTERNAS do DNA Softcom
+  // (não existem na agenda), aplicadas em UPDATE separado depois da criação remota.
+  //
+  // Tratamento de erro: supabase.functions.invoke mascarara o body em non-2xx
+  // como "Edge Function returned a non-2xx status code". Pra ver o real,
+  // lemos error.context (que é o Response) e extraímos o JSON.
   const create = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("collaborator_dependents").insert({
-        collaborator_id: collaboratorId,
-        company_id: companyId,
-        name: form.name.trim(),
-        birth_date: form.birth_date || null,
-        cpf: form.cpf.replace(/\D/g, "") || null,
-        kinship: form.kinship as never,
-        is_irpf_dependent: form.is_irpf_dependent,
-        is_health_plan_dependent: form.is_health_plan_dependent,
+      const { data, error } = await supabase.functions.invoke("collaborator-subresource", {
+        body: {
+          action: "create",
+          kind: "parentes",
+          collaboratorId,
+          data: {
+            name: form.name.trim(),
+            birth_date: form.birth_date || null,
+            cpf: form.cpf.replace(/\D/g, "") || null,
+            kinship: form.kinship,
+            is_invalid: form.is_invalid,
+          },
+        },
       });
-      if (error) throw error;
+      if (error) {
+        const detail = await extractFnErrorDetail(error);
+        throw new Error(detail);
+      }
+      if (data && typeof data === "object" && "error" in data) {
+        const err = data as { error: string; details?: string };
+        throw new Error(err.details ? `${err.error}: ${err.details}` : err.error);
+      }
+      // Campos LOCAL-ONLY (não existem na agenda): patch direto após o
+      // edge function persistir o registro espelho via fromRemote.
+      //   - is_irpf_dependent, is_health_plan_dependent: flags do DNA
+      //   - is_invalid: pra regra de salário-família (filho inválido)
+      const localId = (data as { localId?: string })?.localId;
+      const localOnlyUpdates: Record<string, unknown> = {};
+      if (form.is_irpf_dependent) localOnlyUpdates.is_irpf_dependent = true;
+      if (form.is_health_plan_dependent) localOnlyUpdates.is_health_plan_dependent = true;
+      if (form.is_invalid) localOnlyUpdates.is_invalid = true;
+      if (localId && Object.keys(localOnlyUpdates).length > 0) {
+        await supabase
+          .from("collaborator_dependents")
+          .update(localOnlyUpdates)
+          .eq("id", localId);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -115,27 +150,40 @@ export function CollaboratorDependentsTab({
         kinship: "filho",
         is_irpf_dependent: false,
         is_health_plan_dependent: false,
+        is_invalid: false,
       });
-      toast.success("Dependente adicionado ✓");
+      toast.success("Dependente adicionado ✓ (sincronizado com a agenda)");
     },
     onError: (err: Error) => toast.error("Não rolou. " + err.message),
   });
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("collaborator_dependents")
-        .delete()
-        .eq("id", id);
-      if (error) throw error;
+      const { data, error } = await supabase.functions.invoke("collaborator-subresource", {
+        body: {
+          action: "delete",
+          kind: "parentes",
+          collaboratorId,
+          localId: id,
+        },
+      });
+      if (error) {
+        const detail = await extractFnErrorDetail(error);
+        throw new Error(detail);
+      }
+      if (data && typeof data === "object" && "error" in data) {
+        const err = data as { error: string; details?: string };
+        throw new Error(err.details ? `${err.error}: ${err.details}` : err.error);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ["collaborator-dependents", collaboratorId],
       });
       queryClient.invalidateQueries({ queryKey: ["collaborator", collaboratorId] });
-      toast.success("Removido ✓");
+      toast.success("Removido ✓ (sincronizado com a agenda)");
     },
+    onError: (err: Error) => toast.error("Não rolou. " + err.message),
   });
 
   if (isLoading) {
@@ -192,6 +240,11 @@ export function CollaboratorDependentsTab({
                     {d.is_health_plan_dependent && (
                       <Badge className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 border-0">
                         Plano de Saúde
+                      </Badge>
+                    )}
+                    {d.is_invalid && (
+                      <Badge className="text-xs bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border-0">
+                        Inválido
                       </Badge>
                     )}
                   </div>
@@ -310,6 +363,22 @@ export function CollaboratorDependentsTab({
                 }
               />
             </div>
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <div>
+                <Label htmlFor="dep-invalid" className="text-sm font-medium">
+                  Inválido (deficiente)
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Pra salário-família, inválido tem direito a qualquer idade —
+                  não só até 14 anos.
+                </p>
+              </div>
+              <Switch
+                id="dep-invalid"
+                checked={form.is_invalid}
+                onCheckedChange={(v) => setForm({ ...form, is_invalid: v })}
+              />
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsOpen(false)}>
@@ -329,4 +398,31 @@ export function CollaboratorDependentsTab({
       </Dialog>
     </div>
   );
+}
+
+/**
+ * Extrai mensagem útil de um FunctionsHttpError do supabase-js.
+ * Default error.message é genérico ("non-2xx status code"); o body real
+ * fica em error.context (Response). Lê uma vez e retorna texto formatado.
+ */
+async function extractFnErrorDetail(error: unknown): Promise<string> {
+  const e = error as { message?: string; context?: Response | undefined };
+  const fallback = e.message ?? "Falha na chamada.";
+  const ctx = e.context;
+  if (!ctx || typeof ctx.text !== "function") return fallback;
+  try {
+    const txt = await ctx.text();
+    if (!txt) return fallback;
+    try {
+      const parsed = JSON.parse(txt) as { error?: string; details?: string };
+      if (parsed.error) {
+        return parsed.details ? `${parsed.error}: ${parsed.details}` : parsed.error;
+      }
+    } catch {
+      // body não é JSON — retorna texto bruto
+    }
+    return txt.slice(0, 300);
+  } catch {
+    return fallback;
+  }
 }

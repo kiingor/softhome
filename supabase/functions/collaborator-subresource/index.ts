@@ -50,6 +50,13 @@ interface EntityConfig {
     remote: Record<string, unknown>,
     extra: { companyId: string; collaboratorId: string },
   ) => Record<string, unknown>;
+  /**
+   * Campos da row LOCAL-only que NÃO devem entrar no INSERT vindo do `data`
+   * original (ex: `is_invalid` em `collaborator_dependents` — flag local pra
+   * salário-família, não existe na agenda). O caller (frontend) aplica via
+   * patch separado após o INSERT.
+   */
+  localOnlyFields?: string[];
 }
 
 const ENTITY_MAP: Record<SubResourceKind, EntityConfig> = {
@@ -230,10 +237,12 @@ const ENTITY_MAP: Record<SubResourceKind, EntityConfig> = {
   },
   parentes: {
     table: "collaborator_dependents",
+    // Agenda valida payload com whitelist — só aceita os campos listados aqui.
+    // is_invalid e notes são LOCAL-ONLY (não existem na agenda); o caller
+    // aplica patch separado depois via supabase.from('collaborator_dependents').
     toRemote: (l) => ({
-      tipoParente: l.relationship,
+      tipoParente: l.kinship,
       nomeParente: l.name,
-      genero: l.gender,
       cpf: l.cpf,
       dataNascimento: l.birth_date,
     }),
@@ -242,11 +251,16 @@ const ENTITY_MAP: Record<SubResourceKind, EntityConfig> = {
       collaborator_id: ex.collaboratorId,
       external_id: String(r.id),
       name: r.nomeParente,
-      relationship: r.tipoParente,
-      gender: r.genero,
+      kinship: r.tipoParente,
       cpf: r.cpf,
       birth_date: r.dataNascimento,
+      // is_invalid e notes ficam fora — preservados pela camada caller via
+      // post-update local. Sync subsequente da agenda não sobrescreve.
     }),
+    // Filtra do INSERT (mesmo se o frontend mandar no `data` original).
+    // Sem isso, o merge final do INSERT inclui esses campos e pode quebrar
+    // (ex: coluna ainda não existe localmente em ambientes sem a migration).
+    localOnlyFields: ["is_invalid", "is_irpf_dependent", "is_health_plan_dependent", "notes"],
   },
   emails: {
     table: "collaborator_emails",
@@ -378,8 +392,14 @@ serve(async (req) => {
       return jsonResponse({ error: "POST na agenda falhou", details: (err as Error).message }, status);
     }
     const localRow = cfg.fromRemote(remote, { companyId: collab.company_id, collaboratorId: collab.id });
-    // Mescla com dados locais que o caller mandou (caso a API não retorne tudo)
-    const merged = { ...data, ...localRow };
+    // Mescla com dados locais que o caller mandou (caso a API não retorne tudo).
+    // Filtra os local-only fields — eles entram via patch separado do caller,
+    // não no INSERT base (evita falha se a coluna ainda não existir local).
+    const dataFiltered: Record<string, unknown> = { ...data };
+    for (const f of cfg.localOnlyFields ?? []) {
+      delete dataFiltered[f];
+    }
+    const merged = { ...dataFiltered, ...localRow };
     const { data: inserted, error: insErr } = await sbAdmin
       .from(cfg.table)
       .insert(merged)

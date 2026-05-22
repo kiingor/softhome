@@ -39,15 +39,25 @@ import {
   Download,
   CaretRight,
   CaretDown,
+  DotsThreeVertical,
   Info,
   Calendar,
   ArrowsClockwise as RefreshCw,
+  Trash,
 } from "@phosphor-icons/react";
 import {
   HoverCard,
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PaymentsTab } from "../components/PaymentsTab";
 import { VacationAdvanceDialog } from "../components/VacationAdvanceDialog";
@@ -58,6 +68,7 @@ import {
   usePayrollEntries,
   usePayrollAlerts,
   usePayrollPeriods,
+  isManualAvulso,
 } from "../hooks/use-payroll";
 import { NewEntryDialog } from "../components/NewEntryDialog";
 import {
@@ -89,12 +100,20 @@ export default function PeriodDetailPage() {
     entries,
     isLoading,
     createEntry,
+    deleteEntry,
     reverseEntry,
     closePeriod,
     reopenPeriod,
   } = usePayrollEntries(id);
   const { recalculateTaxes } = usePayrollPeriods();
   const [confirmRecalc, setConfirmRecalc] = useState(false);
+  /** Lançamento avulso selecionado pra confirmação de delete. */
+  const [confirmDeleteEntry, setConfirmDeleteEntry] = useState<{
+    id: string;
+    description: string;
+    type: string;
+    value: number;
+  } | null>(null);
 
   const { data: alerts = [] } = usePayrollAlerts(id);
 
@@ -385,51 +404,67 @@ export default function PeriodDetailPage() {
               )}
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={handleExport} disabled={filteredEntries.length === 0}>
-              <Download className="w-4 h-4 mr-2" />
-              Exportar Excel
-            </Button>
-            {canManage && isOpen && (
-              <>
-                <Button onClick={() => setIsNewEntryOpen(true)}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Novo lançamento
+          <div className="flex gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  <DotsThreeVertical className="w-4 h-4 mr-2" weight="bold" />
+                  Ações
+                  <CaretDown className="w-3.5 h-3.5 ml-2 opacity-60" />
                 </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setVacationAdvanceOpen(true)}
-                  title="Puxa férias aprovadas pra esta folha"
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                  {formatPeriodLabel(period.reference_month)}
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+
+                <DropdownMenuItem
+                  onSelect={handleExport}
+                  disabled={filteredEntries.length === 0}
                 >
-                  <Calendar className="w-4 h-4 mr-2" />
-                  Adiantar férias
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setConfirmRecalc(true)}
-                  title="Recalcula INSS/IRPF/FGTS pela tabela 2026"
-                >
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Recalcular encargos
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setConfirmAction("close")}
-                >
-                  <Lock className="w-4 h-4 mr-2" />
-                  Fechar período
-                </Button>
-              </>
-            )}
-            {canManage && isClosed && (
-              <Button
-                variant="outline"
-                onClick={() => setConfirmAction("reopen")}
-              >
-                <LockOpen className="w-4 h-4 mr-2" />
-                Reabrir
-              </Button>
-            )}
+                  <Download className="w-4 h-4 mr-2" />
+                  Exportar Excel
+                </DropdownMenuItem>
+
+                {canManage && isOpen && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onSelect={() => setIsNewEntryOpen(true)}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Novo lançamento
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setVacationAdvanceOpen(true)}>
+                      <Calendar className="w-4 h-4 mr-2" />
+                      Adiantar férias
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setConfirmRecalc(true)}>
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      Recalcular encargos
+                    </DropdownMenuItem>
+
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onSelect={() => setConfirmAction("close")}
+                      className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                    >
+                      <Lock className="w-4 h-4 mr-2" />
+                      Fechar período
+                    </DropdownMenuItem>
+                  </>
+                )}
+
+                {canManage && isClosed && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onSelect={() => setConfirmAction("reopen")}>
+                      <LockOpen className="w-4 h-4 mr-2" />
+                      Reabrir período
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </div>
@@ -630,10 +665,11 @@ export default function PeriodDetailPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[40%]">Colaborador</TableHead>
-                    <TableHead>Tipo</TableHead>
+                    <TableHead className="w-[35%]">Colaborador</TableHead>
+                    <TableHead className="w-[120px]">Tipo</TableHead>
                     <TableHead>Descrição</TableHead>
-                    <TableHead className="text-right">Valor</TableHead>
+                    <TableHead className="text-right w-[140px] whitespace-nowrap">Valor</TableHead>
+                    <TableHead className="w-[44px] p-0"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -663,7 +699,7 @@ export default function PeriodDetailPage() {
                             {g.entries.length === 1 ? "" : "s"}
                           </TableCell>
                           <TableCell
-                            className={`text-right text-sm font-mono font-semibold ${
+                            className={`text-right text-sm font-mono font-semibold whitespace-nowrap ${
                               g.net >= 0
                                 ? "text-orange-700 dark:text-orange-300"
                                 : "text-rose-700 dark:text-rose-300"
@@ -672,6 +708,7 @@ export default function PeriodDetailPage() {
                             {g.net >= 0 ? "+ " : "- "}
                             {formatCurrency(Math.abs(g.net))}
                           </TableCell>
+                          <TableCell className="p-0" />
                         </TableRow>
                         {isOpen &&
                           g.entries.map((e) => {
@@ -765,7 +802,7 @@ export default function PeriodDetailPage() {
                                   </div>
                                 </TableCell>
                                 <TableCell
-                                  className={`text-right text-sm font-mono ${
+                                  className={`text-right text-sm font-mono whitespace-nowrap ${
                                     value < 0
                                       ? "text-rose-700 dark:text-rose-300"
                                       : earning
@@ -775,6 +812,28 @@ export default function PeriodDetailPage() {
                                 >
                                   {value < 0 ? "" : earning ? "+ " : "- "}
                                   {formatCurrency(Math.abs(value))}
+                                </TableCell>
+                                <TableCell className="w-[44px] p-0 pr-1 align-middle">
+                                  {canManage && !isClosed && isManualAvulso(e) ? (
+                                    <Button
+                                      type="button"
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                      title="Excluir lançamento avulso"
+                                      onClick={(ev) => {
+                                        ev.stopPropagation();
+                                        setConfirmDeleteEntry({
+                                          id: e.id,
+                                          description: e.description ?? ENTRY_TYPE_LABELS[e.type] ?? e.type,
+                                          type: ENTRY_TYPE_LABELS[e.type] ?? e.type,
+                                          value: Number(e.value),
+                                        });
+                                      }}
+                                    >
+                                      <Trash className="w-3.5 h-3.5" />
+                                    </Button>
+                                  ) : null}
                                 </TableCell>
                               </TableRow>
                             );
@@ -797,6 +856,45 @@ export default function PeriodDetailPage() {
         onSubmit={handleNewEntry}
         isSubmitting={createEntry.isPending}
       />
+
+      {/* Confirmação de exclusão de lançamento avulso */}
+      <AlertDialog
+        open={!!confirmDeleteEntry}
+        onOpenChange={(o) => !deleteEntry.isPending && !o && setConfirmDeleteEntry(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir lançamento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmDeleteEntry && (
+                <>
+                  Vai apagar <strong>{confirmDeleteEntry.description}</strong>{" "}
+                  ({confirmDeleteEntry.type}) — {formatCurrency(confirmDeleteEntry.value)}.
+                  <br />
+                  Essa ação é permanente. Pra reverter, lance manualmente de novo.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteEntry.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleteEntry.isPending}
+              onClick={(ev) => {
+                ev.preventDefault();
+                if (!confirmDeleteEntry) return;
+                deleteEntry.mutate(confirmDeleteEntry.id, {
+                  onSuccess: () => setConfirmDeleteEntry(null),
+                });
+              }}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {deleteEntry.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {currentCompany?.id && (
         <VacationAdvanceDialog

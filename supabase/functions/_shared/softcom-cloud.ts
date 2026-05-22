@@ -119,14 +119,107 @@ export async function listEmpresasPdv(): Promise<RemoteEmpresaPdv[]> {
   return await softcomFetch<RemoteEmpresaPdv[]>({ path: "/v1/empresas-pdv" });
 }
 
+/** POST /v1/empresas-pdv — cria empresa/PDV. Retorna o criado. */
+export async function createEmpresaPdv(
+  body: Record<string, unknown>,
+): Promise<RemoteEmpresaPdv> {
+  return await softcomFetch<RemoteEmpresaPdv>({
+    path: "/v1/empresas-pdv",
+    method: "POST",
+    body,
+  });
+}
+
+/** PUT /v1/empresas-pdv/{id} — atualiza empresa/PDV. */
+export async function updateEmpresaPdv(
+  id: number | string,
+  body: Record<string, unknown>,
+): Promise<unknown> {
+  return await softcomDirectFetch(
+    `/v1/empresas-pdv/${encodeURIComponent(String(id))}`,
+    "PUT",
+    body,
+  );
+}
+
+/** DELETE /v1/empresas-pdv/{id} — remove empresa/PDV. */
+export async function deleteEmpresaPdv(id: number | string): Promise<unknown> {
+  return await softcomDirectFetch(
+    `/v1/empresas-pdv/${encodeURIComponent(String(id))}`,
+    "DELETE",
+  );
+}
+
 /** GET /v1/setores — lista global de setores. */
 export async function listSetores(): Promise<RemoteSetor[]> {
   return await softcomFetch<RemoteSetor[]>({ path: "/v1/setores" });
 }
 
+/** POST /v1/setores — cria setor. */
+export async function createSetor(
+  body: Record<string, unknown>,
+): Promise<RemoteSetor> {
+  return await softcomFetch<RemoteSetor>({
+    path: "/v1/setores",
+    method: "POST",
+    body,
+  });
+}
+
+/** PUT /v1/setores/{id} — atualiza setor. */
+export async function updateSetor(
+  id: number | string,
+  body: Record<string, unknown>,
+): Promise<unknown> {
+  return await softcomDirectFetch(
+    `/v1/setores/${encodeURIComponent(String(id))}`,
+    "PUT",
+    body,
+  );
+}
+
+/** DELETE /v1/setores/{id} — remove setor. */
+export async function deleteSetor(id: number | string): Promise<unknown> {
+  return await softcomDirectFetch(
+    `/v1/setores/${encodeURIComponent(String(id))}`,
+    "DELETE",
+  );
+}
+
 /** GET /v1/cargos — lista global de cargos. */
 export async function listCargos(): Promise<RemoteCargo[]> {
   return await softcomFetch<RemoteCargo[]>({ path: "/v1/cargos" });
+}
+
+/** POST /v1/cargos — cria cargo. */
+export async function createCargo(
+  body: Record<string, unknown>,
+): Promise<RemoteCargo> {
+  return await softcomFetch<RemoteCargo>({
+    path: "/v1/cargos",
+    method: "POST",
+    body,
+  });
+}
+
+/** PUT /v1/cargos/{id} — atualiza cargo. */
+export async function updateCargo(
+  id: number | string,
+  body: Record<string, unknown>,
+): Promise<unknown> {
+  return await softcomDirectFetch(
+    `/v1/cargos/${encodeURIComponent(String(id))}`,
+    "PUT",
+    body,
+  );
+}
+
+/** DELETE /v1/cargos/{id} — remove cargo. */
+export async function deleteCargo(id: number | string): Promise<unknown> {
+  return await softcomDirectFetch(
+    `/v1/cargos/${encodeURIComponent(String(id))}`,
+    "DELETE",
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -176,7 +269,11 @@ export type UpdateSection =
   | "identificacao"
   | "funcionais"
   | "comissoes"
-  | "permissoes";
+  | "permissoes"
+  /** Status do colaborador (ativo, inativo, demitido). Inclui termination_date. */
+  | "status"
+  /** Flags binárias: is_temp, is_manager_*, is_godfather. */
+  | "flags";
 
 export async function updateColaboradorSection(
   id: number | string,

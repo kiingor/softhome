@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useDashboard } from '@/contexts/DashboardContext';
 import PermissionGuard from '@/components/dashboard/PermissionGuard';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useCoreResourceMutation } from '@/hooks/useCoreResourceMutation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -112,61 +113,41 @@ export default function SetoresPage() {
     );
   });
 
-  const createMutation = useMutation({
-    mutationFn: async (data: typeof formData) => {
-      const { error } = await supabase.from('teams').insert({
-        company_id: selectedCompanyId,
-        name: data.name,
-        description: data.description || null,
-        store_id: data.store_id || null,
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['teams'] });
-      toast.success('Setor criado com sucesso!');
-      handleCloseDialog();
-    },
-    onError: (error) => {
-      toast.error('Erro ao criar setor: ' + error.message);
-    },
-  });
+  // Mutations vão via edge function core-resource-mutate (PUSH → agenda → local).
+  const teamMutation = useCoreResourceMutation('teams');
 
-  const updateMutation = useMutation({
-    mutationFn: async (data: { id: string } & typeof formData) => {
-      const { error } = await supabase
-        .from('teams')
-        .update({
+  const handleTeamCreate = (data: typeof formData) => {
+    teamMutation.mutate(
+      {
+        action: 'create',
+        data: {
           name: data.name,
           description: data.description || null,
           store_id: data.store_id || null,
-        })
-        .eq('id', data.id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['teams'] });
-      toast.success('Setor atualizado com sucesso!');
-      handleCloseDialog();
-    },
-    onError: (error) => {
-      toast.error('Erro ao atualizar setor: ' + error.message);
-    },
-  });
+        },
+      },
+      { onSuccess: () => handleCloseDialog() },
+    );
+  };
 
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from('teams').delete().eq('id', id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['teams'] });
-      toast.success('Setor excluído com sucesso!');
-    },
-    onError: (error) => {
-      toast.error('Erro ao excluir setor: ' + error.message);
-    },
-  });
+  const handleTeamUpdate = (id: string, data: typeof formData) => {
+    teamMutation.mutate(
+      {
+        action: 'update',
+        id,
+        data: {
+          name: data.name,
+          description: data.description || null,
+          store_id: data.store_id || null,
+        },
+      },
+      { onSuccess: () => handleCloseDialog() },
+    );
+  };
+
+  const handleTeamDelete = (id: string) => {
+    teamMutation.mutate({ action: 'delete', id });
+  };
 
   const handleOpenDialog = (team?: Team) => {
     if (team) {
@@ -197,9 +178,9 @@ export default function SetoresPage() {
     }
 
     if (editingTeam) {
-      updateMutation.mutate({ id: editingTeam.id, ...formData });
+      handleTeamUpdate(editingTeam.id, formData);
     } else {
-      createMutation.mutate(formData);
+      handleTeamCreate(formData);
     }
   };
 
@@ -358,9 +339,7 @@ export default function SetoresPage() {
                   </Button>
                   <Button
                     type="submit"
-                    disabled={
-                      createMutation.isPending || updateMutation.isPending
-                    }
+                    disabled={teamMutation.isPending}
                   >
                     {editingTeam ? 'Salvar' : 'Criar'}
                   </Button>
@@ -445,12 +424,16 @@ export default function SetoresPage() {
                               Copiar ID
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
+                            {/* Excluir setor DESATIVADO — cadastros corporativos sensíveis.
+                                Colaboradores apontam pra teams via FK. Pra "remover" desative
+                                no sistema da agenda; sync replica como inativo aqui. */}
                             <DropdownMenuItem
-                              className="text-destructive focus:text-destructive"
-                              onClick={() => setDeletingTeam(team)}
+                              disabled
+                              className="text-muted-foreground"
+                              title="Não é possível excluir setor. Desative na agenda — sync replica aqui."
                             >
                               <Trash2 className="w-4 h-4 mr-2" />
-                              Excluir
+                              Excluir (indisponível)
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -475,7 +458,7 @@ export default function SetoresPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => { if (deletingTeam) { deleteMutation.mutate(deletingTeam.id); setDeletingTeam(null); } }}
+              onClick={() => { if (deletingTeam) { handleTeamDelete(deletingTeam.id); setDeletingTeam(null); } }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Excluir

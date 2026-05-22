@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useDashboard } from '@/contexts/DashboardContext';
 import PermissionGuard from '@/components/dashboard/PermissionGuard';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useCoreResourceMutation } from '@/hooks/useCoreResourceMutation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -142,30 +143,38 @@ export default function CargosPage() {
     return p.name.toLowerCase().includes(q) || (p.teams?.name || '').toLowerCase().includes(q);
   });
 
-  const createMutation = useMutation({
-    mutationFn: async (data: { name: string; salary: number; inss_percent: number; fgts_percent: number; irpf_percent: number; risk_group: string | null; exam_periodicity_months: number | null; team_id: string | null; level: number | null }) => {
-      const { error } = await supabase.from('positions').insert({ company_id: selectedCompanyId, ...data });
-      if (error) throw error;
-    },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['positions'] }); toast.success('Cargo criado!'); handleCloseDialog(); },
-    onError: (error) => { toast.error('Erro: ' + error.message); },
-  });
+  // Mutations vão via edge function core-resource-mutate (PUSH → agenda → local).
+  const positionMutation = useCoreResourceMutation('positions');
 
-  const updateMutation = useMutation({
-    mutationFn: async (data: { id: string; name: string; salary: number; inss_percent: number; fgts_percent: number; irpf_percent: number; risk_group: string | null; exam_periodicity_months: number | null; team_id: string | null; level: number | null }) => {
-      const { id, ...rest } = data;
-      const { error } = await supabase.from('positions').update(rest).eq('id', id);
-      if (error) throw error;
-    },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['positions'] }); toast.success('Cargo atualizado!'); handleCloseDialog(); },
-    onError: (error) => { toast.error('Erro: ' + error.message); },
-  });
+  type PositionData = {
+    name: string;
+    salary: number;
+    inss_percent: number;
+    fgts_percent: number;
+    irpf_percent: number;
+    risk_group: string | null;
+    exam_periodicity_months: number | null;
+    team_id: string | null;
+    level: number | null;
+  };
 
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => { const { error } = await supabase.from('positions').delete().eq('id', id); if (error) throw error; },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['positions'] }); toast.success('Cargo excluído!'); },
-    onError: (error) => { toast.error('Erro: ' + error.message); },
-  });
+  const handlePositionCreate = (data: PositionData) => {
+    positionMutation.mutate(
+      { action: 'create', data: data as unknown as Record<string, unknown> },
+      { onSuccess: () => handleCloseDialog() },
+    );
+  };
+
+  const handlePositionUpdate = (id: string, data: PositionData) => {
+    positionMutation.mutate(
+      { action: 'update', id, data: data as unknown as Record<string, unknown> },
+      { onSuccess: () => handleCloseDialog() },
+    );
+  };
+
+  const handlePositionDelete = (id: string) => {
+    positionMutation.mutate({ action: 'delete', id });
+  };
 
   const createDocMutation = useMutation({
     mutationFn: async (data: { name: string; observation: string; file_type: string }) => {
@@ -243,9 +252,9 @@ export default function CargosPage() {
     const level = formData.level ? parseInt(formData.level) : null;
 
     if (editingPosition) {
-      updateMutation.mutate({ id: editingPosition.id, name: formData.name, salary, inss_percent, fgts_percent, irpf_percent, risk_group, exam_periodicity_months, team_id, level });
+      handlePositionUpdate(editingPosition.id, { name: formData.name, salary, inss_percent, fgts_percent, irpf_percent, risk_group, exam_periodicity_months, team_id, level });
     } else {
-      createMutation.mutate({ name: formData.name, salary, inss_percent, fgts_percent, irpf_percent, risk_group, exam_periodicity_months, team_id, level });
+      handlePositionCreate({ name: formData.name, salary, inss_percent, fgts_percent, irpf_percent, risk_group, exam_periodicity_months, team_id, level });
     }
   };
 
@@ -429,12 +438,17 @@ export default function CargosPage() {
                             {canDelete && (
                               <>
                                 <DropdownMenuSeparator />
+                                {/* Excluir cargo DESATIVADO — cadastros corporativos sensíveis.
+                                    Colaboradores apontam pra positions via FK e há FK em
+                                    position_documents. Pra "remover" desative na agenda;
+                                    sync replica como inativo aqui. */}
                                 <DropdownMenuItem
-                                  className="text-destructive focus:text-destructive"
-                                  onClick={() => setDeletingPosition(position)}
+                                  disabled
+                                  className="text-muted-foreground"
+                                  title="Não é possível excluir cargo. Desative na agenda — sync replica aqui."
                                 >
                                   <Trash2 className="w-4 h-4 mr-2" />
-                                  Excluir
+                                  Excluir (indisponível)
                                 </DropdownMenuItem>
                               </>
                             )}
@@ -535,7 +549,7 @@ export default function CargosPage() {
                   </div>
                   <DialogFooter className="mt-4">
                     <Button type="button" variant="outline" onClick={handleCloseDialog}>Cancelar</Button>
-                    <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>{editingPosition ? 'Salvar' : 'Criar'}</Button>
+                    <Button type="submit" disabled={positionMutation.isPending}>{editingPosition ? 'Salvar' : 'Criar'}</Button>
                   </DialogFooter>
                 </form>
               </TabsContent>
@@ -679,7 +693,7 @@ export default function CargosPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => { if (deletingPosition) { deleteMutation.mutate(deletingPosition.id); setDeletingPosition(null); } }}
+              onClick={() => { if (deletingPosition) { handlePositionDelete(deletingPosition.id); setDeletingPosition(null); } }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Excluir
