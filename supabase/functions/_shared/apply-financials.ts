@@ -46,8 +46,15 @@ export interface ApplyFinancialsResult {
   errors: Array<{ external_id: string; tipo: string; error: string }>;
 }
 
-// Tipos que viram lançamento de folha (não benefit)
-const PAYROLL_TYPES = new Set(["CUSTO SETOR", "GRATIFICAÇÃO ESPONTANEA"]);
+// Tipos da agenda que viram lançamento de folha (não vão pra catálogo de benefits).
+// Mapa: tipo remoto → type enum local em payroll_entries.
+//   - CUSTO SETOR           → bonificacao  (compõe bruto, mas não junta com salário)
+//   - GRATIFICAÇÃO ESPONTANEA → gratificacao (agrupa com salário base no Pagamentos
+//                                e entra na base de IRPF/descontos do colab)
+const PAYROLL_TYPE_MAP: Record<string, "bonificacao" | "gratificacao"> = {
+  "CUSTO SETOR": "bonificacao",
+  "GRATIFICAÇÃO ESPONTANEA": "gratificacao",
+};
 
 // Encargos só pra CLT — PJ/estagiário não geram INSS/IRPF/FGTS na folha.
 // (calcAllTaxes vem de _shared/clt-calc.ts, espelho de src/lib/payroll/cltCalc.ts)
@@ -236,13 +243,13 @@ export async function applyFinancials(
   for (const a of adicionais) {
     if (a.desativado === true) continue; // pula desativados
     const tipo = (a.tipo ?? "").trim();
-    if (PAYROLL_TYPES.has(tipo)) payrollAdicionais.push(a);
+    if (tipo in PAYROLL_TYPE_MAP) payrollAdicionais.push(a);
     else benefitAdicionais.push(a);
   }
 
   // ────────────────────────────────────────────────────────────────────────
-  // 3. Lançamentos de folha (CUSTO SETOR / GRATIFICAÇÃO ESPONTANEA)
-  //    type='adicional', is_fixed=true, external_id=remoto id
+  // 3. Lançamentos de folha (CUSTO SETOR → bonificacao / GRATIFICAÇÃO → gratificacao)
+  //    is_fixed=true, external_id=remoto id pra idempotência.
   // ────────────────────────────────────────────────────────────────────────
   const payrollRows = payrollAdicionais
     .map((a) => {
@@ -255,7 +262,7 @@ export async function applyFinancials(
         collaborator_id: collaboratorId,
         store_id: storeId ?? null,
         external_id: String(a.id),
-        type: "bonificacao",
+        type: PAYROLL_TYPE_MAP[tipo],
         description: desc,
         value,
         month,

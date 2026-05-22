@@ -15,6 +15,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.0";
 import {
+  getColaborador,
   listAdicionais,
   listColaboradores,
   SoftcomCloudError,
@@ -32,6 +33,14 @@ const CORS_HEADERS = {
 
 const PAGE_SIZE = 50;
 const MAX_PAGES = 200; // hard limit pra não loopar infinitamente (10k colabs max)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TEMP TEST — DESLIGADO em produção (null = sync normal de TODOS os colabs).
+// Pra debugar: troca null por [384, 816, ...] e a sync vai processar SÓ
+// esses colabs. Útil pra rodar o fluxo do início ao fim sem mexer nos
+// outros 299.
+// ─────────────────────────────────────────────────────────────────────────────
+const TEST_ONLY_COLAB_IDS: number[] | null = null;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS_HEADERS });
@@ -86,22 +95,34 @@ serve(async (req) => {
   ]);
 
   // ───────────────────────────────────────────────────────────────────────────
-  // 2. Buscar todas as páginas da API
+  // 2. Buscar colaboradores da API
   // ───────────────────────────────────────────────────────────────────────────
   const remote: RemoteColaborador[] = [];
-  let page = 1;
-  let totalPages = 1;
   try {
-    do {
-      const resp = await listColaboradores({
-        page,
-        pageSize: PAGE_SIZE,
-        incluirDesativados,
-      });
-      remote.push(...resp.data);
-      totalPages = resp.pagination.totalPages || 1;
-      page++;
-    } while (page <= totalPages && page <= MAX_PAGES);
+    // TEMP TEST — REMOVER: atalho que pula a paginação e busca só N colabs.
+    if (TEST_ONLY_COLAB_IDS != null && TEST_ONLY_COLAB_IDS.length > 0) {
+      for (const id of TEST_ONLY_COLAB_IDS) {
+        try {
+          const colab = await getColaborador(id);
+          remote.push(colab);
+        } catch (e) {
+          console.warn(`Falha ao buscar colab teste ${id}:`, (e as Error).message);
+        }
+      }
+    } else {
+      let page = 1;
+      let totalPages = 1;
+      do {
+        const resp = await listColaboradores({
+          page,
+          pageSize: PAGE_SIZE,
+          incluirDesativados,
+        });
+        remote.push(...resp.data);
+        totalPages = resp.pagination.totalPages || 1;
+        page++;
+      } while (page <= totalPages && page <= MAX_PAGES);
+    }
   } catch (err) {
     const status = err instanceof SoftcomCloudError ? err.status : 502;
     return jsonResponse(
@@ -187,25 +208,29 @@ serve(async (req) => {
   }
 
   // Desativar quem sumiu da API (status='inativo')
-  const idsToDeactivate: string[] = [];
-  for (const [extId, info] of existingCollabs) {
-    if (!remoteExtIds.has(extId) && info.status === "ativo") {
-      idsToDeactivate.push(info.id);
-    }
-  }
+  // TEMP TEST: pula a desativação quando TEST_ONLY_COLAB_IDS está ligado —
+  // senão marcaríamos os 299 colabs ausentes do remote como inativos.
   let deactivated = 0;
-  if (idsToDeactivate.length > 0) {
-    const { error: deactErr } = await sbAdmin
-      .from("collaborators")
-      .update({ status: "inativo" })
-      .in("id", idsToDeactivate);
-    if (deactErr) {
-      return jsonResponse(
-        { error: "Desativação falhou", details: deactErr.message },
-        500,
-      );
+  if (TEST_ONLY_COLAB_IDS == null || TEST_ONLY_COLAB_IDS.length === 0) {
+    const idsToDeactivate: string[] = [];
+    for (const [extId, info] of existingCollabs) {
+      if (!remoteExtIds.has(extId) && info.status === "ativo") {
+        idsToDeactivate.push(info.id);
+      }
     }
-    deactivated = idsToDeactivate.length;
+    if (idsToDeactivate.length > 0) {
+      const { error: deactErr } = await sbAdmin
+        .from("collaborators")
+        .update({ status: "inativo" })
+        .in("id", idsToDeactivate);
+      if (deactErr) {
+        return jsonResponse(
+          { error: "Desativação falhou", details: deactErr.message },
+          500,
+        );
+      }
+      deactivated = idsToDeactivate.length;
+    }
   }
 
   // ───────────────────────────────────────────────────────────────────────────

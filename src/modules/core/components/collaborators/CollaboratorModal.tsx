@@ -1379,29 +1379,40 @@ const CollaboratorModal = ({
     let benefitsTotal = 0;
     let taxTotal = 0;
 
+    // Mesma regra de visibilidade do bloco Lançamentos — totais batem com o
+    // que o user vê. Vacation/ferias entries são avulsas, não compõem o
+    // "custo recorrente" do colab.
+    const isRecurringMonthly = (e: { type: string; value: number; external_id?: string | null }) => {
+      if (!(Number(e.value) > 0)) return false;
+      if (e.type === "ferias") return false;
+      if (typeof e.external_id === "string" && e.external_id.startsWith("ferias-")) return false;
+      return true;
+    };
+
+    // Helper compartilhado: classifica sinal da entry (proventos vs deduções)
+    const signedEntryValue = (e: { type: string; value: number }) => {
+      if (e.type === "fgts") return 0; // FGTS vai pra taxTotal, não pro entriesTotal
+      if (e.type === "inss" || e.type === "irpf") return -e.value;
+      if (e.type === "custo" || e.type === "despesa") return -e.value;
+      if (e.type === "desconto" || e.type === "falta" || e.type === "adiantamento") return -e.value;
+      return e.value; // proventos
+    };
+
     if (isNew) {
-      entriesTotal = pendingEntries.reduce((sum, e) => {
-        if (e.type === "fgts") return sum;
-        if (e.type === "inss" || e.type === "irpf") return sum - e.value;
-        if (e.type === "custo" || e.type === "despesa") return sum - e.value;
-        return sum + e.value;
-      }, 0);
-      taxTotal = pendingEntries.reduce((sum, e) => {
-        if (e.type === "fgts") return sum + e.value;
-        return sum;
-      }, 0);
+      entriesTotal = pendingEntries
+        .filter(isRecurringMonthly)
+        .reduce((sum, e) => sum + signedEntryValue(e), 0);
+      taxTotal = pendingEntries
+        .filter(isRecurringMonthly)
+        .reduce((sum, e) => (e.type === "fgts" ? sum + e.value : sum), 0);
       benefitsTotal = pendingBenefits.reduce((sum, b) => sum + b.monthly_value, 0);
     } else {
-      entriesTotal = payrollEntries.reduce((sum, e) => {
-        if (e.type === "fgts") return sum;
-        if (e.type === "inss" || e.type === "irpf") return sum - e.value;
-        if (e.type === "custo" || e.type === "despesa") return sum - e.value;
-        return sum + e.value;
-      }, 0);
-      taxTotal = payrollEntries.reduce((sum, e) => {
-        if (e.type === "fgts") return sum + e.value;
-        return sum;
-      }, 0);
+      entriesTotal = payrollEntries
+        .filter(isRecurringMonthly)
+        .reduce((sum, e) => sum + signedEntryValue(e), 0);
+      taxTotal = payrollEntries
+        .filter(isRecurringMonthly)
+        .reduce((sum, e) => (e.type === "fgts" ? sum + e.value : sum), 0);
       benefitsTotal = benefitAssignments.reduce((sum, a: any) => {
         if (!a.benefit) return sum;
         const valueType = a.benefit.value_type || "monthly";
@@ -2183,6 +2194,12 @@ const CollaboratorModal = ({
                           if (e.type === "fgts" && formData.regime !== "clt") return false;
                           // Linhas zeradas/negativas viram ruído — esconde.
                           if (!(Number(e.value) > 0)) return false;
+                          // Lançamentos de férias são AVULSOS do mês de pagamento —
+                          // só fazem sentido na folha, não na ficha do colab.
+                          // Identifica via external_id 'ferias-*' (criado pelo
+                          // postVacationToPayroll). type='ferias' como cinto-extra.
+                          if (e.type === "ferias") return false;
+                          if (typeof e.external_id === "string" && e.external_id.startsWith("ferias-")) return false;
                           return true;
                         });
                         if (visibleEntries.length === 0) {

@@ -50,13 +50,15 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
   // - benefícios entram só se is_payable=true (categoria 'adicional');
   //   demais benefícios são vouchers/serviços, pagos por outro fluxo
   // - FGTS fora: é encargo do empregador, não desconta do colaborador
-  // - INSS/IRPF descontam do que vai pra mão do colaborador:
-  //     · INSS desconta integralmente do salário base
-  //     · IRPF distribui proporcionalmente entre salário base + gratificações
-  // - descontos (type='desconto', ex: plano de saúde): descontam INTEGRAL
-  //   do salário base (são valores fixos que o colab paga). Se não houver
-  //   salário base no período, ficam fora do cálculo do líquido (não tem
-  //   onde abater).
+  // - **Pagamento Mensal**: salário base + grats recorrentes mescladas em
+  //   1 linha. INSS/IRPF regulares + descontos manuais incidem sobre essa
+  //   base (já contabilizados no mesmo período mas SEM o prefixo ferias-).
+  // - **Pagamento de Férias** (entries com external_id LIKE 'ferias-%'):
+  //   linha SEPARADA. Mescla ferias + 1/3 + grat s/Férias + bon s/Férias,
+  //   menos INSS s/Férias e IRRF s/Férias (também com prefixo ferias-).
+  //   É um cheque distinto (CLT art. 145: D-2 do gozo).
+  // - Outros proventos mensais (bonificação fora férias, hora extra,
+  //   benefício pagável) continuam como linhas separadas.
   // - estornos: par positivo+negativo do mesmo (collab,tipo) somam ≤ 0 → some
   const { payableEntries, taxBreakdownByEntry } = useMemo(() => {
     const earningOnly = entries.filter(
@@ -78,25 +80,30 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
       return Number(e.value) > 0;
     });
 
-    // Calcula impostos por colaborador a partir das entradas de IRPF/INSS
-    // do próprio período (não recalcula — usa o que está em payroll_entries,
-    // que veio do botão "Recalcular encargos" pela tabela 2026).
+    // Helper: entry vem do fluxo de férias? (external_id 'ferias-<reqId>-<kind>')
+    const isVacEntry = (e: PayrollEntryWithCollaborator) =>
+      (e.external_id ?? "").startsWith("ferias-");
+
+    // INSS/IRPF agregados por colab, SEPARANDO regular (mensal) de férias
     type CollabTaxes = { inss: number; irpf: number };
-    const taxesByCollab = new Map<string, CollabTaxes>();
+    const monthlyTaxes = new Map<string, CollabTaxes>();
+    const vacationTaxes = new Map<string, CollabTaxes>();
     for (const e of entries) {
       if (e.type !== "inss" && e.type !== "irpf") continue;
       const cid = e.collaborator_id;
-      const cur = taxesByCollab.get(cid) ?? { inss: 0, irpf: 0 };
+      const target = isVacEntry(e) ? vacationTaxes : monthlyTaxes;
+      const cur = target.get(cid) ?? { inss: 0, irpf: 0 };
       if (e.type === "inss") cur.inss += Number(e.value);
       else cur.irpf += Number(e.value);
-      taxesByCollab.set(cid, cur);
+      target.set(cid, cur);
     }
 
-    // Descontos manuais (plano de saúde, adiantamento, etc) por colaborador
+    // Descontos manuais (plano de saúde, adiantamento) — só aplicam ao mensal.
     type Discount = { label: string; value: number };
     const discountsByCollab = new Map<string, Discount[]>();
     for (const e of entries) {
       if (e.type !== "desconto") continue;
+      if (isVacEntry(e)) continue; // defensivo: férias não tem desconto
       const v = Number(e.value);
       if (!(v > 0)) continue;
       const arr = discountsByCollab.get(e.collaborator_id) ?? [];
@@ -107,12 +114,14 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
       discountsByCollab.set(e.collaborator_id, arr);
     }
 
-    // Aplica deduções nas entries:
-    //   salary base: bruto − INSS − IRPF_share_salary − Σ descontos
-    //   gratificação: bruto − IRPF_share_grat
-    // IRPF_share = irpf × bruto_dele / (bruto_salary + sum_grats)
-    type EntryTax = { inss: number; irpf: number; discounts: Discount[] };
-    const breakdownByEntry = new Map<string, EntryTax>();
+    type Component = { label: string; value: number };
+    type EntryBreakdown = {
+      inss: number;
+      irpf: number;
+      discounts: Discount[];
+      components: Component[];
+    };
+    const breakdownByEntry = new Map<string, EntryBreakdown>();
     const adjustedEntries: PayrollEntryWithCollaborator[] = [];
 
     // Agrupa survivors por colaborador
@@ -124,55 +133,101 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
     }
 
     for (const [collabId, list] of byCollab) {
-      const taxes = taxesByCollab.get(collabId) ?? { inss: 0, irpf: 0 };
-      const salary = list.find((e) => e.type === "salario_base");
-      const grats = list.filter((e) => e.type === "gratificacao");
-      const irpfBase =
-        (salary ? Number(salary.value) : 0) +
-        grats.reduce((s, e) => s + Number(e.value), 0);
+      // Particiona: vacation vs monthly
+      const vacEntries = list.filter(isVacEntry);
+      const monthlyList = list.filter((e) => !isVacEntry(e));
 
-      // Distribui IRPF proporcional ao bruto de cada linha
-      const irpfShares = new Map<string, number>();
-      if (taxes.irpf > 0 && irpfBase > 0) {
-        const targets = [
-          ...(salary ? [salary] : []),
-          ...grats,
-        ];
-        let allocated = 0;
-        targets.forEach((t, i) => {
-          const isLast = i === targets.length - 1;
-          const share = isLast
-            ? taxes.irpf - allocated
-            : Math.round(((taxes.irpf * Number(t.value)) / irpfBase) * 100) / 100;
-          allocated += share;
-          irpfShares.set(t.id, share);
-        });
-      }
-
+      // ╔══════════════════════════════════════════════════════════════╗
+      // ║ MONTHLY: salário + grats merge, outros separados             ║
+      // ╚══════════════════════════════════════════════════════════════╝
+      const taxes = monthlyTaxes.get(collabId) ?? { inss: 0, irpf: 0 };
       const collabDiscounts = discountsByCollab.get(collabId) ?? [];
       const totalDiscount = collabDiscounts.reduce((s, d) => s + d.value, 0);
 
-      for (const e of list) {
-        const irpfShare = irpfShares.get(e.id) ?? 0;
-        let inssShare = 0;
-        let discountShare = 0;
-        let discountsForEntry: Discount[] = [];
-        if (e.type === "salario_base") {
-          inssShare = taxes.inss;
-          discountShare = totalDiscount;
-          discountsForEntry = collabDiscounts;
+      const salary = monthlyList.find((e) => e.type === "salario_base");
+      const grats = monthlyList.filter((e) => e.type === "gratificacao");
+      const others = monthlyList.filter(
+        (e) => e.type !== "salario_base" && e.type !== "gratificacao",
+      );
+
+      if (salary || grats.length > 0) {
+        const primary = salary ?? grats[0];
+        const components: Component[] = [];
+        if (salary) {
+          components.push({ label: "Salário Base", value: Number(salary.value) });
         }
-        const adjusted = Number(e.value) - inssShare - irpfShare - discountShare;
-        if (adjusted <= 0) continue; // não exibe linhas zeradas/negativas
-        adjustedEntries.push({
-          ...e,
-          value: adjusted,
-        } as PayrollEntryWithCollaborator);
+        for (const g of grats) {
+          components.push({
+            label: g.description ?? ENTRY_TYPE_LABELS.gratificacao,
+            value: Number(g.value),
+          });
+        }
+        const gross = components.reduce((s, c) => s + c.value, 0);
+        const adjusted = gross - taxes.inss - taxes.irpf - totalDiscount;
+        if (adjusted > 0) {
+          const mergedDesc = grats.length > 0
+            ? (salary
+                ? `Salário Base + ${grats.length === 1 ? "Gratificação" : `${grats.length} gratificações`}`
+                : (grats.length === 1 ? "Gratificação" : `${grats.length} gratificações`))
+            : "Salário Base";
+          adjustedEntries.push({
+            ...primary,
+            description: mergedDesc,
+            value: adjusted,
+          } as PayrollEntryWithCollaborator);
+          breakdownByEntry.set(primary.id, {
+            inss: taxes.inss,
+            irpf: taxes.irpf,
+            discounts: collabDiscounts,
+            components,
+          });
+        }
+      }
+
+      // Outros tipos monthly (bonificação, hora extra, benefício): linhas próprias
+      for (const e of others) {
+        adjustedEntries.push(e as PayrollEntryWithCollaborator);
         breakdownByEntry.set(e.id, {
-          inss: inssShare,
-          irpf: irpfShare,
-          discounts: discountsForEntry,
+          inss: 0,
+          irpf: 0,
+          discounts: [],
+          components: [{
+            label: e.description ?? ENTRY_TYPE_LABELS[e.type] ?? e.type,
+            value: Number(e.value),
+          }],
         });
+      }
+
+      // ╔══════════════════════════════════════════════════════════════╗
+      // ║ VACATION: todos os entries 'ferias-*' juntos em 1 linha     ║
+      // ╚══════════════════════════════════════════════════════════════╝
+      if (vacEntries.length > 0) {
+        // Âncora: prefere a entry type='ferias' (provento principal),
+        // senão pega a primeira disponível.
+        const primary = vacEntries.find((e) => e.type === "ferias") ?? vacEntries[0];
+        const vacTax = vacationTaxes.get(collabId) ?? { inss: 0, irpf: 0 };
+
+        const components: Component[] = vacEntries.map((e) => ({
+          label: e.description ?? ENTRY_TYPE_LABELS[e.type] ?? e.type,
+          value: Number(e.value),
+        }));
+        const gross = components.reduce((s, c) => s + c.value, 0);
+        const adjusted = gross - vacTax.inss - vacTax.irpf;
+
+        if (adjusted > 0) {
+          adjustedEntries.push({
+            ...primary,
+            type: "ferias",
+            description: "Pagamento de Férias",
+            value: adjusted,
+          } as PayrollEntryWithCollaborator);
+          breakdownByEntry.set(primary.id, {
+            inss: vacTax.inss,
+            irpf: vacTax.irpf,
+            discounts: [],
+            components,
+          });
+        }
       }
     }
 
@@ -444,11 +499,12 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
                 {(() => {
                   const tax = taxBreakdownByEntry.get(entry.id);
                   const totalDiscount = tax?.discounts.reduce((s, d) => s + d.value, 0) ?? 0;
-                  if (!tax || (tax.inss === 0 && tax.irpf === 0 && totalDiscount === 0)) {
+                  const hasMultipleComponents = (tax?.components.length ?? 0) > 1;
+                  // Popup só faz sentido quando tem algo a explicar (deduções OU componentes mesclados).
+                  if (!tax || (tax.inss === 0 && tax.irpf === 0 && totalDiscount === 0 && !hasMultipleComponents)) {
                     return null;
                   }
-                  const grossValue =
-                    Number(entry.value) + tax.inss + tax.irpf + totalDiscount;
+                  const grossValue = tax.components.reduce((s, c) => s + c.value, 0);
                   return (
                     <HoverCard openDelay={150} closeDelay={100}>
                       <HoverCardTrigger asChild>
@@ -461,14 +517,30 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
                           <Info className="w-3.5 h-3.5" weight="fill" />
                         </button>
                       </HoverCardTrigger>
-                      <HoverCardContent align="end" className="w-64 text-xs">
+                      <HoverCardContent align="end" className="w-72 text-xs">
                         <div className="space-y-1.5">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-muted-foreground">Bruto</span>
-                            <span className="font-mono">
-                              {formatCurrency(grossValue)}
-                            </span>
-                          </div>
+                          {/* Componentes brutos (salário + gratificações) */}
+                          {tax.components.map((c, i) => (
+                            <div
+                              key={i}
+                              className="flex items-center justify-between gap-2"
+                            >
+                              <span className="text-muted-foreground truncate" title={c.label}>
+                                {c.label}
+                              </span>
+                              <span className="font-mono shrink-0">
+                                {formatCurrency(c.value)}
+                              </span>
+                            </div>
+                          ))}
+                          {hasMultipleComponents && (
+                            <div className="border-t border-border pt-1.5 flex items-center justify-between gap-2 text-muted-foreground">
+                              <span>Bruto</span>
+                              <span className="font-mono">
+                                {formatCurrency(grossValue)}
+                              </span>
+                            </div>
+                          )}
                           {tax.inss > 0 && (
                             <div className="flex items-center justify-between gap-2 text-rose-700 dark:text-rose-300">
                               <span>− INSS</span>
