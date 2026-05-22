@@ -44,6 +44,38 @@ export const ACTIVE_ENTRY_TYPES = [
 
 export type ActiveEntryType = (typeof ACTIVE_ENTRY_TYPES)[number];
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Lançamentos avulsos (manuais) na folha — UI de criação no NewEntryDialog.
+// Filtra os tipos por natureza (crédito/débito) e exclui os que vêm de
+// outros fluxos (salário base e benefício vêm do auto-populate da sync;
+// ferias vem do fluxo próprio; INSS/IRPF/FGTS são calculados; legacy
+// custo/despesa não usar pra novos).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Lançamentos manuais a CRÉDITO (provento, soma no líquido). */
+export const MANUAL_CREDIT_TYPES = [
+  "hora_extra",
+  "bonificacao",
+  "gratificacao",
+  "atestado",
+] as const;
+
+/** Lançamentos manuais a DÉBITO (desconto, sai do líquido). */
+export const MANUAL_DEBIT_TYPES = [
+  "falta",
+  "adiantamento",
+  "desconto",
+] as const;
+
+export type ManualEntryNature = "credit" | "debit";
+
+/** Natureza de um tipo de lançamento (pra o toggle Crédito/Débito). */
+export function entryTypeNature(type: ActiveEntryType): ManualEntryNature | null {
+  if ((MANUAL_CREDIT_TYPES as readonly string[]).includes(type)) return "credit";
+  if ((MANUAL_DEBIT_TYPES as readonly string[]).includes(type)) return "debit";
+  return null; // salario_base, beneficio — não são lançamentos manuais
+}
+
 // Cores sutis por tipo pro tag/badge na folha. A ideia é só diferenciar
 // visualmente, sem competir com os valores numéricos.
 export const ENTRY_TYPE_COLORS: Record<string, string> = {
@@ -67,6 +99,8 @@ export const ENTRY_TYPE_COLORS: Record<string, string> = {
     "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900/60",
   ferias:
     "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-900/60",
+  salario_familia:
+    "bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-300 dark:border-cyan-900/60",
   inss: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/60",
   irpf: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/60",
   fgts: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/60",
@@ -83,6 +117,7 @@ export const ENTRY_TYPE_LABELS: Record<string, string> = {
   gratificacao: "Gratificação",
   desconto: "Desconto",
   ferias: "Férias",
+  salario_familia: "Salário-Família",
   // Legacy (orphans)
   custo: "Custo (legacy)",
   despesa: "Despesa (legacy)",
@@ -100,6 +135,7 @@ export const EARNINGS_TYPES = [
   "gratificacao",
   "atestado",
   "ferias",
+  "salario_familia",
 ] as const;
 
 export const DEDUCTION_TYPES = [

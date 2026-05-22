@@ -13,6 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useDashboard } from '@/contexts/DashboardContext';
 import PermissionGuard from '@/components/dashboard/PermissionGuard';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useCoreResourceMutation } from '@/hooks/useCoreResourceMutation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -108,63 +109,44 @@ export default function EmpresasPage() {
     );
   });
 
-  const createMutation = useMutation({
-    mutationFn: async (data: typeof formData) => {
-      const { error } = await supabase.from('stores').insert({
-        company_id: selectedCompanyId,
-        store_name: data.store_name,
-        store_code: data.store_code || null,
-        cnpj: data.cnpj || null,
-        address: data.address || null,
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['stores'] });
-      toast.success('Empresa criada com sucesso!');
-      handleCloseDialog();
-    },
-    onError: (error) => {
-      toast.error('Erro ao criar empresa: ' + error.message);
-    },
-  });
+  // Mutations vão via edge function core-resource-mutate (PUSH → agenda → local).
+  // Toast de sucesso/erro vem do hook; aqui só fechamos o dialog onSuccess.
+  const storeMutation = useCoreResourceMutation('stores');
 
-  const updateMutation = useMutation({
-    mutationFn: async (data: { id: string } & typeof formData) => {
-      const { error } = await supabase
-        .from('stores')
-        .update({
+  const handleStoreCreate = (data: typeof formData) => {
+    storeMutation.mutate(
+      {
+        action: 'create',
+        data: {
           store_name: data.store_name,
           store_code: data.store_code || null,
           cnpj: data.cnpj || null,
           address: data.address || null,
-        })
-        .eq('id', data.id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['stores'] });
-      toast.success('Empresa atualizada com sucesso!');
-      handleCloseDialog();
-    },
-    onError: (error) => {
-      toast.error('Erro ao atualizar empresa: ' + error.message);
-    },
-  });
+        },
+      },
+      { onSuccess: () => handleCloseDialog() },
+    );
+  };
 
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from('stores').delete().eq('id', id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['stores'] });
-      toast.success('Empresa excluída com sucesso!');
-    },
-    onError: (error) => {
-      toast.error('Erro ao excluir empresa: ' + error.message);
-    },
-  });
+  const handleStoreUpdate = (id: string, data: typeof formData) => {
+    storeMutation.mutate(
+      {
+        action: 'update',
+        id,
+        data: {
+          store_name: data.store_name,
+          store_code: data.store_code || null,
+          cnpj: data.cnpj || null,
+          address: data.address || null,
+        },
+      },
+      { onSuccess: () => handleCloseDialog() },
+    );
+  };
+
+  const handleStoreDelete = (id: string) => {
+    storeMutation.mutate({ action: 'delete', id });
+  };
 
   const handleOpenDialog = (store?: Store) => {
     if (store) {
@@ -200,9 +182,9 @@ export default function EmpresasPage() {
     }
 
     if (editingStore) {
-      updateMutation.mutate({ id: editingStore.id, ...formData });
+      handleStoreUpdate(editingStore.id, formData);
     } else {
-      createMutation.mutate(formData);
+      handleStoreCreate(formData);
     }
   };
 
@@ -367,9 +349,7 @@ export default function EmpresasPage() {
                   </Button>
                   <Button
                     type="submit"
-                    disabled={
-                      createMutation.isPending || updateMutation.isPending
-                    }
+                    disabled={storeMutation.isPending}
                   >
                     {editingStore ? 'Salvar' : 'Criar'}
                   </Button>
@@ -452,7 +432,7 @@ export default function EmpresasPage() {
                             toast.success("ID copiado!");
                           }}
                           onEdit={() => handleOpenDialog(store)}
-                          onDelete={() => deleteMutation.mutate(store.id)}
+                          onDelete={() => handleStoreDelete(store.id)}
                         />
                       </TableCell>
                     </TableRow>
@@ -506,12 +486,17 @@ function StoreActionsMenu({
             Copiar ID
           </DropdownMenuItem>
           <DropdownMenuSeparator />
+          {/* Excluir empresa DESATIVADO — cadastros corporativos são sensíveis.
+              Várias FKs apontam pra `stores` (colabs, lojas, holidays, payroll).
+              Pra "remover" use o sync da agenda: lá desativa, aqui sincroniza
+              como is_active=false. */}
           <DropdownMenuItem
-            onClick={() => setConfirmDeleteOpen(true)}
-            className="text-destructive focus:text-destructive"
+            disabled
+            className="text-muted-foreground"
+            title="Não é possível excluir empresa. Desative no sistema da agenda — vai sincronizar como inativa aqui."
           >
             <Trash2 className="mr-2 h-4 w-4" />
-            Excluir
+            Excluir (indisponível)
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

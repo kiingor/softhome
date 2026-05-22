@@ -16,7 +16,12 @@ import type {
   ReverseEntryValues,
 } from "../schemas/payroll.schema";
 import { calculateMonthlyBenefitValue, type DayAbbrev } from "@/lib/workingDays";
-import { calcAllTaxes } from "@/lib/payroll/cltCalc";
+import {
+  calcAllTaxes,
+  calcSalarioFamilia,
+  eligibleChildrenForSalarioFamilia,
+  SALARIO_FAMILIA_LIMITE_2026,
+} from "@/lib/payroll/cltCalc";
 import { calcVacation, type VacationCalcResult } from "@/lib/payroll/vacationCalc";
 import { getCollabsToSkipNextMonth } from "@/lib/payroll/vacationSkipRules";
 import { postVacationToPayroll } from "@/hooks/useVacations";
@@ -228,6 +233,90 @@ export function usePayrollPeriods() {
 
         if (autoEntries.length > 0) {
           await supabase.from("payroll_entries").insert(autoEntries);
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // 3a-bis. Salário-família — pra cada CLT com salário ≤ limite, conta
+        // filhos elegíveis (idade < 14 OU inválido) e cria entry tipo
+        // salario_familia. Isento de INSS/IRPF/FGTS, não compõe base.
+        //
+        // Idempotência via external_id 'salario-familia-<collab_id>-<YYYY-MM>'.
+        // Skip mês-seguinte respeitado (skipSalaryNext já filtrou colabs cujo
+        // recibo de férias está cobrindo).
+        // ─────────────────────────────────────────────────────────────────────
+        const sfCandidates = (collaborators ?? []).filter((c) => {
+          if (skipSalaryNext.has(c.id)) return false;
+          const sal = (c.position as { salary?: number } | null)?.salary ?? 0;
+          // Filtro grosso pra evitar query desnecessária quando salário já é
+          // acima do limite. Salário-família só pra baixa renda (~R$ 1.9k).
+          return sal > 0 && sal <= SALARIO_FAMILIA_LIMITE_2026;
+        });
+
+        if (sfCandidates.length > 0) {
+          const candidateIds = sfCandidates.map((c) => c.id);
+          // Carrega dependentes desses colabs em 1 query (evita N+1)
+          const { data: depsData } = await supabase
+            .from("collaborator_dependents")
+            .select("collaborator_id, birth_date, kinship, is_invalid")
+            .in("collaborator_id", candidateIds);
+
+          // Anti-dup: pega salário-família já lançados nesse mês
+          const sfExternalIds = candidateIds.map(
+            (id) => `salario-familia-${id}-${year}-${String(month).padStart(2, "0")}`,
+          );
+          const { data: existingSF } = await supabase
+            .from("payroll_entries")
+            .select("external_id")
+            .eq("company_id", companyId)
+            .eq("month", month)
+            .eq("year", year)
+            .in("external_id", sfExternalIds);
+          const existingSFSet = new Set(
+            (existingSF ?? []).map((e) => (e as { external_id: string }).external_id),
+          );
+
+          const depsByCollab = new Map<
+            string,
+            Array<{ birth_date: string | null; kinship: string | null; is_invalid: boolean | null }>
+          >();
+          for (const d of depsData ?? []) {
+            const cid = (d as { collaborator_id: string }).collaborator_id;
+            const arr = depsByCollab.get(cid) ?? [];
+            arr.push(d as { birth_date: string | null; kinship: string | null; is_invalid: boolean | null });
+            depsByCollab.set(cid, arr);
+          }
+
+          const sfEntries: PayrollEntry[] = [];
+          const refDate = new Date(year, month - 1, 15); // meio do mês como referência
+          for (const c of sfCandidates) {
+            const fullSalary = (c.position as { salary?: number } | null)?.salary ?? 0;
+            const deps = depsByCollab.get(c.id) ?? [];
+            const eligible = eligibleChildrenForSalarioFamilia(deps, refDate);
+            const calc = calcSalarioFamilia({
+              grossSalary: fullSalary,
+              eligibleChildrenCount: eligible.length,
+            });
+            if (!calc.eligible || calc.value <= 0) continue;
+            const externalId = `salario-familia-${c.id}-${year}-${String(month).padStart(2, "0")}`;
+            if (existingSFSet.has(externalId)) continue;
+            sfEntries.push({
+              company_id: companyId,
+              collaborator_id: c.id,
+              store_id: c.store_id,
+              external_id: externalId,
+              type: "salario_familia" as const,
+              description: `Salário-família (${eligible.length} filho${eligible.length === 1 ? "" : "s"})`,
+              value: calc.value,
+              is_fixed: true,
+              is_payable: true,
+              month,
+              year,
+            } as PayrollEntry);
+          }
+
+          if (sfEntries.length > 0) {
+            await supabase.from("payroll_entries").insert(sfEntries);
+          }
         }
 
         // 3b. Benefícios assigned
@@ -1008,6 +1097,58 @@ export function usePayrollEntries(periodId: string | undefined) {
         );
       }
 
+      // Decisão de produto: lançamento FIXO de gratificação/bonificação é
+      // recorrente e precisa virar adicional na agenda (pra que apareça em
+      // outras folhas e fique consistente com o sistema legado). Lançamento
+      // pontual (is_fixed=false) fica só no DNA Softcom.
+      const shouldPushAsAdicional =
+        values.is_fixed === true &&
+        (values.type === "gratificacao" || values.type === "bonificacao");
+
+      let externalId: string | null = null;
+      if (shouldPushAsAdicional) {
+        // Mapeamento type → tipo da agenda
+        const tipoAgenda =
+          values.type === "gratificacao"
+            ? "GRATIFICAÇÃO ESPONTANEA"
+            : "CUSTO SETOR";
+
+        const { data: pushData, error: pushError } = await supabase.functions.invoke(
+          "collaborator-subresource",
+          {
+            body: {
+              action: "create",
+              kind: "adicionais",
+              collaboratorId: values.collaborator_id,
+              data: {
+                tipo: tipoAgenda,
+                descricao: values.description || tipoAgenda,
+                valores: values.value,
+              },
+            },
+          },
+        );
+        if (pushError) {
+          throw new Error(
+            "Falha ao criar adicional na agenda: " + pushError.message,
+          );
+        }
+        if (pushData && typeof pushData === "object" && "error" in pushData) {
+          const err = pushData as { error: string; details?: string };
+          throw new Error(
+            err.details ? `${err.error}: ${err.details}` : err.error,
+          );
+        }
+        // edge function já gravou em payroll_entries via apply-financials NEXT
+        // sync. MAS pra que o lançamento apareça JÁ neste período aberto,
+        // gravamos local também com external_id do adicional retornado, pra
+        // evitar duplicação se a sync rodar depois.
+        const remote = (pushData as { remote?: { id?: number | string } } | null)?.remote;
+        if (remote && remote.id != null) {
+          externalId = String(remote.id);
+        }
+      }
+
       const { data: userData } = await supabase.auth.getUser();
       const { error } = await supabase.from("payroll_entries").insert({
         company_id: companyId,
@@ -1016,15 +1157,61 @@ export function usePayrollEntries(periodId: string | undefined) {
         description: values.description || null,
         value: values.value,
         is_fixed: values.is_fixed,
+        external_id: externalId,
         month,
         year,
         created_by: userData?.user?.id ?? null,
       });
       if (error) throw error;
+
+      return { pushedToAgenda: shouldPushAsAdicional };
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["payroll-entries"] });
+      const suffix = result?.pushedToAgenda
+        ? " ✓ (sincronizado com a agenda como adicional)"
+        : " ✓";
+      toast.success("Lançamento criado" + suffix);
+    },
+    onError: (err: Error) => {
+      toast.error(err.message ?? "Não rolou. Tenta de novo?");
+    },
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Deleta lançamento AVULSO (manual) — só permite se for is_fixed=false E
+  // sem external_id. Entries sincronizadas/auto-popular/férias/salário-família
+  // não podem ser deletadas por aqui (devem ser estornadas ou recriadas via
+  // re-sync). Pra deletar sync, apaga o período inteiro.
+  // ─────────────────────────────────────────────────────────────────────────
+  const deleteEntry = useMutation({
+    mutationFn: async (entryId: string) => {
+      if (!period || !companyId) throw new Error("Período não encontrado");
+      if (period.status !== "open") {
+        throw new Error("Período fechado. Reabra antes de deletar.");
+      }
+      // Confirma que é avulso antes de deletar (defesa em profundidade)
+      const { data: entry, error: fetchError } = await supabase
+        .from("payroll_entries")
+        .select("id, is_fixed, external_id")
+        .eq("id", entryId)
+        .single();
+      if (fetchError || !entry) throw fetchError ?? new Error("Lançamento não encontrado");
+      if (entry.is_fixed) {
+        throw new Error("Lançamento fixo (do salário/encargo) — use estorno.");
+      }
+      if (entry.external_id) {
+        throw new Error("Lançamento sincronizado — não pode ser deletado.");
+      }
+      const { error } = await supabase
+        .from("payroll_entries")
+        .delete()
+        .eq("id", entryId);
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payroll-entries"] });
-      toast.success("Lançamento criado ✓");
+      toast.success("Lançamento removido ✓");
     },
     onError: (err: Error) => {
       toast.error(err.message ?? "Não rolou. Tenta de novo?");
@@ -1130,10 +1317,20 @@ export function usePayrollEntries(periodId: string | undefined) {
     isLoading,
     period,
     createEntry,
+    deleteEntry,
     reverseEntry,
     closePeriod,
     reopenPeriod,
   };
+}
+
+/**
+ * Helper: identifica se uma entry é AVULSA (lançada manualmente via
+ * NewEntryDialog). Avulsas podem ser deletadas e NÃO devem aparecer na ficha
+ * permanente do colab (são pontuais ao mês).
+ */
+export function isManualAvulso(entry: { is_fixed?: boolean; external_id?: string | null }): boolean {
+  return entry.is_fixed === false && (entry.external_id == null || entry.external_id === "");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

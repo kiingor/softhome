@@ -27,7 +27,13 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const ALLOWED_SECTIONS: UpdateSection[] = ["identificacao", "funcionais", "comissoes"];
+const ALLOWED_SECTIONS: UpdateSection[] = [
+  "identificacao",
+  "funcionais",
+  "comissoes",
+  "status",
+  "flags",
+];
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS_HEADERS });
@@ -158,6 +164,14 @@ function mapLocalForSection(
       "commission_tef_install", "commission_tef_monthly",
     ],
     permissoes: [],
+    status: ["status", "termination_date", "termination_reason"],
+    flags: [
+      "is_temp",
+      "is_manager_leader",
+      "is_manager_director",
+      "is_manager_support",
+      "is_godfather",
+    ],
   };
   const out: Record<string, unknown> = {};
   for (const k of sectionFields[section] ?? []) {
@@ -181,6 +195,29 @@ async function buildRemotePayloadForSection(
       comissaoUpgrade: local.commission_upgrade,
       comissaoTefInstalacao: local.commission_tef_install,
       comissaoTefMensal: local.commission_tef_monthly,
+    };
+  }
+
+  if (section === "status") {
+    // Status local → agenda. Local enum: 'ativo' | 'inativo' |
+    // 'aguardando_documentacao' | 'validacao_pendente' | 'reprovado'.
+    // Agenda usa boolean `desativado`. Mantém data de demissão e motivo.
+    const localStatus = (local.status as string | undefined) ?? "";
+    const desativado = localStatus === "inativo" || localStatus === "reprovado";
+    return {
+      desativado,
+      dataDemissao: local.termination_date,
+      motivoDemissao: local.termination_reason,
+    };
+  }
+
+  if (section === "flags") {
+    return {
+      contratoTemporario: local.is_temp,
+      eGerenteLider: local.is_manager_leader,
+      eGerenteDiretor: local.is_manager_director,
+      eGerenteSuporte: local.is_manager_support,
+      ePadrinho: local.is_godfather,
     };
   }
 

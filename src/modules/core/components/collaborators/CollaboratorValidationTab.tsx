@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useUpdateCollaborator } from "@/hooks/useCollaboratorWriteBack";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -31,6 +32,7 @@ export default function CollaboratorValidationTab({ collaboratorId, companyId, c
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [globalRejectReason, setGlobalRejectReason] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const updateCollaborator = useUpdateCollaborator();
 
   // Fetch onboarding session
   const { data: session } = useQuery({
@@ -108,15 +110,19 @@ export default function CollaboratorValidationTab({ collaboratorId, companyId, c
   const handleApproveAll = async () => {
     setIsProcessing(true);
     try {
-      const { error } = await supabase.from("collaborators").update({ status: "ativo" }).eq("id", collaboratorId);
-      if (error) throw error;
-      toast.success("Cadastro aprovado! Colaborador ativado.");
+      // Via edge function collaborator-update sec='status' → PUSH pra agenda
+      await updateCollaborator.mutateAsync({
+        collaboratorId,
+        section: "status",
+        data: { status: "ativo" },
+      });
+      toast.success("Cadastro aprovado ✓ (sincronizado com a agenda)");
       onStatusChange();
       setApproveDialogOpen(false);
-      // Send WhatsApp notification
       sendWhatsAppNotification(companyId, collaboratorId, "documents_approved");
-    } catch (err: any) {
-      toast.error(err.message);
+    } catch (err) {
+      console.error("Aprovar falhou:", err);
+      // toast já é emitido pelo hook em onError
     } finally {
       setIsProcessing(false);
     }
@@ -126,16 +132,18 @@ export default function CollaboratorValidationTab({ collaboratorId, companyId, c
     if (!globalRejectReason.trim()) { toast.error("Informe o motivo"); return; }
     setIsProcessing(true);
     try {
-      const { error } = await supabase.from("collaborators").update({ status: "reprovado" }).eq("id", collaboratorId);
-      if (error) throw error;
-      toast.success("Cadastro reprovado.");
+      await updateCollaborator.mutateAsync({
+        collaboratorId,
+        section: "status",
+        data: { status: "reprovado", termination_reason: globalRejectReason },
+      });
+      toast.success("Cadastro reprovado ✓ (sincronizado com a agenda)");
       onStatusChange();
       setRejectDialogOpen(false);
       setGlobalRejectReason("");
-      // Send WhatsApp notification
       sendWhatsAppNotification(companyId, collaboratorId, "documents_rejected");
-    } catch (err: any) {
-      toast.error(err.message);
+    } catch (err) {
+      console.error("Reprovar falhou:", err);
     } finally {
       setIsProcessing(false);
     }

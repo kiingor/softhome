@@ -49,6 +49,8 @@ import {
 import { UserPlus, MagnifyingGlass as Search, Funnel as Filter, DotsThree as MoreHorizontal, Pencil as Edit, Trash as Trash2, Users, ArrowsClockwise as RefreshCw } from "@phosphor-icons/react";
 import { useDashboard } from "@/contexts/DashboardContext";
 import { supabase } from "@/integrations/supabase/client";
+import { useUpdateCollaborator } from "@/hooks/useCollaboratorWriteBack";
+import { SyncProgressDialog } from "@/components/dashboard/SyncProgressDialog";
 import { useToast } from "@/hooks/use-toast";
 import { formatCPF } from "@/lib/validators";
 import CollaboratorModal from "@/modules/core/components/collaborators/CollaboratorModal";
@@ -57,6 +59,7 @@ import { TableSkeleton } from "@/components/ui/table-skeleton";
 interface Collaborator {
   id: string;
   name: string;
+  softcom_surname: string | null;
   cpf: string;
   email: string | null;
   phone: string | null;
@@ -114,6 +117,7 @@ interface SyncResult {
 
 const ColaboradoresPage = () => {
   const { currentCompany } = useDashboard();
+  const updateCollaborator = useUpdateCollaborator();
   const { toast } = useToast();
   const { canCreate, canEdit, canDelete, isAdmin } = usePermissions("colaboradores");
   // Cadastro manual de colaborador é controle de dev: fluxo padrão é via sync da agenda.
@@ -128,6 +132,9 @@ const ColaboradoresPage = () => {
 
   // Sync com agenda Softcom Cloud
   const [isSyncing, setIsSyncing] = useState(false);
+  // Job de sincronização em andamento — controla o modal de progresso
+  const [syncJobId, setSyncJobId] = useState<string | null>(null);
+  const [syncProgressOpen, setSyncProgressOpen] = useState(false);
   const [isSyncConfirmOpen, setIsSyncConfirmOpen] = useState(false);
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
   const canSync = canCreate || isAdmin;
@@ -378,9 +385,14 @@ const ColaboradoresPage = () => {
         await supabase.from("onboarding_sessions").delete().eq("id", session.id);
       }
       await supabase.from("collaborator_documents").delete().eq("collaborator_id", collaborator.id);
-      await supabase.from("collaborators").update({ status: "aguardando_documentacao" }).eq("id", collaborator.id);
-      
-      toast({ title: "Documentação reenviada", description: `${collaborator.name} pode iniciar o primeiro acesso novamente.` });
+      // Status via edge function — PUSH pra agenda também
+      await updateCollaborator.mutateAsync({
+        collaboratorId: collaborator.id,
+        section: "status",
+        data: { status: "aguardando_documentacao" },
+      });
+
+      toast({ title: "Documentação reenviada ✓", description: `${collaborator.name} pode iniciar o primeiro acesso novamente.` });
       loadCollaborators();
     } catch (error: any) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
@@ -391,6 +403,11 @@ const ColaboradoresPage = () => {
 
   const handleSync = async () => {
     if (!currentCompany?.id) return;
+    // Se já existe um job em andamento, só reabre o modal (não dispara outro)
+    if (syncJobId) {
+      setSyncProgressOpen(true);
+      return;
+    }
     setIsSyncing(true);
     try {
       const { data, error } = await supabase.functions.invoke('sync-collaborators', {
@@ -403,18 +420,13 @@ const ColaboradoresPage = () => {
       if (error) throw error;
       const errMsg = (data as { error?: string } | null)?.error;
       if (errMsg) throw new Error(errMsg);
-      const r = data as SyncResult;
-      setSyncResult({
-        inserted: r.inserted ?? 0,
-        updated: r.updated ?? 0,
-        deactivated: r.deactivated ?? 0,
-        fetched: r.fetched ?? 0,
-        errors: r.errors ?? [],
-        successes: r.successes ?? [],
-        financials: r.financials ?? null,
-        details: r.details ?? null,
-      });
-      loadCollaborators();
+      // Edge function agora retorna { jobId } imediato — trabalho real roda em background
+      const jobId = (data as { jobId?: string })?.jobId;
+      if (!jobId) {
+        throw new Error('Edge function não retornou jobId');
+      }
+      setSyncJobId(jobId);
+      setSyncProgressOpen(true);
     } catch (err) {
       toast({
         title: 'Não foi possível sincronizar agora',
@@ -813,12 +825,15 @@ const ColaboradoresPage = () => {
                         onClick={() => handleEdit(collaborator)}
                       >
                         <TableCell className="max-w-[280px]">
+                          {/* Linha 1 (destaque): apelido Softcom — se tiver.
+                              Fallback pro nome completo capitalizado quando não tem.
+                              Linha 2 (secundária): nome completo, sempre. */}
                           <div className="flex items-center gap-2">
                             <span
                               className="font-medium text-sm capitalize truncate"
-                              title={collaborator.name}
+                              title={collaborator.softcom_surname ?? collaborator.name}
                             >
-                              {collaborator.name.toLowerCase()}
+                              {(collaborator.softcom_surname ?? collaborator.name).toLowerCase()}
                             </span>
                             {collaborator.is_temp && (
                               <Badge variant="secondary" className="text-[10px] h-5 px-1.5 shrink-0">
@@ -826,12 +841,12 @@ const ColaboradoresPage = () => {
                               </Badge>
                             )}
                           </div>
-                          {collaborator.email && (
+                          {collaborator.softcom_surname && (
                             <div
-                              className="text-xs text-muted-foreground truncate"
-                              title={collaborator.email}
+                              className="text-xs text-muted-foreground truncate capitalize"
+                              title={collaborator.name}
                             >
-                              {collaborator.email}
+                              {collaborator.name.toLowerCase()}
                             </div>
                           )}
                         </TableCell>
@@ -885,12 +900,15 @@ const ColaboradoresPage = () => {
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
+                                  {/* Excluir DESATIVADO. Use "Desativar" no modal do colab.
+                                      Preserva histórico (folha, férias, 13º) e sincroniza com a agenda. */}
                                   <DropdownMenuItem
-                                    onClick={() => handleDelete(collaborator)}
-                                    className="text-destructive focus:text-destructive"
+                                    disabled
+                                    className="text-muted-foreground"
+                                    title="Não é possível excluir. Abra o colaborador e clique em Desativar."
                                   >
                                     <Trash2 className="w-4 h-4 mr-2" />
-                                    Excluir
+                                    Excluir (indisponível)
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
@@ -963,6 +981,37 @@ const ColaboradoresPage = () => {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Modal de progresso da sincronização (fire-and-poll: edge function
+            roda em background, modal polla sync_jobs a cada 1.2s). */}
+        <SyncProgressDialog
+          open={syncProgressOpen}
+          onOpenChange={(o) => {
+            setSyncProgressOpen(o);
+            // Quando fecha, limpa o jobId se já terminou (libera próximo Sincronizar)
+            if (!o) {
+              setSyncJobId((current) => current); // mantém ref pra histórico
+            }
+          }}
+          jobId={syncJobId}
+          onFinished={(job) => {
+            if (job.status === "completed") {
+              toast({
+                title: "Sincronização concluída ✓",
+                description: `${job.inserted} novos · ${job.updated} atualizados · ${job.deactivated} desativados${job.errors.length ? ` · ${job.errors.length} erros` : ""}`,
+              });
+            } else if (job.status === "failed") {
+              toast({
+                title: "Sincronização falhou",
+                description: job.error_message ?? "Erro desconhecido",
+                variant: "destructive",
+              });
+            }
+            // Limpa jobId pra permitir nova sync no próximo clique
+            setSyncJobId(null);
+            loadCollaborators();
+          }}
+        />
       </div>
     </PermissionGuard>
   );

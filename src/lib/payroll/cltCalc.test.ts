@@ -4,8 +4,13 @@ import {
   calcIRPF,
   calcFGTS,
   calcAllTaxes,
+  calcSalarioFamilia,
+  eligibleChildrenForSalarioFamilia,
+  ageInYears,
   INSS_CEILING_2026,
   DEPENDENT_DEDUCTION_2026,
+  SALARIO_FAMILIA_LIMITE_2026,
+  SALARIO_FAMILIA_VALOR_2026,
 } from "./cltCalc";
 
 describe("calcINSS — tabela 2026", () => {
@@ -191,5 +196,141 @@ describe("constantes auditáveis", () => {
 
   it("teto INSS é R$ 988,09", () => {
     expect(INSS_CEILING_2026).toBe(988.09);
+  });
+
+  it("limite salário-família 2026 é R$ 1.906,04", () => {
+    expect(SALARIO_FAMILIA_LIMITE_2026).toBe(1906.04);
+  });
+
+  it("valor por filho do salário-família 2026 é R$ 65,00", () => {
+    expect(SALARIO_FAMILIA_VALOR_2026).toBe(65);
+  });
+});
+
+describe("ageInYears — idade em anos completos", () => {
+  it("nascimento 01/06/2020, ref 01/06/2026 → 6 anos", () => {
+    expect(ageInYears("2020-06-01", new Date(2026, 5, 1))).toBe(6);
+  });
+
+  it("nascimento 02/06/2020, ref 01/06/2026 → 5 anos (ainda não fez)", () => {
+    expect(ageInYears("2020-06-02", new Date(2026, 5, 1))).toBe(5);
+  });
+
+  it("data inválida → -1", () => {
+    expect(ageInYears("não-é-data")).toBe(-1);
+  });
+});
+
+describe("eligibleChildrenForSalarioFamilia", () => {
+  const ref = new Date(2026, 5, 1); // 01/06/2026
+
+  it("filho de 10 anos → elegível", () => {
+    const r = eligibleChildrenForSalarioFamilia(
+      [{ birth_date: "2016-01-15", kinship: "filho", is_invalid: false }],
+      ref,
+    );
+    expect(r).toHaveLength(1);
+  });
+
+  it("filho de 14 anos completos → NÃO elegível (regra <14)", () => {
+    const r = eligibleChildrenForSalarioFamilia(
+      [{ birth_date: "2012-01-15", kinship: "filho", is_invalid: false }],
+      ref,
+    );
+    expect(r).toHaveLength(0);
+  });
+
+  it("filho de 15 anos inválido → elegível (inválido qualquer idade)", () => {
+    const r = eligibleChildrenForSalarioFamilia(
+      [{ birth_date: "2011-01-15", kinship: "filho", is_invalid: true }],
+      ref,
+    );
+    expect(r).toHaveLength(1);
+  });
+
+  it("cônjuge não é elegível (só filho/enteado)", () => {
+    const r = eligibleChildrenForSalarioFamilia(
+      [{ birth_date: "1990-01-15", kinship: "cônjuge", is_invalid: false }],
+      ref,
+    );
+    expect(r).toHaveLength(0);
+  });
+
+  it("enteado < 14 → elegível", () => {
+    const r = eligibleChildrenForSalarioFamilia(
+      [{ birth_date: "2020-01-15", kinship: "enteado", is_invalid: false }],
+      ref,
+    );
+    expect(r).toHaveLength(1);
+  });
+
+  it("mistura: 2 filhos elegíveis + 1 cônjuge + 1 filho 18 anos saudável", () => {
+    const r = eligibleChildrenForSalarioFamilia(
+      [
+        { birth_date: "2018-01-15", kinship: "filho" },         // 8 anos ✓
+        { birth_date: "2020-05-10", kinship: "filha" },         // 6 anos ✓
+        { birth_date: "1995-01-15", kinship: "cônjuge" },       // exclui
+        { birth_date: "2008-01-15", kinship: "filho" },         // 18 anos exclui
+      ],
+      ref,
+    );
+    expect(r).toHaveLength(2);
+  });
+
+  it("filho sem data de nascimento e não-inválido → exclui (defensivo)", () => {
+    const r = eligibleChildrenForSalarioFamilia(
+      [{ birth_date: null, kinship: "filho", is_invalid: false }],
+      ref,
+    );
+    expect(r).toHaveLength(0);
+  });
+});
+
+describe("calcSalarioFamilia", () => {
+  it("salário R$ 1.500 + 2 filhos elegíveis → R$ 130", () => {
+    const r = calcSalarioFamilia({ grossSalary: 1500, eligibleChildrenCount: 2 });
+    expect(r.value).toBe(130);
+    expect(r.eligible).toBe(true);
+  });
+
+  it("salário no limite exato (R$ 1.906,04) + 1 filho → R$ 65", () => {
+    const r = calcSalarioFamilia({ grossSalary: 1906.04, eligibleChildrenCount: 1 });
+    expect(r.value).toBe(65);
+    expect(r.eligible).toBe(true);
+  });
+
+  it("salário R$ 1.906,05 (1 centavo acima do limite) → R$ 0, não elegível", () => {
+    const r = calcSalarioFamilia({ grossSalary: 1906.05, eligibleChildrenCount: 2 });
+    expect(r.value).toBe(0);
+    expect(r.eligible).toBe(false);
+  });
+
+  it("salário OK mas zero filhos → R$ 0", () => {
+    const r = calcSalarioFamilia({ grossSalary: 1500, eligibleChildrenCount: 0 });
+    expect(r.value).toBe(0);
+    expect(r.eligible).toBe(false);
+  });
+
+  it("salário zero → R$ 0", () => {
+    const r = calcSalarioFamilia({ grossSalary: 0, eligibleChildrenCount: 3 });
+    expect(r.value).toBe(0);
+    expect(r.eligible).toBe(false);
+  });
+
+  it("salário alto (R$ 5.000) → R$ 0 mesmo com filhos", () => {
+    const r = calcSalarioFamilia({ grossSalary: 5000, eligibleChildrenCount: 2 });
+    expect(r.value).toBe(0);
+    expect(r.eligible).toBe(false);
+  });
+
+  it("perChild e limit retornados pra UI", () => {
+    const r = calcSalarioFamilia({ grossSalary: 1500, eligibleChildrenCount: 1 });
+    expect(r.perChild).toBe(65);
+    expect(r.limit).toBe(1906.04);
+  });
+
+  it("contagem fracionada/negativa → tratada como inteiro >= 0", () => {
+    expect(calcSalarioFamilia({ grossSalary: 1500, eligibleChildrenCount: -2 }).value).toBe(0);
+    expect(calcSalarioFamilia({ grossSalary: 1500, eligibleChildrenCount: 2.7 }).value).toBe(130);
   });
 });

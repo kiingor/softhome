@@ -23,6 +23,14 @@ import {
 import type { RemoteColaborador } from "../_shared/softcom-cloud-types.ts";
 import { applyFinancials } from "../_shared/apply-financials.ts";
 import { applyCollaboratorDetails } from "../_shared/apply-collaborator-details.ts";
+import {
+  createSyncJob,
+  markJobCompleted,
+  markJobFailed,
+  markJobRunning,
+  throttledJobUpdater,
+  updateJob,
+} from "../_shared/sync-job.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -32,7 +40,18 @@ const CORS_HEADERS = {
 };
 
 const PAGE_SIZE = 50;
-const MAX_PAGES = 200; // hard limit pra não loopar infinitamente (10k colabs max)
+// Limite de páginas pra não loopar infinitamente em caso de bug na agenda
+// (totalPages nunca atualizar). 2000 páginas × 50 = 100k colabs — folga
+// suficiente pra qualquer base real.
+const MAX_PAGES = 2000;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TEMP TEST — DESLIGADO em produção (null = sync normal de TODOS os colabs).
+// Pra debugar: troca null por [384, 816, ...] e a sync vai processar SÓ
+// esses colabs. Útil pra rodar o fluxo do início ao fim sem mexer nos
+// outros 299.
+// ─────────────────────────────────────────────────────────────────────────────
+const TEST_ONLY_COLAB_IDS: number[] | null = null;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TEMP TEST — DESLIGADO em produção (null = sync normal de TODOS os colabs).
@@ -85,6 +104,64 @@ serve(async (req) => {
   });
 
   // ───────────────────────────────────────────────────────────────────────────
+  // Cria sync_job e retorna jobId imediato. O trabalho real roda em background
+  // via EdgeRuntime.waitUntil, atualizando sync_jobs.processed/current_step
+  // periodicamente pra o frontend pollar e mostrar progresso ao vivo.
+  // ───────────────────────────────────────────────────────────────────────────
+  const jobId = await createSyncJob(sbAdmin, {
+    companyId,
+    resource: "collaborators",
+    options: { incluirDesativados, includeFinancials, includeDetails },
+    createdBy: user.id,
+    currentStep: "Iniciando sincronização...",
+  });
+
+  // deno-lint-ignore no-explicit-any
+  const ert = (globalThis as any).EdgeRuntime as
+    | { waitUntil?: (p: Promise<unknown>) => void }
+    | undefined;
+  const work = runCollaboratorsSync(sbAdmin, jobId, {
+    companyId,
+    incluirDesativados,
+    includeFinancials,
+    includeDetails,
+  }).catch(async (err: Error) => {
+    console.error(`sync-collaborators job ${jobId} crashed:`, err);
+    await markJobFailed(sbAdmin, jobId, err.message ?? "Erro desconhecido");
+  });
+
+  if (ert?.waitUntil) {
+    ert.waitUntil(work);
+  } else {
+    // Em ambientes sem EdgeRuntime (testes locais), só dispara sem await
+    void work;
+  }
+
+  return jsonResponse({ success: true, jobId, status: "running" }, 202);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// runCollaboratorsSync — trabalho real, idêntico ao anterior mas com
+// atualizações periódicas de progresso no sync_job.
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function runCollaboratorsSync(
+  // deno-lint-ignore no-explicit-any
+  sbAdmin: any,
+  jobId: string,
+  args: {
+    companyId: string;
+    incluirDesativados: boolean;
+    includeFinancials: boolean;
+    includeDetails: boolean;
+  },
+): Promise<void> {
+  const { companyId, incluirDesativados, includeFinancials, includeDetails } = args;
+  const tick = throttledJobUpdater(sbAdmin, jobId, 800);
+
+  await markJobRunning(sbAdmin, jobId, "Carregando lookups (empresas/setores/cargos)...");
+
+  // ───────────────────────────────────────────────────────────────────────────
   // 1. Pré-carregar lookups (external_id remoto → uuid local)
   // ───────────────────────────────────────────────────────────────────────────
   const [storesMap, teamsMap, positionsMap, existingCollabs] = await Promise.all([
@@ -95,9 +172,11 @@ serve(async (req) => {
   ]);
 
   // ───────────────────────────────────────────────────────────────────────────
-  // 2. Buscar colaboradores da API
+  // 2. Buscar colaboradores da API (paginado)
   // ───────────────────────────────────────────────────────────────────────────
   const remote: RemoteColaborador[] = [];
+  await updateJob(sbAdmin, jobId, { current_step: "Buscando colaboradores na agenda..." });
+
   try {
     // TEMP TEST — atalho que pula a paginação e busca só N colabs (debug).
     if (TEST_ONLY_COLAB_IDS != null && TEST_ONLY_COLAB_IDS.length > 0) {
@@ -120,16 +199,28 @@ serve(async (req) => {
         });
         remote.push(...resp.data);
         totalPages = resp.pagination.totalPages || 1;
+        await tick({
+          current_step: `Buscando agenda — página ${page}/${totalPages} (${remote.length} colabs)`,
+          total: resp.pagination.total ?? remote.length,
+        });
         page++;
       } while (page <= totalPages && page <= MAX_PAGES);
     }
   } catch (err) {
     const status = err instanceof SoftcomCloudError ? err.status : 502;
-    return jsonResponse(
-      { error: "Falha ao ler Softcom Cloud", details: (err as Error).message },
-      status,
+    await markJobFailed(
+      sbAdmin,
+      jobId,
+      `Falha ao ler Softcom Cloud (HTTP ${status}): ${(err as Error).message}`,
     );
+    return;
   }
+
+  // Total real agora que terminou de paginar
+  await updateJob(sbAdmin, jobId, {
+    total: remote.length,
+    current_step: `Preparando upsert de ${remote.length} colaboradores...`,
+  });
 
   // ───────────────────────────────────────────────────────────────────────────
   // 3. Diff + upsert
@@ -158,9 +249,8 @@ serve(async (req) => {
 
   let inserted = 0;
   let updated = 0;
+  let processed = 0;
   if (rowsToUpsert.length > 0) {
-    // Upsert em chunks. Se um chunk falha por algum row inválido, retenta um
-    // por um pra isolar quais deram erro (sem perder os outros do mesmo chunk).
     const chunkSize = 50;
     for (let i = 0; i < rowsToUpsert.length; i += chunkSize) {
       const chunk = rowsToUpsert.slice(i, i + chunkSize);
@@ -173,7 +263,6 @@ serve(async (req) => {
         .select("external_id");
 
       if (upErr) {
-        // Retenta linha-a-linha pra identificar quais falharam
         for (const row of chunk) {
           const extId = String(row.external_id);
           const meta = rowMetaByExt.get(extId);
@@ -194,6 +283,7 @@ serve(async (req) => {
             if (action === "updated") updated++; else inserted++;
             successes.push({ external_id: extId, name: meta?.name ?? `Colab ${extId}`, action });
           }
+          processed++;
         }
       } else {
         for (const row of upsertData ?? []) {
@@ -202,8 +292,16 @@ serve(async (req) => {
           const action = existingCollabs.has(extId) ? "updated" : "inserted";
           if (action === "updated") updated++; else inserted++;
           successes.push({ external_id: extId, name: meta?.name ?? `Colab ${extId}`, action });
+          processed++;
         }
       }
+      await tick({
+        processed,
+        inserted,
+        updated,
+        current_step: `Salvando colaboradores: ${processed}/${rowsToUpsert.length}`,
+        errors: errors.slice(-20).map((e) => ({ external_id: e.external_id, name: e.name, error: e.error })),
+      });
     }
   }
 
@@ -219,17 +317,19 @@ serve(async (req) => {
       }
     }
     if (idsToDeactivate.length > 0) {
+      await updateJob(sbAdmin, jobId, {
+        current_step: `Desativando ${idsToDeactivate.length} colab(s) ausentes da agenda...`,
+      });
       const { error: deactErr } = await sbAdmin
         .from("collaborators")
         .update({ status: "inativo" })
         .in("id", idsToDeactivate);
       if (deactErr) {
-        return jsonResponse(
-          { error: "Desativação falhou", details: deactErr.message },
-          500,
-        );
+        await markJobFailed(sbAdmin, jobId, `Desativação falhou: ${deactErr.message}`);
+        return;
       }
       deactivated = idsToDeactivate.length;
+      await updateJob(sbAdmin, jobId, { deactivated });
     }
   }
 
@@ -276,7 +376,9 @@ serve(async (req) => {
       (collabsLocal ?? []).map((c: { id: string; external_id: string; store_id: string | null; current_salary: number | null }) => [c.external_id, c]),
     );
 
+    let finIdx = 0;
     for (const s of successes) {
+      finIdx++;
       const local = localByExt.get(s.external_id);
       if (!local) continue;
       try {
@@ -315,6 +417,9 @@ serve(async (req) => {
           error: (e as Error).message,
         });
       }
+      await tick({
+        current_step: `Aplicando financeiros: ${finIdx}/${successes.length} — ${s.name}`,
+      });
     }
   }
 
@@ -352,7 +457,9 @@ serve(async (req) => {
       (collabsLocal ?? []).map((c: { id: string; external_id: string }) => [c.external_id, c.id]),
     );
 
+    let detIdx = 0;
     for (const s of successes) {
+      detIdx++;
       const localId = localByExt.get(s.external_id);
       if (!localId) continue;
       try {
@@ -381,21 +488,28 @@ serve(async (req) => {
           error: (e as Error).message,
         });
       }
+      await tick({
+        current_step: `Sincronizando detalhes: ${detIdx}/${successes.length} — ${s.name}`,
+      });
     }
   }
 
-  return jsonResponse({
-    success: true,
+  // Flush final do throttle + marca como concluído
+  await tick({}, true);
+
+  await markJobCompleted(sbAdmin, jobId, {
     fetched: remote.length,
     inserted,
     updated,
     deactivated,
+    successes_count: successes.length,
+    errors_count: errors.length,
     errors,
     successes,
     financials: financialsSummary,
     details: detailsSummary,
   });
-});
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers

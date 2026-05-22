@@ -1,6 +1,10 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  useCreateCollaborator,
+  useUpdateCollaborator,
+} from "@/hooks/useCollaboratorWriteBack";
 import { useDashboard } from "@/contexts/DashboardContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -170,6 +174,9 @@ const CollaboratorModal = ({
   const { currentCompany, hasAnyRole } = useDashboard();
   const isNew = !collaboratorId;
   const { month: currentMonth, year: currentYear } = getCurrentCompetencia();
+  // Write-back pra agenda: substitui supabase.from('collaborators').update direto
+  const updateCollaborator = useUpdateCollaborator();
+  const createCollaborator = useCreateCollaborator();
 
   // Form state
   const [formData, setFormData] = useState({
@@ -956,25 +963,21 @@ const CollaboratorModal = ({
         : baseData;
 
       if (isNew) {
-        const { data: newCollab, error } = await supabase
-          .from("collaborators")
-          .insert(saveData)
-          .select()
-          .single();
-
-        if (error) {
-          if (error.code === "23505") {
-            toast.error("Já existe um colaborador com este CPF");
-            return;
-          }
-          throw error;
+        // Via edge function collaborator-create → POST na agenda + INSERT local.
+        // Se a agenda recusar (ex: CPF duplicado lá), local NÃO é gravado.
+        const createResult = await createCollaborator.mutateAsync({
+          companyId: currentCompany!.id,
+          data: saveData,
+        });
+        const newCollabId = createResult.localId;
+        if (!newCollabId) {
+          throw new Error("Edge function não retornou localId");
         }
-
-        savedCollabId = newCollab.id;
+        savedCollabId = newCollabId;
 
         if (pendingEntries.length > 0) {
           const entriesToCreate = pendingEntries.map((e) => ({
-            collaborator_id: newCollab.id,
+            collaborator_id: newCollabId,
             company_id: currentCompany!.id,
             type: e.type,
             value: e.value,
@@ -989,44 +992,70 @@ const CollaboratorModal = ({
         if (pendingBenefits.length > 0) {
           const assignmentsToCreate = pendingBenefits.map((b) => ({
             benefit_id: b.benefit_id,
-            collaborator_id: newCollab.id,
+            collaborator_id: newCollabId,
           }));
           await supabase.from("benefits_assignments").insert(assignmentsToCreate);
         }
 
-        const message = userId 
-          ? `${formData.name} foi cadastrado com acesso ao Portal!`
-          : "Colaborador criado com sucesso!";
+        const message = userId
+          ? `${formData.name} cadastrado ✓ (sincronizado com a agenda + acesso ao Portal)`
+          : `${formData.name} cadastrado ✓ (sincronizado com a agenda)`;
         toast.success(message);
 
-        // Send WhatsApp notification
-        sendWhatsAppNotification(currentCompany!.id, newCollab.id, "collaborator_registered");
+        sendWhatsAppNotification(currentCompany!.id, newCollabId, "collaborator_registered");
       } else {
-        const updateData = {
-          ...saveData,
-          ...(userId ? { user_id: userId } : {}),
-        };
-        delete (updateData as any).user_id;
+        // Edição: chama collaborator-update por SEÇÃO. A edge function filtra
+        // os campos relevantes de cada seção (mapLocalForSection) e faz PUSH
+        // pra rota correspondente na agenda (POST /v1/colaboradores/{id}/{secao}).
+        // Sequencial pra capturar erros por seção. Status é updated separado
+        // via handleDeactivate/Reactivate, então não enviamos aqui.
+        const payload: Record<string, unknown> = { ...saveData };
+        if (userId) payload.user_id = userId;
+
+        // Identificação (nome, CPF, endereço, contatos, lookups de setor/empresa)
+        await updateCollaborator.mutateAsync({
+          collaboratorId: collaboratorId!,
+          section: "identificacao",
+          data: payload,
+        });
+        // Funcionais (regime, salário, cargo, datas, dados de CTPS/banco)
+        await updateCollaborator.mutateAsync({
+          collaboratorId: collaboratorId!,
+          section: "funcionais",
+          data: payload,
+        });
+        // Comissões (se houver algum campo de comissão preenchido)
+        if (
+          payload.commission_monthly !== undefined ||
+          payload.commission_license !== undefined ||
+          payload.commission_upgrade !== undefined ||
+          payload.commission_tef_install !== undefined ||
+          payload.commission_tef_monthly !== undefined
+        ) {
+          await updateCollaborator.mutateAsync({
+            collaboratorId: collaboratorId!,
+            section: "comissoes",
+            data: payload,
+          });
+        }
+        // Flags (is_temp, is_manager_*, is_godfather)
+        await updateCollaborator.mutateAsync({
+          collaboratorId: collaboratorId!,
+          section: "flags",
+          data: payload,
+        });
+
+        // user_id é local-only (sem write-back) — patch direto se mudou
         if (userId) {
-          (updateData as any).user_id = userId;
-        }
-        
-        const { error } = await supabase
-          .from("collaborators")
-          .update(updateData)
-          .eq("id", collaboratorId);
-
-        if (error) {
-          if (error.code === "23505") {
-            toast.error("Já existe um colaborador com este CPF");
-            return;
-          }
-          throw error;
+          await supabase
+            .from("collaborators")
+            .update({ user_id: userId })
+            .eq("id", collaboratorId!);
         }
 
-        const message = userId 
-          ? "Colaborador atualizado e acesso ao portal criado!"
-          : "Colaborador atualizado!";
+        const message = userId
+          ? "Colaborador atualizado ✓ (sincronizado com a agenda + acesso ao portal criado)"
+          : "Colaborador atualizado ✓ (sincronizado com a agenda)";
         toast.success(message);
       }
 
@@ -1041,28 +1070,28 @@ const CollaboratorModal = ({
     }
   };
 
-  // Desativar colaborador (status=inativo + termination_date)
+  // Desativar colaborador (status=inativo + termination_date).
+  // Passa pela edge function collaborator-update sec='status' pra PUSH na agenda.
   const handleDeactivate = async () => {
     if (!collaboratorId) return;
     setIsDeactivating(true);
     try {
-      const { error } = await supabase
-        .from("collaborators")
-        .update({
+      await updateCollaborator.mutateAsync({
+        collaboratorId,
+        section: "status",
+        data: {
           status: "inativo",
           termination_date: new Date().toISOString().slice(0, 10),
-        })
-        .eq("id", collaboratorId);
-      if (error) throw error;
-      toast.success("Colaborador desativado.");
-      queryClient.invalidateQueries({ queryKey: ["collaborators"] });
-      queryClient.invalidateQueries({ queryKey: ["collaborator", collaboratorId] });
+        },
+      });
+      toast.success("Colaborador desativado ✓ (sincronizado com a agenda)");
       queryClient.invalidateQueries({ queryKey: ["collaborator-timeline", collaboratorId] });
       onSuccess?.();
       setConfirmDeactivate(false);
       onOpenChange(false);
-    } catch (error: any) {
-      toast.error("Erro ao desativar: " + error.message);
+    } catch (error) {
+      // toast já é emitido pelo hook em onError
+      console.error("Desativar falhou:", error);
     } finally {
       setIsDeactivating(false);
     }
@@ -1073,22 +1102,17 @@ const CollaboratorModal = ({
     if (!collaboratorId) return;
     setIsDeactivating(true);
     try {
-      const { error } = await supabase
-        .from("collaborators")
-        .update({
-          status: "ativo",
-          termination_date: null,
-        })
-        .eq("id", collaboratorId);
-      if (error) throw error;
-      toast.success("Colaborador reativado ✓");
-      queryClient.invalidateQueries({ queryKey: ["collaborators"] });
-      queryClient.invalidateQueries({ queryKey: ["collaborator", collaboratorId] });
+      await updateCollaborator.mutateAsync({
+        collaboratorId,
+        section: "status",
+        data: { status: "ativo", termination_date: null },
+      });
+      toast.success("Colaborador reativado ✓ (sincronizado com a agenda)");
       queryClient.invalidateQueries({ queryKey: ["collaborator-timeline", collaboratorId] });
       setFormData((prev) => ({ ...prev, status: "ativo" }));
       onSuccess?.();
-    } catch (error: any) {
-      toast.error("Erro ao reativar: " + error.message);
+    } catch (error) {
+      console.error("Reativar falhou:", error);
     } finally {
       setIsDeactivating(false);
     }
@@ -2200,6 +2224,11 @@ const CollaboratorModal = ({
                           // postVacationToPayroll). type='ferias' como cinto-extra.
                           if (e.type === "ferias") return false;
                           if (typeof e.external_id === "string" && e.external_id.startsWith("ferias-")) return false;
+                          // Lançamentos AVULSOS (NewEntryDialog: is_fixed=false +
+                          // sem external_id) são pontuais ao mês — não fazem
+                          // parte da ficha permanente do colab.
+                          const hasExtId = typeof e.external_id === "string" && e.external_id.length > 0;
+                          if (e.is_fixed === false && !hasExtId) return false;
                           return true;
                         });
                         if (visibleEntries.length === 0) {
@@ -2699,11 +2728,16 @@ const CollaboratorModal = ({
                 </Button>
               )}
               {!isNew && canManage && (
+                // Excluir colaborador FOI DESATIVADO. Cadastros são sensíveis
+                // (FK em folha, férias, 13º, vínculo com user/auth, agenda
+                // legada). Pra "remover" use o botão Desativar — colab fica
+                // com status='inativo' + termination_date, e sincroniza
+                // como `desativado: true` na agenda. Histórico preservado.
                 <Button
                   variant="outline"
-                  className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
-                  onClick={() => setConfirmDelete(true)}
-                  disabled={isDeactivating || isDeleting}
+                  className="text-muted-foreground border-muted"
+                  disabled
+                  title="Não é possível excluir colaborador. Use Desativar — preserva histórico e sincroniza com a agenda."
                 >
                   <Trash className="w-4 h-4 mr-2" />
                   Excluir

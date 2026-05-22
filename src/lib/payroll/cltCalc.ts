@@ -37,6 +37,27 @@ export const IRPF_REDUCER_RATE_2026 = 0.133145;
 export const FGTS_RATE = 0.08;
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Salário-Família 2026 (Portaria MTP/MF — reajuste anual junto com INSS)
+//
+// Regra: empregado CLT com salário ≤ SALARIO_FAMILIA_LIMITE recebe
+// SALARIO_FAMILIA_VALOR por cada FILHO de até 14 anos OU filho inválido
+// (qualquer idade). Isento de INSS/IRPF/FGTS. Empregador paga e compensa
+// no INSS a recolher.
+//
+// Valores 2025 (placeholder pra 2026 — atualizar quando MTP publicar):
+//   • Limite: R$ 1.906,04
+//   • Valor por filho: R$ 65,00
+//
+// Fonte: https://www.gov.br/inss/pt-br/noticias/o-que-e-salario-familia-e-quem-tem-direito
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const SALARIO_FAMILIA_LIMITE_2026 = 1906.04;
+export const SALARIO_FAMILIA_VALOR_2026 = 65.0;
+
+/** Idade-limite (exclusivo) pra filho não inválido. Lei 4.266/63 art. 1º. */
+export const SALARIO_FAMILIA_IDADE_LIMITE = 14;
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Funções
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -116,4 +137,81 @@ export function calcAllTaxes(args: {
   });
   const fgts = calcFGTS(args.grossSalary);
   return { inss, irpf, fgts };
+}
+
+/**
+ * Dependente elegível ao salário-família.
+ * Use `eligibleChildrenForSalarioFamilia` pra filtrar uma lista de dependentes
+ * por idade + invalidez. A função de cálculo abaixo recebe só a contagem.
+ */
+export interface SalarioFamiliaDependent {
+  /** Data de nascimento ISO (YYYY-MM-DD). */
+  birth_date: string | null;
+  /** True se o dependente é inválido (qualquer idade conta). */
+  is_invalid?: boolean | null;
+  /** Tem que ser filho/enteado pra contar. */
+  kinship?: string | null;
+}
+
+/**
+ * Calcula a idade em anos completos a partir da data de nascimento, na
+ * data de referência (default: hoje). Não usa libs externas — só
+ * aritmética básica pra evitar timezone bugs.
+ */
+export function ageInYears(birthIso: string, refDate: Date = new Date()): number {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(birthIso);
+  if (!m) return -1;
+  const birth = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  let age = refDate.getFullYear() - birth.getFullYear();
+  const beforeBirthday =
+    refDate.getMonth() < birth.getMonth() ||
+    (refDate.getMonth() === birth.getMonth() && refDate.getDate() < birth.getDate());
+  if (beforeBirthday) age--;
+  return age;
+}
+
+/**
+ * Filtra dependentes elegíveis ao salário-família.
+ * Regras: kinship='filho'/'enteado' E (idade < 14 OU is_invalid).
+ */
+export function eligibleChildrenForSalarioFamilia(
+  dependents: SalarioFamiliaDependent[],
+  refDate: Date = new Date(),
+): SalarioFamiliaDependent[] {
+  return dependents.filter((d) => {
+    // Só filho ou enteado contam pra salário-família.
+    const k = (d.kinship ?? "").toLowerCase();
+    if (k !== "filho" && k !== "filha" && k !== "enteado" && k !== "enteada") return false;
+    // Inválido conta em qualquer idade.
+    if (d.is_invalid === true) return true;
+    // Caso normal: idade < 14 (anos completos).
+    if (!d.birth_date) return false;
+    return ageInYears(d.birth_date, refDate) < SALARIO_FAMILIA_IDADE_LIMITE;
+  });
+}
+
+/**
+ * Calcula o valor do salário-família devido a um empregado.
+ *
+ * Regras (Lei 4.266/63 + reajuste 2026):
+ *   • Empregado precisa ter salário ≤ SALARIO_FAMILIA_LIMITE_2026
+ *   • Empresa paga SALARIO_FAMILIA_VALOR_2026 por cada filho elegível
+ *   • Isento de INSS/IRPF/FGTS — entra no líquido sem desconto
+ *
+ * Retorna value = 0 quando o empregado não se qualifica (acima do teto OU
+ * sem filhos elegíveis).
+ */
+export function calcSalarioFamilia(args: {
+  grossSalary: number;
+  eligibleChildrenCount: number;
+}): { value: number; eligible: boolean; perChild: number; limit: number } {
+  const salary = Math.max(0, Number(args.grossSalary) || 0);
+  const count = Math.max(0, Math.floor(Number(args.eligibleChildrenCount) || 0));
+  const eligible = salary > 0 && salary <= SALARIO_FAMILIA_LIMITE_2026 && count > 0;
+  return {
+    value: eligible ? round2(SALARIO_FAMILIA_VALOR_2026 * count) : 0,
+    eligible,
+    perChild: SALARIO_FAMILIA_VALOR_2026,
+    limit: SALARIO_FAMILIA_LIMITE_2026,
+  };
 }
