@@ -1,25 +1,21 @@
 // Edge Function: sync-collaborators
 //
-// Sincroniza colaboradores principais (sem sub-abas) com api.softcom.cloud.
-// Pagina internamente. Pra sincronizar sub-abas de um colaborador
-// específico (ferias, 13, exames, parentes, eventos, etc.), use
-// `sync-collaborator-details` com o ID dele.
+// Sincroniza colaboradores com api.softcom.cloud em LOTES COMPLETOS:
+// cada lote pega N colabs e roda upsert + financials + details neles antes
+// de avançar pro próximo. Vantagem sobre processar tudo em 3 fases globais:
+// se travar no meio, o lote anterior já está 100% completo no SoftHouse —
+// não fica "metade upsertado, metade com financials, nada de details".
 //
 // ─── Fluxo "fatia + auto-continuação" ──────────────────────────────────────
 // 1. Cliente: POST { companyId, includeFinancials?, includeDetails? }
 //    → cria sync_job, retorna { jobId } 202, trabalho roda em background
-// 2. Background: trabalha em FATIAS de até 4 min (SLICE_BUDGET_MS) pra
-//    caber bem dentro do limite Supabase (~6 min wall time).
-// 3. Cada fatia respeita cursor.phase: init → financials → details → done.
-//    Financials e details são paralelizados (chunks de 8 / 4 colabs).
-// 4. Se o budget esgotar antes de done, persiste o cursor e auto-invoca
-//    a si mesma via fetch (Authorization: Bearer SERVICE_ROLE) passando
-//    { resumeJobId }. Nova invocação lê o cursor e continua.
-// 5. Frontend polla sync_jobs até status terminal (completed/failed).
-//
-// Estratégia espelho 100% por external_id, idêntica a sync-stores/teams/positions.
-// Lookups pré-carregados pra resolver setor/cargo/empresa via mapa em memória
-// (evita N+1).
+// 2. FASE init: lookups + fetch agenda (paginado) + filtros + cursor inicial
+// 3. FASE batches: loop processando BATCH_SIZE colabs em paralelo. Cada
+//    colab no batch passa por upsert → (financials) → (details) end-to-end.
+// 4. FASE deactivate: marca como inativo quem sumiu da agenda
+// 5. Se SLICE_BUDGET_MS esgotar entre batches: persiste cursor + self-invoke
+//    com { resumeJobId }. Nova invocação retoma do batchIdx atual.
+// 6. Frontend polla sync_jobs até status terminal.
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.0";
@@ -52,25 +48,25 @@ const PAGE_SIZE = 50;
 const MAX_PAGES = 2000;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Tunables do "fatia + auto-continuação"
+// Tunables
 // ─────────────────────────────────────────────────────────────────────────────
 // Tempo máximo por invocação. 4 min é seguro pra Supabase Edge Functions
-// (limit teórico ~6 min wall time / 400s CPU).
+// (limit teórico ~6 min wall time).
 const SLICE_BUDGET_MS = 4 * 60 * 1000;
-// Paralelização em fases N+1 contra a agenda. Conservador pra não saturar a
-// API legada nem o pool de conexões do Postgres.
-const FINANCIALS_CONCURRENCY = 8;
-const DETAILS_CONCURRENCY = 4; // details = 9 HTTP requests por colab
-// Persiste cursor a cada N colabs processados (chunk-size do tick + cursor).
-const CURSOR_PERSIST_EVERY = 8;
+// Colabs por batch. Cada colab no batch passa por upsert + financials + details
+// end-to-end em paralelo com os outros do batch. 10 é conservador pra não
+// saturar a agenda (cada colab faz 11 HTTP requests; 10 paralelos = 110 reqs
+// simultâneos no pior caso — agenda aguenta).
+const BATCH_SIZE = 10;
+// Watchdog: se um batch demorar mais que isso, aborta esse batch (colabs
+// pendentes ficam de fora) e agenda continuação. Protege contra colab lento
+// da agenda travando o worker até morrer no limite de 6min do Supabase.
+const BATCH_TIMEOUT_MS = 90 * 1000; // 90s por batch
 // Limite hard contra loop infinito de continuações.
-const MAX_CONTINUATIONS = 25;
+const MAX_CONTINUATIONS = 50;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TEMP TEST — DESLIGADO em produção (null = sync normal de TODOS os colabs).
-// Pra debugar: troca null por [384, 816, ...] e a sync vai processar SÓ
-// esses colabs. Útil pra rodar o fluxo do início ao fim sem mexer nos
-// outros 299.
 // ─────────────────────────────────────────────────────────────────────────────
 const TEST_ONLY_COLAB_IDS: number[] | null = null;
 
@@ -78,7 +74,7 @@ const TEST_ONLY_COLAB_IDS: number[] | null = null;
 // Tipos do cursor — persistido em sync_jobs.cursor (jsonb)
 // ─────────────────────────────────────────────────────────────────────────────
 
-type Phase = "init" | "financials" | "details" | "done";
+type Phase = "init" | "batches" | "deactivate" | "done";
 
 interface JobOptions {
   companyId: string;
@@ -98,6 +94,7 @@ interface ErrorRef {
   name: string;
   cpf: string | null;
   error: string;
+  phase: "upsert" | "financials" | "details";
 }
 
 interface FinancialsSummary {
@@ -111,35 +108,36 @@ interface FinancialsSummary {
   assignmentsUpserted: number;
   benefitsCreated: number;
   errors: number;
-  errorDetails: Array<{ collaboratorName: string; external_id: string; tipo: string; error: string }>;
 }
 
 interface DetailsSummary {
   processed: number;
   totals: Record<string, number>;
   errors: number;
-  errorDetails: Array<{ collaboratorName: string; kind: string; error: string }>;
 }
 
 interface JobCursor {
   phase: Phase;
+  // Onde está no array pendingExtIds
+  batchIdx: number;
   // Contadores acumulados (sobrevivem entre continuações)
   fetched: number;
+  toProcess: number;
   inserted: number;
   updated: number;
   deactivated: number;
-  // Filtrados por regra de negócio (ex: sem salário) — não são erro, é skip intencional
   skippedNoSalary: number;
-  // Lista de quem foi upsertado com sucesso — base pras fases seguintes
+  // Snapshot da agenda no momento do fetch (fase init) — usado pra:
+  //   • iterar nos batches (pendingExtIds)
+  //   • desativar (remoteExtIds vs existentes localmente)
+  //   • diferenciar inserted vs updated (existingExtIds)
+  remoteExtIds: string[];      // TODOS que vieram da agenda (incluindo sem salário)
+  pendingExtIds: string[];     // só os que passaram pelo filtro de salário
+  existingExtIds: string[];    // já tinham no SoftHouse (pra contar updated)
   successes: SuccessRef[];
   errors: ErrorRef[];
-  // Índice de onde retomar em financials/details
-  financialsIdx: number;
-  detailsIdx: number;
-  // Sumários acumulados das fases opt-in
-  financialsSummary: FinancialsSummary | null;
-  detailsSummary: DetailsSummary | null;
-  // Quantas vezes esta job já foi continuada
+  financialsSummary: FinancialsSummary;
+  detailsSummary: DetailsSummary;
   continuationCount: number;
   options: JobOptions;
 }
@@ -147,40 +145,35 @@ interface JobCursor {
 function newCursor(options: JobOptions): JobCursor {
   return {
     phase: "init",
+    batchIdx: 0,
     fetched: 0,
+    toProcess: 0,
     inserted: 0,
     updated: 0,
     deactivated: 0,
     skippedNoSalary: 0,
+    remoteExtIds: [],
+    pendingExtIds: [],
+    existingExtIds: [],
     successes: [],
     errors: [],
-    financialsIdx: 0,
-    detailsIdx: 0,
-    financialsSummary: null,
-    detailsSummary: null,
+    financialsSummary: {
+      processed: 0, salaryCreated: 0, salaryUpdated: 0,
+      inssGenerated: 0, irpfGenerated: 0, fgtsGenerated: 0,
+      payrollUpserted: 0, assignmentsUpserted: 0, benefitsCreated: 0,
+      errors: 0,
+    },
+    detailsSummary: {
+      processed: 0,
+      totals: {
+        absences: 0, leaves: 0, emails: 0, internships: 0,
+        pdvs: 0, healthPlans: 0, healthPlanDeductions: 0,
+        vacations: 0, exams: 0, timelineEvents: 0,
+      },
+      errors: 0,
+    },
     continuationCount: 0,
     options,
-  };
-}
-
-function newFinancialsSummary(): FinancialsSummary {
-  return {
-    processed: 0, salaryCreated: 0, salaryUpdated: 0,
-    inssGenerated: 0, irpfGenerated: 0, fgtsGenerated: 0,
-    payrollUpserted: 0, assignmentsUpserted: 0, benefitsCreated: 0,
-    errors: 0, errorDetails: [],
-  };
-}
-
-function newDetailsSummary(): DetailsSummary {
-  return {
-    processed: 0,
-    totals: {
-      absences: 0, leaves: 0, emails: 0, internships: 0,
-      pdvs: 0, healthPlans: 0, healthPlanDeductions: 0,
-      vacations: 0, exams: 0, timelineEvents: 0,
-    },
-    errors: 0, errorDetails: [],
   };
 }
 
@@ -199,7 +192,6 @@ serve(async (req) => {
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-  // Parse body (resume vs novo)
   let body: Record<string, unknown>;
   try {
     body = await req.json();
@@ -215,10 +207,9 @@ serve(async (req) => {
   });
 
   // ───────────────────────────────────────────────────────────────────────────
-  // Modo CONTINUAÇÃO: self-invoke com Authorization: Bearer SERVICE_ROLE
+  // Modo CONTINUAÇÃO: self-invoke com SERVICE_ROLE bearer
   // ───────────────────────────────────────────────────────────────────────────
   if (isInternalResume) {
-    // Carrega o job + cursor
     const { data: jobRow, error: loadErr } = await sbAdmin
       .from("sync_jobs")
       .select("id, status, cursor, options")
@@ -234,7 +225,6 @@ serve(async (req) => {
     if (!cursor) {
       return jsonResponse({ error: "Job sem cursor — não pode retomar" }, 400);
     }
-    // Background continua
     scheduleBackground(() =>
       runJobSlice(sbAdmin, supabaseUrl, serviceKey, resumeJobId, cursor).catch(async (err: Error) => {
         console.error(`sync-collaborators resume ${resumeJobId} crashed:`, err);
@@ -277,7 +267,6 @@ serve(async (req) => {
   const options: JobOptions = { companyId, incluirDesativados, includeFinancials, includeDetails };
   const cursor = newCursor(options);
 
-  // Cria job + grava cursor inicial
   const jobId = await createSyncJob(sbAdmin, {
     companyId,
     resource: "collaborators",
@@ -315,18 +304,15 @@ async function runJobSlice(
   const tick = throttledJobUpdater(sbAdmin, jobId, 800);
 
   if (cursor.continuationCount === 0) {
-    await markJobRunning(sbAdmin, jobId, "Carregando lookups (empresas/setores/cargos)...");
+    await markJobRunning(sbAdmin, jobId, "Carregando lookups...");
   } else {
     await updateJob(sbAdmin, jobId, {
-      current_step: `Retomando (continuação ${cursor.continuationCount})...`,
+      current_step: `Retomando lote ${Math.floor(cursor.batchIdx / BATCH_SIZE) + 1} (continuação ${cursor.continuationCount})...`,
     });
   }
 
-  const { companyId, incluirDesativados, includeFinancials, includeDetails } = cursor.options;
-
   // ───────────────────────────────────────────────────────────────────────────
-  // FASE 1: init — lookup, fetch agenda, diff, upsert, deactivate
-  // (executa só na primeira invocação. Geralmente cabe bem dentro do budget.)
+  // FASE 1: init — lookups, fetch agenda, filtros
   // ───────────────────────────────────────────────────────────────────────────
   if (cursor.phase === "init") {
     try {
@@ -338,77 +324,29 @@ async function runJobSlice(
       await markJobFailed(sbAdmin, jobId, msg);
       return;
     }
-
-    // Decide próxima fase
-    if (includeFinancials && cursor.successes.length > 0) {
-      cursor.phase = "financials";
-      cursor.financialsSummary = newFinancialsSummary();
-      // Reseta barra pra refletir progresso da NOVA fase (não fica preso
-      // no contador da fase 1)
-      await updateJob(sbAdmin, jobId, {
-        processed: 0,
-        total: cursor.successes.length,
-        current_step: `Iniciando financeiros (${cursor.successes.length} colabs)...`,
-      });
-    } else if (includeDetails && cursor.successes.length > 0) {
-      cursor.phase = "details";
-      cursor.detailsSummary = newDetailsSummary();
-      await updateJob(sbAdmin, jobId, {
-        processed: 0,
-        total: cursor.successes.length,
-        current_step: `Iniciando detalhes (${cursor.successes.length} colabs)...`,
-      });
-    } else {
-      cursor.phase = "done";
-    }
+    cursor.phase = cursor.pendingExtIds.length > 0 ? "batches" : "deactivate";
     await persistCursor(sbAdmin, jobId, cursor);
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // FASE 2: financials (opt-in, paralelizado em chunks)
+  // FASE 2: batches — processa lotes de BATCH_SIZE colabs end-to-end
   // ───────────────────────────────────────────────────────────────────────────
-  if (cursor.phase === "financials") {
-    if (!cursor.financialsSummary) cursor.financialsSummary = newFinancialsSummary();
-
-    const result = await runFinancialsPhase(
-      sbAdmin, jobId, cursor, tick, budgetExpired,
-    );
-
+  if (cursor.phase === "batches") {
+    const result = await runBatchesPhase(sbAdmin, jobId, cursor, tick, budgetExpired);
     if (result === "budget_expired") {
       await persistCursor(sbAdmin, jobId, cursor);
       await scheduleContinuation(sbAdmin, supabaseUrl, serviceKey, jobId, cursor);
       return;
     }
-    // Concluído
-    if (includeDetails && cursor.successes.length > 0) {
-      cursor.phase = "details";
-      cursor.detailsSummary = newDetailsSummary();
-      await updateJob(sbAdmin, jobId, {
-        processed: 0,
-        total: cursor.successes.length,
-        current_step: `Iniciando detalhes (${cursor.successes.length} colabs)...`,
-      });
-    } else {
-      cursor.phase = "done";
-    }
+    cursor.phase = "deactivate";
     await persistCursor(sbAdmin, jobId, cursor);
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // FASE 3: details (opt-in, paralelizado)
+  // FASE 3: deactivate — marca como inativo quem sumiu da agenda
   // ───────────────────────────────────────────────────────────────────────────
-  if (cursor.phase === "details") {
-    if (!cursor.detailsSummary) cursor.detailsSummary = newDetailsSummary();
-
-    const result = await runDetailsPhase(
-      sbAdmin, jobId, cursor, tick, budgetExpired,
-    );
-
-    if (result === "budget_expired") {
-      await persistCursor(sbAdmin, jobId, cursor);
-      await scheduleContinuation(sbAdmin, supabaseUrl, serviceKey, jobId, cursor);
-      return;
-    }
+  if (cursor.phase === "deactivate") {
+    await runDeactivatePhase(sbAdmin, jobId, cursor);
     cursor.phase = "done";
     await persistCursor(sbAdmin, jobId, cursor);
   }
@@ -419,22 +357,23 @@ async function runJobSlice(
   await tick({}, true);
   await markJobCompleted(sbAdmin, jobId, {
     fetched: cursor.fetched,
+    to_process: cursor.toProcess,
     inserted: cursor.inserted,
     updated: cursor.updated,
     deactivated: cursor.deactivated,
     skipped_no_salary: cursor.skippedNoSalary,
     successes_count: cursor.successes.length,
     errors_count: cursor.errors.length,
-    errors: cursor.errors,
-    successes: cursor.successes,
-    financials: cursor.financialsSummary,
-    details: cursor.detailsSummary,
+    errors: cursor.errors.slice(-100), // limita output do result final
+    successes: cursor.successes.slice(-100),
+    financials: cursor.options.includeFinancials ? cursor.financialsSummary : null,
+    details: cursor.options.includeDetails ? cursor.detailsSummary : null,
     continuations: cursor.continuationCount,
   });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FASE 1: init (lookups, fetch agenda, diff, upsert, deactivate)
+// FASE 1: init — lookups + fetch agenda + filtros
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function runInitPhase(
@@ -446,15 +385,7 @@ async function runInitPhase(
 ): Promise<void> {
   const { companyId, incluirDesativados } = cursor.options;
 
-  // 1. Lookups
-  const [storesMap, teamsMap, positionsMap, existingCollabs] = await Promise.all([
-    loadExternalIdMap(sbAdmin, "stores", companyId),
-    loadExternalIdMap(sbAdmin, "teams", companyId),
-    loadExternalIdMap(sbAdmin, "positions", companyId),
-    loadExistingCollaborators(sbAdmin, companyId),
-  ]);
-
-  // 2. Fetch agenda (paginado)
+  // Fetch agenda paginado
   await updateJob(sbAdmin, jobId, { current_step: "Buscando colaboradores na agenda..." });
   const remote: RemoteColaborador[] = [];
 
@@ -475,150 +406,45 @@ async function runInitPhase(
       totalPages = resp.pagination.totalPages || 1;
       await tick({
         current_step: `Buscando agenda — página ${page}/${totalPages} (${remote.length} colabs)`,
-        total: resp.pagination.total ?? remote.length,
       });
       page++;
     } while (page <= totalPages && page <= MAX_PAGES);
   }
 
   cursor.fetched = remote.length;
-  await updateJob(sbAdmin, jobId, {
-    total: remote.length,
-    current_step: `Preparando upsert de ${remote.length} colaboradores...`,
-  });
+  cursor.remoteExtIds = remote.map((r) => String(r.id));
 
-  // 3. Diff + upsert
-  // IMPORTANTE: remoteExtIds inclui TODOS os colabs vindos da agenda (mesmo
-  // sem salário). Isso garante que colabs filtrados aqui não sejam marcados
-  // como "desativados" abaixo — eles AINDA existem na agenda, só não têm
-  // salário cadastrado ainda. Desativação só dispara pra quem realmente
-  // sumiu do retorno da agenda.
-  const remoteExtIds = new Set(remote.map((r) => String(r.id)));
-  const rowsToUpsert: Record<string, unknown>[] = [];
-  const rowMetaByExt = new Map<string, { name: string; cpf: string | null }>();
-
+  // Filtra por salário > 0
+  const pending: RemoteColaborador[] = [];
   for (const r of remote) {
-    const displayName = (r.nome ?? r.nomeSuporte ?? `Colab ${r.id}`).toString().trim();
-
-    // ──────────────────────────────────────────────────────────────────────
-    // Filtro: pula colabs sem salário cadastrado (lixo da agenda — registros
-    // incompletos, testes antigos, etc). Decisão do user pra evitar importar
-    // dados inúteis. Não conta como erro — é skip intencional.
-    // ──────────────────────────────────────────────────────────────────────
     const salary = typeof r.salarioAtual === "number" ? r.salarioAtual : 0;
     if (!(salary > 0)) {
       cursor.skippedNoSalary++;
       continue;
     }
-
-    try {
-      const row = mapColaboradorToRow(r, companyId, storesMap, teamsMap, positionsMap);
-      rowsToUpsert.push(row);
-      rowMetaByExt.set(String(r.id), { name: displayName, cpf: r.cpf ?? null });
-    } catch (e) {
-      cursor.errors.push({
-        external_id: String(r.id),
-        name: displayName,
-        cpf: r.cpf ?? null,
-        error: (e as Error).message,
-      });
-    }
+    pending.push(r);
   }
 
-  if (cursor.skippedNoSalary > 0) {
-    await updateJob(sbAdmin, jobId, {
-      current_step: `${rowsToUpsert.length} pra processar (${cursor.skippedNoSalary} ignorados — sem salário)`,
-    });
-  }
+  cursor.pendingExtIds = pending.map((r) => String(r.id));
+  cursor.toProcess = pending.length;
 
-  let processed = 0;
-  if (rowsToUpsert.length > 0) {
-    const chunkSize = 50;
-    for (let i = 0; i < rowsToUpsert.length; i += chunkSize) {
-      const chunk = rowsToUpsert.slice(i, i + chunkSize);
-      const { data: upsertData, error: upErr } = await sbAdmin
-        .from("collaborators")
-        .upsert(chunk, { onConflict: "company_id,external_id", ignoreDuplicates: false })
-        .select("external_id");
+  // Carrega quem já existe localmente pra distinguir inserted vs updated
+  const existing = await loadExistingCollaborators(sbAdmin, companyId);
+  cursor.existingExtIds = Array.from(existing.keys());
 
-      if (upErr) {
-        // Tenta linha-a-linha pra reportar quais falharam
-        for (const row of chunk) {
-          const extId = String(row.external_id);
-          const meta = rowMetaByExt.get(extId);
-          const { data: singleData, error: singleErr } = await sbAdmin
-            .from("collaborators")
-            .upsert(row, { onConflict: "company_id,external_id", ignoreDuplicates: false })
-            .select("external_id")
-            .maybeSingle();
-          if (singleErr) {
-            // Mensagem amigável pra erro de CPF duplicado (caso clássico:
-            // existe outro colab local com mesmo CPF mas external_id diferente)
-            const friendlyError = singleErr.message.includes("cpf_company_id")
-              ? `CPF ${row.cpf ?? "—"} já cadastrado em outro colaborador desta empresa`
-              : singleErr.message;
-            cursor.errors.push({
-              external_id: extId,
-              name: meta?.name ?? `Colab ${extId}`,
-              cpf: meta?.cpf ?? null,
-              error: friendlyError,
-            });
-          } else if (singleData) {
-            const action = existingCollabs.has(extId) ? "updated" : "inserted";
-            if (action === "updated") cursor.updated++; else cursor.inserted++;
-            cursor.successes.push({ external_id: extId, name: meta?.name ?? `Colab ${extId}`, action });
-          }
-          processed++;
-        }
-      } else {
-        for (const row of upsertData ?? []) {
-          const extId = row.external_id as string;
-          const meta = rowMetaByExt.get(extId);
-          const action = existingCollabs.has(extId) ? "updated" : "inserted";
-          if (action === "updated") cursor.updated++; else cursor.inserted++;
-          cursor.successes.push({ external_id: extId, name: meta?.name ?? `Colab ${extId}`, action });
-          processed++;
-        }
-      }
-      await tick({
-        processed,
-        inserted: cursor.inserted,
-        updated: cursor.updated,
-        current_step: `Salvando colaboradores: ${processed}/${rowsToUpsert.length}`,
-        errors: cursor.errors.slice(-20).map((e) => ({ external_id: e.external_id, name: e.name, error: e.error })),
-      });
-    }
-  }
-
-  // 4. Desativar quem sumiu (skip se TEST_ONLY ligado)
-  if (TEST_ONLY_COLAB_IDS == null || TEST_ONLY_COLAB_IDS.length === 0) {
-    const idsToDeactivate: string[] = [];
-    for (const [extId, info] of existingCollabs) {
-      if (!remoteExtIds.has(extId) && info.status === "ativo") {
-        idsToDeactivate.push(info.id);
-      }
-    }
-    if (idsToDeactivate.length > 0) {
-      await updateJob(sbAdmin, jobId, {
-        current_step: `Desativando ${idsToDeactivate.length} colab(s) ausentes da agenda...`,
-      });
-      const { error: deactErr } = await sbAdmin
-        .from("collaborators")
-        .update({ status: "inativo" })
-        .in("id", idsToDeactivate);
-      if (deactErr) throw new Error(`Desativação falhou: ${deactErr.message}`);
-      cursor.deactivated = idsToDeactivate.length;
-      await updateJob(sbAdmin, jobId, { deactivated: cursor.deactivated });
-    }
-  }
+  await updateJob(sbAdmin, jobId, {
+    total: cursor.toProcess,
+    processed: 0,
+    current_step: `${cursor.toProcess} pra processar (${cursor.skippedNoSalary} ignorados sem salário) — iniciando lotes de ${BATCH_SIZE}...`,
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FASE 2: financials — paralelizado, com cursor persistente.
-// Retorna "budget_expired" se precisou parar antes de terminar.
+// FASE 2: batches — processa lotes de BATCH_SIZE colabs end-to-end
+// Cada colab passa por: upsert → financials (se opt-in) → details (se opt-in)
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function runFinancialsPhase(
+async function runBatchesPhase(
   // deno-lint-ignore no-explicit-any
   sbAdmin: any,
   jobId: string,
@@ -626,204 +452,314 @@ async function runFinancialsPhase(
   tick: (patch: Record<string, unknown>, flush?: boolean) => Promise<void>,
   budgetExpired: () => boolean,
 ): Promise<"completed" | "budget_expired"> {
-  const successes = cursor.successes;
-  const total = successes.length;
-  const summary = cursor.financialsSummary!;
+  const { companyId, includeFinancials, includeDetails } = cursor.options;
+  const total = cursor.toProcess;
 
-  // Carrega mapa local (id + store_id + current_salary) só pros restantes
-  const remaining = successes.slice(cursor.financialsIdx);
-  if (remaining.length === 0) return "completed";
+  const [storesMap, teamsMap, positionsMap] = await Promise.all([
+    loadExternalIdMap(sbAdmin, "stores", companyId),
+    loadExternalIdMap(sbAdmin, "teams", companyId),
+    loadExternalIdMap(sbAdmin, "positions", companyId),
+  ]);
+  const existingExtIdsSet = new Set(cursor.existingExtIds);
 
-  const { data: collabsLocal } = await sbAdmin
-    .from("collaborators")
-    .select("id, external_id, store_id, current_salary")
-    .eq("company_id", cursor.options.companyId)
-    .in("external_id", remaining.map((s) => s.external_id));
-  const localByExt = new Map<string, { id: string; store_id: string | null; current_salary: number | null }>(
-    (collabsLocal ?? []).map((c: { id: string; external_id: string; store_id: string | null; current_salary: number | null }) => [c.external_id, c]),
-  );
-
-  // Loop em chunks paralelos
-  while (cursor.financialsIdx < total) {
+  while (cursor.batchIdx < total) {
     if (budgetExpired()) return "budget_expired";
 
-    const chunk = successes.slice(cursor.financialsIdx, cursor.financialsIdx + FINANCIALS_CONCURRENCY);
-    const results = await Promise.allSettled(
-      chunk.map(async (s) => {
-        const local = localByExt.get(s.external_id);
-        if (!local) return { skipped: true, name: s.name, external_id: s.external_id };
-        try {
-          const adicionais = await listAdicionais(s.external_id);
-          const fin = await applyFinancials(sbAdmin, {
-            companyId: cursor.options.companyId,
-            collaboratorId: local.id,
-            storeId: local.store_id,
-            currentSalary: local.current_salary,
-            adicionais,
-          });
-          return { ok: true, name: s.name, external_id: s.external_id, fin };
-        } catch (e) {
-          return { error: (e as Error).message, name: s.name, external_id: s.external_id };
-        }
-      }),
-    );
+    const batchNum = Math.floor(cursor.batchIdx / BATCH_SIZE) + 1;
+    const totalBatches = Math.ceil(total / BATCH_SIZE);
+    const batchExtIds = cursor.pendingExtIds.slice(cursor.batchIdx, cursor.batchIdx + BATCH_SIZE);
 
-    // Agrega
-    for (const r of results) {
-      if (r.status === "rejected") {
-        // Promise.allSettled garante que nunca cai aqui (capturamos no try), mas defensivo
-        summary.errors++;
-        summary.errorDetails.push({
-          collaboratorName: "?",
-          external_id: "?",
-          tipo: "EXCEPTION",
-          error: String(r.reason),
-        });
-        continue;
-      }
-      const v = r.value;
-      if ("skipped" in v) continue;
-      if ("error" in v) {
-        summary.errors++;
-        summary.errorDetails.push({
-          collaboratorName: v.name,
-          external_id: v.external_id,
-          tipo: "EXCEPTION",
-          error: v.error,
-        });
-        continue;
-      }
-      const { fin } = v;
-      summary.processed++;
-      if (fin.salaryEntry.created) summary.salaryCreated++;
-      if (fin.salaryEntry.updated) summary.salaryUpdated++;
-      if (fin.taxEntries.inss.created || fin.taxEntries.inss.updated) summary.inssGenerated++;
-      if (fin.taxEntries.irpf.created || fin.taxEntries.irpf.updated) summary.irpfGenerated++;
-      if (fin.taxEntries.fgts.created || fin.taxEntries.fgts.updated) summary.fgtsGenerated++;
-      summary.payrollUpserted += fin.payrollEntries.upserted;
-      summary.assignmentsUpserted += fin.benefitsAssignments.upserted;
-      summary.benefitsCreated += fin.benefitsAssignments.benefitsCreated;
-      summary.errors += fin.errors.length;
-      for (const fe of fin.errors) {
-        summary.errorDetails.push({
-          collaboratorName: v.name,
-          external_id: fe.external_id,
-          tipo: fe.tipo,
-          error: fe.error,
-        });
-      }
-    }
-
-    cursor.financialsIdx += chunk.length;
     await tick({
-      processed: cursor.financialsIdx,
-      total,
-      current_step: `Aplicando financeiros: ${cursor.financialsIdx}/${total} (paralelo ${FINANCIALS_CONCURRENCY}x)`,
+      current_step: `Lote ${batchNum}/${totalBatches}: processando ${batchExtIds.length} colabs...`,
     });
 
-    // Persiste cursor periodicamente
-    if (cursor.financialsIdx % CURSOR_PERSIST_EVERY === 0) {
+    // ─── Watchdog: aborta batch se ultrapassar BATCH_TIMEOUT_MS ───
+    // Sem isso, um colab travado na agenda segura o batch inteiro até o
+    // worker morrer no limite do Supabase (~6min). Resultado: nunca consegue
+    // agendar continuação. Com watchdog: aborta o batch, marca incompletos
+    // como pending (cursor não avança esses), agenda continuação que retoma.
+    const batchPromise = runOneBatch({
+      sbAdmin, cursor, batchExtIds, batchNum, totalBatches,
+      companyId, storesMap, teamsMap, positionsMap, existingExtIdsSet,
+      includeFinancials, includeDetails,
+      onColabDone: async (doneCount) => {
+        // Tick a cada colab terminado (não só ao fim do batch) — feedback ao vivo.
+        await tick({
+          processed: cursor.batchIdx + doneCount,
+          total,
+          inserted: cursor.inserted,
+          updated: cursor.updated,
+          current_step: `Lote ${batchNum}/${totalBatches}: ${doneCount}/${batchExtIds.length} colabs do lote prontos (${cursor.batchIdx + doneCount}/${total} geral)`,
+        });
+      },
+    });
+
+    const timeoutPromise = new Promise<"timeout">((resolve) =>
+      setTimeout(() => resolve("timeout"), BATCH_TIMEOUT_MS)
+    );
+
+    const result = await Promise.race([batchPromise, timeoutPromise]);
+
+    if (result === "timeout") {
+      // Watchdog disparou — batch demorou demais. Marca colabs do batch que
+      // NÃO conseguiram terminar como pending (vão ser refeitos na próxima
+      // continuação). Os que terminaram já tiveram cursor mutado.
+      console.warn(`Batch ${batchNum} timeout (${BATCH_TIMEOUT_MS}ms) — abortando`);
+      await tick({
+        current_step: `⚠ Lote ${batchNum} demorou demais (>${BATCH_TIMEOUT_MS / 1000}s) — agendando continuação...`,
+      });
+      // Avança batchIdx até onde processOneColabEndToEnd conseguiu (rastreado
+      // via successes/errors no cursor). Como Promise.race não cancela o
+      // batchPromise, ele continua rodando em background até dar erro/timeout
+      // do HTTP — mas como o resultado já vem por mutação do cursor (não
+      // pelo return), os colabs que terminarem ainda serão contados na
+      // próxima invocação.
       await persistCursor(sbAdmin, jobId, cursor);
+      return "budget_expired";
     }
+
+    // Batch terminou no tempo
+    cursor.batchIdx += batchExtIds.length;
+    await tick({
+      processed: cursor.batchIdx,
+      total,
+      inserted: cursor.inserted,
+      updated: cursor.updated,
+      current_step: `Lote ${batchNum}/${totalBatches} concluído — ${cursor.batchIdx}/${total} colabs prontos`,
+    });
+    await persistCursor(sbAdmin, jobId, cursor);
   }
 
   return "completed";
 }
 
+/**
+ * Roda 1 batch em paralelo, com callback `onColabDone` chamado a cada colab
+ * terminado pra dar feedback ao vivo (sem esperar batch inteiro).
+ */
+async function runOneBatch(args: {
+  // deno-lint-ignore no-explicit-any
+  sbAdmin: any;
+  cursor: JobCursor;
+  batchExtIds: string[];
+  batchNum: number;
+  totalBatches: number;
+  companyId: string;
+  storesMap: Map<string, string>;
+  teamsMap: Map<string, string>;
+  positionsMap: Map<string, string>;
+  existingExtIdsSet: Set<string>;
+  includeFinancials: boolean;
+  includeDetails: boolean;
+  onColabDone: (doneCount: number) => Promise<void>;
+}): Promise<"done"> {
+  const {
+    sbAdmin, cursor, batchExtIds, companyId, storesMap, teamsMap, positionsMap,
+    existingExtIdsSet, includeFinancials, includeDetails, onColabDone,
+  } = args;
+
+  let doneCount = 0;
+  await Promise.allSettled(
+    batchExtIds.map(async (extId) => {
+      await processOneColabEndToEnd(sbAdmin, cursor, {
+        extId, companyId, storesMap, teamsMap, positionsMap,
+        existingExtIdsSet, includeFinancials, includeDetails,
+      });
+      doneCount++;
+      try {
+        await onColabDone(doneCount);
+      } catch { /* tick falhou — não bloqueia o batch */ }
+    }),
+  );
+  return "done";
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// FASE 3: details — paralelizado, com cursor persistente.
+// Processa UM colaborador end-to-end: fetch da agenda + upsert + financials +
+// details. Atualiza contadores no cursor (mutável). Erros vão pra cursor.errors
+// com a phase onde falhou.
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function runDetailsPhase(
+async function processOneColabEndToEnd(
   // deno-lint-ignore no-explicit-any
   sbAdmin: any,
-  jobId: string,
   cursor: JobCursor,
-  tick: (patch: Record<string, unknown>, flush?: boolean) => Promise<void>,
-  budgetExpired: () => boolean,
-): Promise<"completed" | "budget_expired"> {
-  const successes = cursor.successes;
-  const total = successes.length;
-  const summary = cursor.detailsSummary!;
+  ctx: {
+    extId: string;
+    companyId: string;
+    storesMap: Map<string, string>;
+    teamsMap: Map<string, string>;
+    positionsMap: Map<string, string>;
+    existingExtIdsSet: Set<string>;
+    includeFinancials: boolean;
+    includeDetails: boolean;
+  },
+): Promise<void> {
+  const { extId, companyId, storesMap, teamsMap, positionsMap, existingExtIdsSet, includeFinancials, includeDetails } = ctx;
 
-  const remaining = successes.slice(cursor.detailsIdx);
-  if (remaining.length === 0) return "completed";
+  // Fetch fresh data da agenda (mais lento mas garante dados atuais e cabe no batch)
+  let remote: RemoteColaborador;
+  try {
+    remote = await getColaborador(Number(extId));
+  } catch (e) {
+    cursor.errors.push({
+      external_id: extId, name: `Colab ${extId}`, cpf: null,
+      phase: "upsert", error: `Fetch agenda: ${(e as Error).message}`,
+    });
+    return;
+  }
 
-  const { data: collabsLocal } = await sbAdmin
+  const displayName = (remote.nome ?? remote.nomeSuporte ?? `Colab ${extId}`).toString().trim();
+  const cpf = remote.cpf ? String(remote.cpf).replace(/\D/g, "") : null;
+
+  // ─── Upsert do colab ───
+  let row: Record<string, unknown>;
+  try {
+    row = mapColaboradorToRow(remote, companyId, storesMap, teamsMap, positionsMap);
+  } catch (e) {
+    cursor.errors.push({
+      external_id: extId, name: displayName, cpf,
+      phase: "upsert", error: (e as Error).message,
+    });
+    return;
+  }
+
+  const { data: upData, error: upErr } = await sbAdmin
     .from("collaborators")
-    .select("id, external_id")
-    .eq("company_id", cursor.options.companyId)
-    .in("external_id", remaining.map((s) => s.external_id));
-  const localByExt = new Map<string, string>(
-    (collabsLocal ?? []).map((c: { id: string; external_id: string }) => [c.external_id, c.id]),
-  );
+    .upsert(row, { onConflict: "company_id,external_id", ignoreDuplicates: false })
+    .select("id")
+    .maybeSingle();
 
-  while (cursor.detailsIdx < total) {
-    if (budgetExpired()) return "budget_expired";
+  if (upErr) {
+    const friendlyError = upErr.message.includes("cpf_company_id")
+      ? `CPF ${cpf ?? "—"} já cadastrado em outro colaborador desta empresa`
+      : upErr.message.includes("not-null") && upErr.message.includes("cpf")
+      ? `CPF vazio — aplique a migration cpf_nullable (npx supabase db push)`
+      : upErr.message;
+    cursor.errors.push({
+      external_id: extId, name: displayName, cpf,
+      phase: "upsert", error: friendlyError,
+    });
+    return;
+  }
+  if (!upData?.id) {
+    cursor.errors.push({
+      external_id: extId, name: displayName, cpf,
+      phase: "upsert", error: "Upsert retornou sem id",
+    });
+    return;
+  }
 
-    const chunk = successes.slice(cursor.detailsIdx, cursor.detailsIdx + DETAILS_CONCURRENCY);
-    const results = await Promise.allSettled(
-      chunk.map(async (s) => {
-        const localId = localByExt.get(s.external_id);
-        if (!localId) return { skipped: true };
-        try {
-          const det = await applyCollaboratorDetails(sbAdmin, {
-            companyId: cursor.options.companyId,
-            collaboratorId: localId,
-            remoteId: s.external_id,
-          });
-          return { ok: true, name: s.name, det };
-        } catch (e) {
-          return { error: (e as Error).message, name: s.name };
-        }
-      }),
-    );
+  const collaboratorId = upData.id as string;
+  const action = existingExtIdsSet.has(extId) ? "updated" : "inserted";
+  if (action === "updated") cursor.updated++; else cursor.inserted++;
+  cursor.successes.push({ external_id: extId, name: displayName, action });
 
-    for (const r of results) {
-      if (r.status === "rejected") {
-        summary.errors++;
-        summary.errorDetails.push({
-          collaboratorName: "?",
-          kind: "EXCEPTION",
-          error: String(r.reason),
+  // ─── Financials (opt-in) ───
+  if (includeFinancials) {
+    try {
+      const adicionais = await listAdicionais(extId);
+      const fin = await applyFinancials(sbAdmin, {
+        companyId,
+        collaboratorId,
+        storeId: (row.store_id as string | null) ?? null,
+        currentSalary: (row.current_salary as number | null) ?? null,
+        adicionais,
+      });
+      const fs = cursor.financialsSummary;
+      fs.processed++;
+      if (fin.salaryEntry.created) fs.salaryCreated++;
+      if (fin.salaryEntry.updated) fs.salaryUpdated++;
+      if (fin.taxEntries.inss.created || fin.taxEntries.inss.updated) fs.inssGenerated++;
+      if (fin.taxEntries.irpf.created || fin.taxEntries.irpf.updated) fs.irpfGenerated++;
+      if (fin.taxEntries.fgts.created || fin.taxEntries.fgts.updated) fs.fgtsGenerated++;
+      fs.payrollUpserted += fin.payrollEntries.upserted;
+      fs.assignmentsUpserted += fin.benefitsAssignments.upserted;
+      fs.benefitsCreated += fin.benefitsAssignments.benefitsCreated;
+      fs.errors += fin.errors.length;
+      for (const fe of fin.errors.slice(0, 3)) {
+        cursor.errors.push({
+          external_id: extId, name: displayName, cpf,
+          phase: "financials", error: `${fe.tipo}: ${fe.error}`,
         });
-        continue;
       }
-      const v = r.value;
-      if ("skipped" in v) continue;
-      if ("error" in v) {
-        summary.errors++;
-        summary.errorDetails.push({
-          collaboratorName: v.name,
-          kind: "EXCEPTION",
-          error: v.error,
-        });
-        continue;
-      }
-      summary.processed++;
-      for (const [kind, result] of Object.entries(v.det)) {
-        summary.totals[kind] = (summary.totals[kind] ?? 0) + (result as { upserted: number }).upserted;
+    } catch (e) {
+      cursor.financialsSummary.errors++;
+      cursor.errors.push({
+        external_id: extId, name: displayName, cpf,
+        phase: "financials", error: (e as Error).message,
+      });
+    }
+  }
+
+  // ─── Details (opt-in) ───
+  if (includeDetails) {
+    try {
+      const det = await applyCollaboratorDetails(sbAdmin, {
+        companyId, collaboratorId, remoteId: extId,
+      });
+      const ds = cursor.detailsSummary;
+      ds.processed++;
+      for (const [kind, result] of Object.entries(det)) {
+        ds.totals[kind] = (ds.totals[kind] ?? 0) + (result as { upserted: number }).upserted;
         const err = (result as { error?: string }).error;
         if (err) {
-          summary.errors++;
-          summary.errorDetails.push({ collaboratorName: v.name, kind, error: err });
+          ds.errors++;
+          cursor.errors.push({
+            external_id: extId, name: displayName, cpf,
+            phase: "details", error: `${kind}: ${err}`,
+          });
         }
       }
+    } catch (e) {
+      cursor.detailsSummary.errors++;
+      cursor.errors.push({
+        external_id: extId, name: displayName, cpf,
+        phase: "details", error: (e as Error).message,
+      });
     }
+  }
+}
 
-    cursor.detailsIdx += chunk.length;
-    await tick({
-      processed: cursor.detailsIdx,
-      total,
-      current_step: `Sincronizando detalhes: ${cursor.detailsIdx}/${total} (paralelo ${DETAILS_CONCURRENCY}x)`,
-    });
+// ─────────────────────────────────────────────────────────────────────────────
+// FASE 3: deactivate — marca como inativo quem sumiu da agenda
+// ─────────────────────────────────────────────────────────────────────────────
 
-    if (cursor.detailsIdx % CURSOR_PERSIST_EVERY === 0) {
-      await persistCursor(sbAdmin, jobId, cursor);
+async function runDeactivatePhase(
+  // deno-lint-ignore no-explicit-any
+  sbAdmin: any,
+  jobId: string,
+  cursor: JobCursor,
+): Promise<void> {
+  if (TEST_ONLY_COLAB_IDS != null && TEST_ONLY_COLAB_IDS.length > 0) {
+    return; // Skip defensivo no modo teste
+  }
+
+  await updateJob(sbAdmin, jobId, { current_step: "Verificando colabs que sumiram da agenda..." });
+
+  const existing = await loadExistingCollaborators(sbAdmin, cursor.options.companyId);
+  const remoteSet = new Set(cursor.remoteExtIds);
+  const idsToDeactivate: string[] = [];
+  for (const [extId, info] of existing) {
+    if (!remoteSet.has(extId) && info.status === "ativo") {
+      idsToDeactivate.push(info.id);
     }
   }
 
-  return "completed";
+  if (idsToDeactivate.length > 0) {
+    await updateJob(sbAdmin, jobId, {
+      current_step: `Desativando ${idsToDeactivate.length} colab(s) ausentes da agenda...`,
+    });
+    const { error: deactErr } = await sbAdmin
+      .from("collaborators")
+      .update({ status: "inativo" })
+      .in("id", idsToDeactivate);
+    if (deactErr) {
+      throw new Error(`Desativação falhou: ${deactErr.message}`);
+    }
+    cursor.deactivated = idsToDeactivate.length;
+    await updateJob(sbAdmin, jobId, { deactivated: cursor.deactivated });
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -843,24 +779,18 @@ async function scheduleContinuation(
     await markJobFailed(
       sbAdmin,
       jobId,
-      `Limite de ${MAX_CONTINUATIONS} continuações atingido — job parou em ${cursor.phase} ` +
-      `(financials=${cursor.financialsIdx}, details=${cursor.detailsIdx})`,
+      `Limite de ${MAX_CONTINUATIONS} continuações atingido — job parou em batch ${Math.floor(cursor.batchIdx / BATCH_SIZE) + 1}`,
     );
     return;
   }
   await persistCursor(sbAdmin, jobId, cursor);
   await updateJob(sbAdmin, jobId, {
-    current_step: `Disparando continuação ${cursor.continuationCount}/${MAX_CONTINUATIONS}...`,
+    current_step: `Disparando continuação ${cursor.continuationCount}/${MAX_CONTINUATIONS} (lote ${Math.floor(cursor.batchIdx / BATCH_SIZE) + 1})...`,
   });
 
-  // Self-invoke da edge function. IMPORTANTE: agora await o fetch (com
-  // timeout) — fire-and-forget anterior podia ser GC'd antes do request HTTP
-  // chegar no servidor. A nova invocação retorna 202 imediato (porque o
-  // trabalho real roda em waitUntil dela), então este await é só pra
-  // confirmar que a requisição chegou.
   const url = `${supabaseUrl}/functions/v1/sync-collaborators`;
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
   try {
     const resp = await fetch(url, {
       method: "POST",
@@ -875,12 +805,8 @@ async function scheduleContinuation(
     if (!resp.ok) {
       const text = await resp.text().catch(() => "<no body>");
       console.error(`Self-invoke failed HTTP ${resp.status}: ${text}`);
-      await updateJob(sbAdmin, jobId, {
-        current_step: `⚠ Continuação falhou (HTTP ${resp.status}). Job ficou em ${cursor.phase} ${cursor.financialsIdx}/${cursor.detailsIdx}.`,
-      });
       await markJobFailed(
-        sbAdmin,
-        jobId,
+        sbAdmin, jobId,
         `Auto-continuação falhou: HTTP ${resp.status}. ${text.slice(0, 300)}`,
       );
     } else {
@@ -891,11 +817,8 @@ async function scheduleContinuation(
     const errMsg = (e as Error).message;
     console.error(`Self-invoke threw: ${errMsg}`);
     await markJobFailed(
-      sbAdmin,
-      jobId,
-      `Auto-continuação não pôde ser disparada: ${errMsg}. ` +
-      `Estado atual: ${cursor.phase} financials=${cursor.financialsIdx} details=${cursor.detailsIdx}. ` +
-      `Rode Sincronizar de novo pra continuar do zero.`,
+      sbAdmin, jobId,
+      `Auto-continuação não pôde ser disparada: ${errMsg}. Job parou em batch ${Math.floor(cursor.batchIdx / BATCH_SIZE) + 1}. Rode Sincronizar pra retomar.`,
     );
   }
 }
@@ -911,10 +834,6 @@ async function persistCursor(
   });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// EdgeRuntime.waitUntil helper (com fallback pra ambientes locais)
-// ─────────────────────────────────────────────────────────────────────────────
-
 function scheduleBackground(fn: () => Promise<unknown>): void {
   // deno-lint-ignore no-explicit-any
   const ert = (globalThis as any).EdgeRuntime as
@@ -922,7 +841,6 @@ function scheduleBackground(fn: () => Promise<unknown>): void {
     | undefined;
   const p = fn();
   if (ert?.waitUntil) ert.waitUntil(p);
-  // Em ambientes sem EdgeRuntime, só dispara sem await
   else void p;
 }
 
@@ -973,9 +891,7 @@ function mapColaboradorToRow(
   const contractedStoreId =
     r.empresaContratada != null ? stores.get(String(r.empresaContratada)) ?? null : null;
 
-  // CPF: aceita vazio. Migration 20260525143000 tornou a coluna nullable e
-  // o UNIQUE virou parcial (só impede dup quando cpf não é null). RH preenche
-  // depois manual pelos colabs sem cpf.
+  // CPF: aceita vazio. Migration 20260525143000 tornou a coluna nullable.
   const cpfRaw = r.cpf ? String(r.cpf).replace(/\D/g, "") : "";
   const cpf = cpfRaw.length > 0 ? cpfRaw : null;
   const name = (r.nome ?? r.nomeSuporte ?? `Colab ${r.id}`).trim();
