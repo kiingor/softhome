@@ -66,7 +66,40 @@ function getConfig(): { baseUrl: string; apiKey: string } {
   return { baseUrl, apiKey };
 }
 
+// Retry com exponential backoff pra 429 (rate limit) e 503 (overloaded).
+// Tenta até 4× total. Espera Retry-After (se presente) ou 2^attempt × 2000ms.
+const RETRY_STATUSES = new Set([429, 503]);
+const MAX_RETRIES = 3;
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 async function softcomFetch<T>(opts: FetchOptions): Promise<T> {
+  let lastErr: Error | null = null;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      return await softcomFetchOnce<T>(opts);
+    } catch (err) {
+      lastErr = err as Error;
+      const isRetryable = err instanceof SoftcomCloudError && RETRY_STATUSES.has(err.status);
+      if (!isRetryable || attempt === MAX_RETRIES) throw err;
+
+      // Backoff: 2s, 4s, 8s (com jitter pra evitar herd)
+      const baseDelay = Math.min(2000 * Math.pow(2, attempt), 8000);
+      const jitter = Math.floor(Math.random() * 500);
+      const delay = baseDelay + jitter;
+      console.warn(
+        `softcomFetch retry ${attempt + 1}/${MAX_RETRIES} após ${delay}ms (HTTP ${(err as SoftcomCloudError).status})`,
+      );
+      await sleep(delay);
+    }
+  }
+  throw lastErr ?? new SoftcomCloudError(500, "softcomFetch: estado inesperado");
+}
+
+async function softcomFetchOnce<T>(opts: FetchOptions): Promise<T> {
   const { baseUrl, apiKey } = getConfig();
   const url = `${baseUrl}${opts.path}`;
   const ctrl = new AbortController();

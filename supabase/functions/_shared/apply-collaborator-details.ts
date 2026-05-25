@@ -19,6 +19,7 @@ import {
   listEventos,
   listExames,
   listFerias,
+  listParentes,
   listPdvs,
   listPlanos,
 } from "./softcom-cloud.ts";
@@ -38,6 +39,7 @@ export interface ApplyDetailsResult {
   vacations: ChildResult;
   exams: ChildResult;
   timelineEvents: ChildResult;
+  dependents: ChildResult;
 }
 
 interface ChildResult {
@@ -66,12 +68,13 @@ export async function applyCollaboratorDetails(
     vacations: { fetched: 0, upserted: 0 },
     exams: { fetched: 0, upserted: 0 },
     timelineEvents: { fetched: 0, upserted: 0 },
+    dependents: { fetched: 0, upserted: 0 },
   };
 
   // Buscar todas as sub-abas em paralelo
-  let absRaw, lvRaw, emlRaw, intRaw, pdvRaw, plnRaw, feRaw, evRaw, exRaw;
+  let absRaw, lvRaw, emlRaw, intRaw, pdvRaw, plnRaw, feRaw, evRaw, exRaw, parRaw;
   try {
-    [absRaw, lvRaw, emlRaw, intRaw, pdvRaw, plnRaw, feRaw, evRaw, exRaw] = await Promise.all([
+    [absRaw, lvRaw, emlRaw, intRaw, pdvRaw, plnRaw, feRaw, evRaw, exRaw, parRaw] = await Promise.all([
       listAbsenteismos(remoteId),
       listAfastamentos(remoteId),
       listEmails(remoteId),
@@ -81,6 +84,7 @@ export async function applyCollaboratorDetails(
       listFerias(remoteId),
       listEventos(remoteId),
       listExames(remoteId),
+      listParentes(remoteId),
     ]);
   } catch (err) {
     // Falha de rede afeta todas as filhas. Reporta no primeiro slot.
@@ -318,7 +322,51 @@ export async function applyCollaboratorDetails(
     .filter((r): r is NonNullable<typeof r> => r !== null);
   results.timelineEvents = await upsertChildren(sbAdmin, "collaborator_timeline_events", eventRows);
 
+  // Dependentes (parentes na agenda → collaborator_dependents).
+  // Enum kinship_type: filho|enteado|tutelado|conjuge|companheiro|pai|mae|irmao|avô|neto|outro
+  const dependentRows = parRaw
+    .map((p) => {
+      const nome = (p.nomeParente ?? "").trim();
+      if (!nome) return null; // name é NOT NULL
+      return {
+        company_id: companyId,
+        collaborator_id: localId,
+        external_id: String(p.id),
+        name: nome,
+        cpf: p.cpf ? String(p.cpf).replace(/\D/g, "") || null : null,
+        birth_date: parseDate(p.dataNascimento),
+        kinship: mapKinship(p.tipoParente),
+        // is_irpf_dependent e is_health_plan_dependent: default false.
+        // RH marca depois manual (campos locais, não vêm da agenda).
+        is_irpf_dependent: false,
+        is_health_plan_dependent: false,
+      };
+    })
+    .filter((r): r is NonNullable<typeof r> => r !== null);
+  results.dependents = await upsertChildren(sbAdmin, "collaborator_dependents", dependentRows);
+
   return results;
+}
+
+/**
+ * Mapeia tipoParente da agenda pro enum kinship_type local.
+ * Default 'outro' pra valores não reconhecidos.
+ */
+function mapKinship(tipo: string | null | undefined): string {
+  if (!tipo) return "outro";
+  const norm = String(tipo).toLowerCase().trim();
+  // Mapeamento direto
+  if (norm.includes("filh")) return "filho";  // filho, filha, filhos
+  if (norm.includes("entead")) return "enteado";
+  if (norm.includes("tutela")) return "tutelado";
+  if (norm.includes("conjug") || norm.includes("cônjug") || norm.includes("esposa") || norm.includes("marido")) return "conjuge";
+  if (norm.includes("companh")) return "companheiro";
+  if (norm.startsWith("pai")) return "pai";
+  if (norm.startsWith("mae") || norm.startsWith("mãe")) return "mae";
+  if (norm.includes("irm")) return "irmao";
+  if (norm.includes("avo") || norm.includes("avô")) return "avô";
+  if (norm.includes("neto") || norm.includes("neta")) return "neto";
+  return "outro";
 }
 
 /**

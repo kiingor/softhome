@@ -54,10 +54,12 @@ const MAX_PAGES = 2000;
 // (limit teórico ~6 min wall time).
 const SLICE_BUDGET_MS = 4 * 60 * 1000;
 // Colabs por batch. Cada colab no batch passa por upsert + financials + details
-// end-to-end em paralelo com os outros do batch. 10 é conservador pra não
-// saturar a agenda (cada colab faz 11 HTTP requests; 10 paralelos = 110 reqs
-// simultâneos no pior caso — agenda aguenta).
-const BATCH_SIZE = 10;
+// end-to-end em paralelo com os outros do batch. 5 é MUITO conservador pra não
+// estourar o rate limit da agenda (observado HTTP 429 com batch 10+).
+const BATCH_SIZE = 5;
+// Pausa entre batches pra espacar as rajadas. Junto com o retry com backoff
+// no softcom-cloud.ts (2s/4s/8s pra 429/503), dá folga pra agenda recuperar.
+const INTER_BATCH_DELAY_MS = 800;
 // Watchdog: se um batch demorar mais que isso, aborta esse batch (colabs
 // pendentes ficam de fora) e agenda continuação. Protege contra colab lento
 // da agenda travando o worker até morrer no limite de 6min do Supabase.
@@ -81,6 +83,14 @@ interface JobOptions {
   incluirDesativados: boolean;
   includeFinancials: boolean;
   includeDetails: boolean;
+  /** Se true, filtra pendingExtIds pra só colabs que AINDA não têm
+   *  payroll_entries com external_id='salario-base'. Útil pra completar
+   *  syncs que travaram no meio sem refazer os que já estão prontos. */
+  onlyMissingFinancials?: boolean;
+  /** Se true, filtra pendingExtIds pra só colabs que AINDA não têm
+   *  rows em collaborator_pdvs OU vacation_periods (proxy pra "details
+   *  já rodaram"). Útil pra completar syncs que travaram no meio. */
+  onlyMissingDetails?: boolean;
 }
 
 interface SuccessRef {
@@ -168,7 +178,7 @@ function newCursor(options: JobOptions): JobCursor {
       totals: {
         absences: 0, leaves: 0, emails: 0, internships: 0,
         pdvs: 0, healthPlans: 0, healthPlanDeductions: 0,
-        vacations: 0, exams: 0, timelineEvents: 0,
+        vacations: 0, exams: 0, timelineEvents: 0, dependents: 0,
       },
       errors: 0,
     },
@@ -248,15 +258,19 @@ serve(async (req) => {
   let incluirDesativados = false;
   let includeFinancials = false;
   let includeDetails = false;
+  let onlyMissingFinancials = false;
+  let onlyMissingDetails = false;
   try {
     companyId = String(body.companyId ?? "").trim();
     if (!companyId) throw new Error("missing companyId");
     incluirDesativados = Boolean(body.incluirDesativados);
     includeFinancials = Boolean(body.includeFinancials);
     includeDetails = Boolean(body.includeDetails);
+    onlyMissingFinancials = Boolean(body.onlyMissingFinancials);
+    onlyMissingDetails = Boolean(body.onlyMissingDetails);
   } catch (e) {
     return jsonResponse(
-      { error: "Body deve ter { companyId, incluirDesativados?, includeFinancials?, includeDetails? }: " + (e as Error).message },
+      { error: "Body deve ter { companyId, incluirDesativados?, includeFinancials?, includeDetails?, onlyMissingFinancials?, onlyMissingDetails? }: " + (e as Error).message },
       400,
     );
   }
@@ -264,13 +278,13 @@ serve(async (req) => {
   const allowed = await checkPermission(sbUser, user.id, companyId, "colaboradores");
   if (!allowed) return jsonResponse({ error: "Sem permissão" }, 403);
 
-  const options: JobOptions = { companyId, incluirDesativados, includeFinancials, includeDetails };
+  const options: JobOptions = { companyId, incluirDesativados, includeFinancials, includeDetails, onlyMissingFinancials, onlyMissingDetails };
   const cursor = newCursor(options);
 
   const jobId = await createSyncJob(sbAdmin, {
     companyId,
     resource: "collaborators",
-    options: { incluirDesativados, includeFinancials, includeDetails },
+    options: { incluirDesativados, includeFinancials, includeDetails, onlyMissingFinancials, onlyMissingDetails },
     createdBy: user.id,
     currentStep: "Iniciando sincronização...",
   });
@@ -415,7 +429,7 @@ async function runInitPhase(
   cursor.remoteExtIds = remote.map((r) => String(r.id));
 
   // Filtra por salário > 0
-  const pending: RemoteColaborador[] = [];
+  let pending: RemoteColaborador[] = [];
   for (const r of remote) {
     const salary = typeof r.salarioAtual === "number" ? r.salarioAtual : 0;
     if (!(salary > 0)) {
@@ -423,6 +437,79 @@ async function runInitPhase(
       continue;
     }
     pending.push(r);
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Filtro opcional: onlyMissingFinancials — pula colabs que já têm entry
+  // de salário base no banco. Útil pra completar syncs que travaram no meio
+  // sem refazer os que já estão prontos.
+  // ──────────────────────────────────────────────────────────────────────
+  if (cursor.options.onlyMissingFinancials) {
+    // Carrega todos os colabs locais com seus IDs + external_ids
+    const { data: localCollabs } = await sbAdmin
+      .from("collaborators")
+      .select("id, external_id")
+      .eq("company_id", companyId)
+      .not("external_id", "is", null);
+    // Carrega quais colabs já têm entry de salário base
+    const { data: withSalary } = await sbAdmin
+      .from("payroll_entries")
+      .select("collaborator_id")
+      .eq("company_id", companyId)
+      .eq("external_id", "salario-base");
+    const withSalaryIds = new Set(
+      (withSalary ?? []).map((e: { collaborator_id: string }) => e.collaborator_id),
+    );
+    const extIdsWithFin = new Set(
+      (localCollabs ?? [])
+        .filter((c: { id: string }) => withSalaryIds.has(c.id))
+        .map((c: { external_id: string }) => c.external_id),
+    );
+    const beforeFilter = pending.length;
+    pending = pending.filter((r) => !extIdsWithFin.has(String(r.id)));
+    console.log(
+      `onlyMissingFinancials: ${beforeFilter} → ${pending.length} (pulou ${extIdsWithFin.size} já prontos)`,
+    );
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Filtro opcional: onlyMissingDetails — pula colabs que já têm rows
+  // em collaborator_pdvs OU vacation_periods (proxy: details já rodaram).
+  // ──────────────────────────────────────────────────────────────────────
+  if (cursor.options.onlyMissingDetails) {
+    const { data: localCollabs } = await sbAdmin
+      .from("collaborators")
+      .select("id, external_id")
+      .eq("company_id", companyId)
+      .not("external_id", "is", null);
+    // Pega collaborator_ids que aparecem em pdvs OU vacation_periods
+    const [{ data: withPdvs }, { data: withVacs }] = await Promise.all([
+      sbAdmin
+        .from("collaborator_pdvs")
+        .select("collaborator_id")
+        .eq("company_id", companyId),
+      sbAdmin
+        .from("vacation_periods")
+        .select("collaborator_id")
+        .eq("company_id", companyId),
+    ]);
+    const withDetIds = new Set<string>();
+    for (const r of (withPdvs ?? []) as { collaborator_id: string }[]) {
+      withDetIds.add(r.collaborator_id);
+    }
+    for (const r of (withVacs ?? []) as { collaborator_id: string }[]) {
+      withDetIds.add(r.collaborator_id);
+    }
+    const extIdsWithDet = new Set(
+      (localCollabs ?? [])
+        .filter((c: { id: string }) => withDetIds.has(c.id))
+        .map((c: { external_id: string }) => c.external_id),
+    );
+    const beforeFilter = pending.length;
+    pending = pending.filter((r) => !extIdsWithDet.has(String(r.id)));
+    console.log(
+      `onlyMissingDetails: ${beforeFilter} → ${pending.length} (pulou ${extIdsWithDet.size} já prontos)`,
+    );
   }
 
   cursor.pendingExtIds = pending.map((r) => String(r.id));
@@ -528,6 +615,11 @@ async function runBatchesPhase(
       current_step: `Lote ${batchNum}/${totalBatches} concluído — ${cursor.batchIdx}/${total} colabs prontos`,
     });
     await persistCursor(sbAdmin, jobId, cursor);
+
+    // Pausa antes do próximo batch pra dar folga pra agenda (evita 429)
+    if (cursor.batchIdx < total) {
+      await new Promise((r) => setTimeout(r, INTER_BATCH_DELAY_MS));
+    }
   }
 
   return "completed";
