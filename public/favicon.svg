@@ -1,36 +1,7 @@
-<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Fundo: quadrado arredondado com gradient hero (laranja-coral) -->
-  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
-
-  <!-- DNA: duas fitas em hélice + degraus -->
-  <!-- Fita A: vai da esquerda → direita → esquerda → direita -->
-  <path
-    d="M22 14 C42 22 42 30 22 38 C42 46 42 50 22 50"
-    stroke="white"
-    stroke-width="3"
-    stroke-linecap="round"
-    fill="none"
-  />
-  <!-- Fita B: espelhada (opacidade menor pra dar profundidade) -->
-  <path
-    d="M42 14 C22 22 22 30 42 38 C22 46 22 50 42 50"
-    stroke="white"
-    stroke-width="3"
-    stroke-linecap="round"
-    stroke-opacity="0.7"
-    fill="none"
-  />
-
-  <!-- Degraus da escada (pares de bases): horizontais conectando as fitas nos pontos de cruzamento -->
-  <line x1="24" y1="18" x2="40" y2="18" stroke="white" stroke-width="2" stroke-linecap="round"/>
-  <line x1="26" y1="26" x2="38" y2="26" stroke="white" stroke-width="2" stroke-linecap="round" stroke-opacity="0.85"/>
-  <line x1="26" y1="38" x2="38" y2="38" stroke="white" stroke-width="2" stroke-linecap="round" stroke-opacity="0.85"/>
-  <line x1="24" y1="46" x2="40" y2="46" stroke="white" stroke-width="2" stroke-linecap="round"/>
-
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#FB923C"/>
-      <stop offset="1" stop-color="#F97316"/>
-    </linearGradient>
-  </defs>
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <rect width="64" height="64" rx="14" fill="#F97316"/>
+  <text x="32" y="48" text-anchor="middle"
+        font-family="Montserrat, 'Helvetica Neue', Arial, sans-serif"
+        font-weight="900" font-size="46" fill="#FFFFFF"
+        letter-spacing="-2">S</text>
 </svg>
