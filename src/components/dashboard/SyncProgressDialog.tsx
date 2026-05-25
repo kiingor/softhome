@@ -273,12 +273,18 @@ function Stat({ label, value, color }: { label: string; value: number; color: "e
 function FinalSummary({ result }: { result: Record<string, unknown> }) {
   const financials = result.financials as { processed?: number; errors?: number } | null | undefined;
   const details = result.details as { processed?: number; errors?: number } | null | undefined;
+  const skippedNoSalary = Number(result.skipped_no_salary ?? 0);
   return (
     <div className="rounded border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/50 dark:bg-emerald-950/20 p-3 text-xs space-y-1">
       <p className="font-medium text-emerald-800 dark:text-emerald-200">Resumo final</p>
       <p className="text-emerald-900 dark:text-emerald-100">
         {String(result.fetched ?? 0)} colaboradores buscados da agenda.
       </p>
+      {skippedNoSalary > 0 && (
+        <p className="text-amber-800 dark:text-amber-200">
+          {skippedNoSalary} ignorado{skippedNoSalary === 1 ? "" : "s"} (sem salário cadastrado).
+        </p>
+      )}
       {financials && (
         <p className="text-emerald-900 dark:text-emerald-100">
           Financeiros aplicados em {financials.processed ?? 0} colab{financials.processed === 1 ? "" : "s"}

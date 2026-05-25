@@ -128,6 +128,8 @@ interface JobCursor {
   inserted: number;
   updated: number;
   deactivated: number;
+  // Filtrados por regra de negócio (ex: sem salário) — não são erro, é skip intencional
+  skippedNoSalary: number;
   // Lista de quem foi upsertado com sucesso — base pras fases seguintes
   successes: SuccessRef[];
   errors: ErrorRef[];
@@ -149,6 +151,7 @@ function newCursor(options: JobOptions): JobCursor {
     inserted: 0,
     updated: 0,
     deactivated: 0,
+    skippedNoSalary: 0,
     successes: [],
     errors: [],
     financialsIdx: 0,
@@ -402,6 +405,7 @@ async function runJobSlice(
     inserted: cursor.inserted,
     updated: cursor.updated,
     deactivated: cursor.deactivated,
+    skipped_no_salary: cursor.skippedNoSalary,
     successes_count: cursor.successes.length,
     errors_count: cursor.errors.length,
     errors: cursor.errors,
@@ -467,12 +471,29 @@ async function runInitPhase(
   });
 
   // 3. Diff + upsert
+  // IMPORTANTE: remoteExtIds inclui TODOS os colabs vindos da agenda (mesmo
+  // sem salário). Isso garante que colabs filtrados aqui não sejam marcados
+  // como "desativados" abaixo — eles AINDA existem na agenda, só não têm
+  // salário cadastrado ainda. Desativação só dispara pra quem realmente
+  // sumiu do retorno da agenda.
   const remoteExtIds = new Set(remote.map((r) => String(r.id)));
   const rowsToUpsert: Record<string, unknown>[] = [];
   const rowMetaByExt = new Map<string, { name: string; cpf: string | null }>();
 
   for (const r of remote) {
     const displayName = (r.nome ?? r.nomeSuporte ?? `Colab ${r.id}`).toString().trim();
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Filtro: pula colabs sem salário cadastrado (lixo da agenda — registros
+    // incompletos, testes antigos, etc). Decisão do user pra evitar importar
+    // dados inúteis. Não conta como erro — é skip intencional.
+    // ──────────────────────────────────────────────────────────────────────
+    const salary = typeof r.salarioAtual === "number" ? r.salarioAtual : 0;
+    if (!(salary > 0)) {
+      cursor.skippedNoSalary++;
+      continue;
+    }
+
     try {
       const row = mapColaboradorToRow(r, companyId, storesMap, teamsMap, positionsMap);
       rowsToUpsert.push(row);
@@ -485,6 +506,12 @@ async function runInitPhase(
         error: (e as Error).message,
       });
     }
+  }
+
+  if (cursor.skippedNoSalary > 0) {
+    await updateJob(sbAdmin, jobId, {
+      current_step: `${rowsToUpsert.length} pra processar (${cursor.skippedNoSalary} ignorados — sem salário)`,
+    });
   }
 
   let processed = 0;
