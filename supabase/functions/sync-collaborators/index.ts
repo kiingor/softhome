@@ -54,10 +54,12 @@ const MAX_PAGES = 2000;
 // (limit teórico ~6 min wall time).
 const SLICE_BUDGET_MS = 4 * 60 * 1000;
 // Colabs por batch. Cada colab no batch passa por upsert + financials + details
-// end-to-end em paralelo com os outros do batch. 10 é conservador pra não
-// saturar a agenda (cada colab faz 11 HTTP requests; 10 paralelos = 110 reqs
-// simultâneos no pior caso — agenda aguenta).
-const BATCH_SIZE = 10;
+// end-to-end em paralelo com os outros do batch. 5 é MUITO conservador pra não
+// estourar o rate limit da agenda (observado HTTP 429 com batch 10+).
+const BATCH_SIZE = 5;
+// Pausa entre batches pra espacar as rajadas. Junto com o retry com backoff
+// no softcom-cloud.ts (2s/4s/8s pra 429/503), dá folga pra agenda recuperar.
+const INTER_BATCH_DELAY_MS = 800;
 // Watchdog: se um batch demorar mais que isso, aborta esse batch (colabs
 // pendentes ficam de fora) e agenda continuação. Protege contra colab lento
 // da agenda travando o worker até morrer no limite de 6min do Supabase.
@@ -528,6 +530,11 @@ async function runBatchesPhase(
       current_step: `Lote ${batchNum}/${totalBatches} concluído — ${cursor.batchIdx}/${total} colabs prontos`,
     });
     await persistCursor(sbAdmin, jobId, cursor);
+
+    // Pausa antes do próximo batch pra dar folga pra agenda (evita 429)
+    if (cursor.batchIdx < total) {
+      await new Promise((r) => setTimeout(r, INTER_BATCH_DELAY_MS));
+    }
   }
 
   return "completed";
