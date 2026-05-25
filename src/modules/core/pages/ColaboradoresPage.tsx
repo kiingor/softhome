@@ -51,6 +51,11 @@ import { useDashboard } from "@/contexts/DashboardContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useUpdateCollaborator } from "@/hooks/useCollaboratorWriteBack";
 import { SyncProgressDialog } from "@/components/dashboard/SyncProgressDialog";
+import {
+  clearSyncJobId,
+  getSyncJobId,
+  setSyncJobId as setSyncJobIdInStorage,
+} from "@/lib/sync-job-storage";
 import { useToast } from "@/hooks/use-toast";
 import { formatCPF } from "@/lib/validators";
 import CollaboratorModal from "@/modules/core/components/collaborators/CollaboratorModal";
@@ -426,6 +431,8 @@ const ColaboradoresPage = () => {
         throw new Error('Edge function não retornou jobId');
       }
       setSyncJobId(jobId);
+      // Persiste o jobId pra reabrir modal automaticamente se o user fechar e voltar
+      setSyncJobIdInStorage(currentCompany.id, "collaborators", jobId);
       setSyncProgressOpen(true);
     } catch (err) {
       toast({
@@ -437,6 +444,51 @@ const ColaboradoresPage = () => {
       setIsSyncing(false);
     }
   };
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Ao montar (ou trocar de empresa): checa se há job de sync em andamento
+  // pra esta company. Se sim, reabre o modal automaticamente. Isso resolve
+  // o caso "fechei o modal e não consigo reabrir pra acompanhar".
+  // ────────────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!currentCompany?.id) return;
+    const stored = getSyncJobId(currentCompany.id, "collaborators");
+    if (!stored) return;
+    let cancelled = false;
+    (async () => {
+      // Cast: types.ts está desatualizado e não inclui sync_jobs ainda.
+      // Tabela existe no schema (migration 20260522190000_create_sync_jobs.sql).
+      const { data } = await (supabase as unknown as {
+        from: (t: string) => {
+          select: (s: string) => {
+            eq: (k: string, v: string) => {
+              maybeSingle: () => Promise<{ data: { id: string; status: string } | null }>;
+            };
+          };
+        };
+      })
+        .from("sync_jobs")
+        .select("id, status")
+        .eq("id", stored)
+        .maybeSingle();
+      if (cancelled) return;
+      if (!data) {
+        // Job sumiu (apagado ou erro de RLS) — limpa storage
+        clearSyncJobId(currentCompany.id, "collaborators");
+        return;
+      }
+      if (data.status === "running" || data.status === "pending") {
+        setSyncJobId(stored);
+        setSyncProgressOpen(true);
+      } else {
+        // Terminal — limpa storage
+        clearSyncJobId(currentCompany.id, "collaborators");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentCompany?.id]);
 
   return (
     <PermissionGuard module="colaboradores">

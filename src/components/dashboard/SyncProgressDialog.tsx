@@ -34,6 +34,7 @@ import {
 } from "@phosphor-icons/react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { clearSyncJobId } from "@/lib/sync-job-storage";
 
 export type SyncJobStatus =
   | "pending"
@@ -104,6 +105,8 @@ export function SyncProgressDialog({ open, onOpenChange, jobId, onFinished }: Pr
   useEffect(() => {
     if (job && isTerminal) {
       onFinished?.(job);
+      // Limpa o jobId persistido — sync acabou, próximo "Sincronizar" começa nova
+      clearSyncJobId(job.company_id, job.resource);
       // Refresh queries que dependem dos dados sincronizados
       if (job.resource === "collaborators") {
         queryClient.invalidateQueries({ queryKey: ["collaborators"] });

@@ -5,8 +5,17 @@
 // específico (ferias, 13, exames, parentes, eventos, etc.), use
 // `sync-collaborator-details` com o ID dele.
 //
-// Body: { companyId: uuid, incluirDesativados?: boolean }
-// Response: { success, fetched, inserted, updated, deactivated, errors }
+// ─── Fluxo "fatia + auto-continuação" ──────────────────────────────────────
+// 1. Cliente: POST { companyId, includeFinancials?, includeDetails? }
+//    → cria sync_job, retorna { jobId } 202, trabalho roda em background
+// 2. Background: trabalha em FATIAS de até 4 min (SLICE_BUDGET_MS) pra
+//    caber bem dentro do limite Supabase (~6 min wall time).
+// 3. Cada fatia respeita cursor.phase: init → financials → details → done.
+//    Financials e details são paralelizados (chunks de 8 / 4 colabs).
+// 4. Se o budget esgotar antes de done, persiste o cursor e auto-invoca
+//    a si mesma via fetch (Authorization: Bearer SERVICE_ROLE) passando
+//    { resumeJobId }. Nova invocação lê o cursor e continua.
+// 5. Frontend polla sync_jobs até status terminal (completed/failed).
 //
 // Estratégia espelho 100% por external_id, idêntica a sync-stores/teams/positions.
 // Lookups pré-carregados pra resolver setor/cargo/empresa via mapa em memória
@@ -40,10 +49,22 @@ const CORS_HEADERS = {
 };
 
 const PAGE_SIZE = 50;
-// Limite de páginas pra não loopar infinitamente em caso de bug na agenda
-// (totalPages nunca atualizar). 2000 páginas × 50 = 100k colabs — folga
-// suficiente pra qualquer base real.
 const MAX_PAGES = 2000;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tunables do "fatia + auto-continuação"
+// ─────────────────────────────────────────────────────────────────────────────
+// Tempo máximo por invocação. 4 min é seguro pra Supabase Edge Functions
+// (limit teórico ~6 min wall time / 400s CPU).
+const SLICE_BUDGET_MS = 4 * 60 * 1000;
+// Paralelização em fases N+1 contra a agenda. Conservador pra não saturar a
+// API legada nem o pool de conexões do Postgres.
+const FINANCIALS_CONCURRENCY = 8;
+const DETAILS_CONCURRENCY = 4; // details = 9 HTTP requests por colab
+// Persiste cursor a cada N colabs processados (chunk-size do tick + cursor).
+const CURSOR_PERSIST_EVERY = 8;
+// Limite hard contra loop infinito de continuações.
+const MAX_CONTINUATIONS = 25;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TEMP TEST — DESLIGADO em produção (null = sync normal de TODOS os colabs).
@@ -52,6 +73,117 @@ const MAX_PAGES = 2000;
 // outros 299.
 // ─────────────────────────────────────────────────────────────────────────────
 const TEST_ONLY_COLAB_IDS: number[] | null = null;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tipos do cursor — persistido em sync_jobs.cursor (jsonb)
+// ─────────────────────────────────────────────────────────────────────────────
+
+type Phase = "init" | "financials" | "details" | "done";
+
+interface JobOptions {
+  companyId: string;
+  incluirDesativados: boolean;
+  includeFinancials: boolean;
+  includeDetails: boolean;
+}
+
+interface SuccessRef {
+  external_id: string;
+  name: string;
+  action: "inserted" | "updated";
+}
+
+interface ErrorRef {
+  external_id: string;
+  name: string;
+  cpf: string | null;
+  error: string;
+}
+
+interface FinancialsSummary {
+  processed: number;
+  salaryCreated: number;
+  salaryUpdated: number;
+  inssGenerated: number;
+  irpfGenerated: number;
+  fgtsGenerated: number;
+  payrollUpserted: number;
+  assignmentsUpserted: number;
+  benefitsCreated: number;
+  errors: number;
+  errorDetails: Array<{ collaboratorName: string; external_id: string; tipo: string; error: string }>;
+}
+
+interface DetailsSummary {
+  processed: number;
+  totals: Record<string, number>;
+  errors: number;
+  errorDetails: Array<{ collaboratorName: string; kind: string; error: string }>;
+}
+
+interface JobCursor {
+  phase: Phase;
+  // Contadores acumulados (sobrevivem entre continuações)
+  fetched: number;
+  inserted: number;
+  updated: number;
+  deactivated: number;
+  // Lista de quem foi upsertado com sucesso — base pras fases seguintes
+  successes: SuccessRef[];
+  errors: ErrorRef[];
+  // Índice de onde retomar em financials/details
+  financialsIdx: number;
+  detailsIdx: number;
+  // Sumários acumulados das fases opt-in
+  financialsSummary: FinancialsSummary | null;
+  detailsSummary: DetailsSummary | null;
+  // Quantas vezes esta job já foi continuada
+  continuationCount: number;
+  options: JobOptions;
+}
+
+function newCursor(options: JobOptions): JobCursor {
+  return {
+    phase: "init",
+    fetched: 0,
+    inserted: 0,
+    updated: 0,
+    deactivated: 0,
+    successes: [],
+    errors: [],
+    financialsIdx: 0,
+    detailsIdx: 0,
+    financialsSummary: null,
+    detailsSummary: null,
+    continuationCount: 0,
+    options,
+  };
+}
+
+function newFinancialsSummary(): FinancialsSummary {
+  return {
+    processed: 0, salaryCreated: 0, salaryUpdated: 0,
+    inssGenerated: 0, irpfGenerated: 0, fgtsGenerated: 0,
+    payrollUpserted: 0, assignmentsUpserted: 0, benefitsCreated: 0,
+    errors: 0, errorDetails: [],
+  };
+}
+
+function newDetailsSummary(): DetailsSummary {
+  return {
+    processed: 0,
+    totals: {
+      absences: 0, leaves: 0, emails: 0, internships: 0,
+      pdvs: 0, healthPlans: 0, healthPlanDeductions: 0,
+      vacations: 0, exams: 0, timelineEvents: 0,
+    },
+    errors: 0, errorDetails: [],
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HTTP handler
+// ─────────────────────────────────────────────────────────────────────────────
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS_HEADERS });
@@ -64,6 +196,55 @@ serve(async (req) => {
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
+  // Parse body (resume vs novo)
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch (e) {
+    return jsonResponse({ error: "Body JSON inválido: " + (e as Error).message }, 400);
+  }
+
+  const resumeJobId = typeof body.resumeJobId === "string" ? body.resumeJobId : null;
+  const isInternalResume = resumeJobId !== null && authHeader === `Bearer ${serviceKey}`;
+
+  const sbAdmin = createClient(supabaseUrl, serviceKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Modo CONTINUAÇÃO: self-invoke com Authorization: Bearer SERVICE_ROLE
+  // ───────────────────────────────────────────────────────────────────────────
+  if (isInternalResume) {
+    // Carrega o job + cursor
+    const { data: jobRow, error: loadErr } = await sbAdmin
+      .from("sync_jobs")
+      .select("id, status, cursor, options")
+      .eq("id", resumeJobId)
+      .maybeSingle();
+    if (loadErr || !jobRow) {
+      return jsonResponse({ error: "Job não encontrado: " + (loadErr?.message ?? resumeJobId) }, 404);
+    }
+    if (jobRow.status !== "running") {
+      return jsonResponse({ error: `Job ${resumeJobId} não está running (status=${jobRow.status})` }, 409);
+    }
+    const cursor = (jobRow.cursor as JobCursor | null) ?? null;
+    if (!cursor) {
+      return jsonResponse({ error: "Job sem cursor — não pode retomar" }, 400);
+    }
+    // Background continua
+    scheduleBackground(() =>
+      runJobSlice(sbAdmin, supabaseUrl, serviceKey, resumeJobId, cursor).catch(async (err: Error) => {
+        console.error(`sync-collaborators resume ${resumeJobId} crashed:`, err);
+        await markJobFailed(sbAdmin, resumeJobId, err.message ?? "Erro na continuação");
+      })
+    );
+    return jsonResponse({ success: true, jobId: resumeJobId, status: "running", resumed: true }, 202);
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Modo NOVO: usuário humano
+  // ───────────────────────────────────────────────────────────────────────────
+
   const sbUser = createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: authHeader } },
   });
@@ -75,7 +256,6 @@ serve(async (req) => {
   let includeFinancials = false;
   let includeDetails = false;
   try {
-    const body = await req.json();
     companyId = String(body.companyId ?? "").trim();
     if (!companyId) throw new Error("missing companyId");
     incluirDesativados = Boolean(body.incluirDesativados);
@@ -91,15 +271,10 @@ serve(async (req) => {
   const allowed = await checkPermission(sbUser, user.id, companyId, "colaboradores");
   if (!allowed) return jsonResponse({ error: "Sem permissão" }, 403);
 
-  const sbAdmin = createClient(supabaseUrl, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+  const options: JobOptions = { companyId, incluirDesativados, includeFinancials, includeDetails };
+  const cursor = newCursor(options);
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // Cria sync_job e retorna jobId imediato. O trabalho real roda em background
-  // via EdgeRuntime.waitUntil, atualizando sync_jobs.processed/current_step
-  // periodicamente pra o frontend pollar e mostrar progresso ao vivo.
-  // ───────────────────────────────────────────────────────────────────────────
+  // Cria job + grava cursor inicial
   const jobId = await createSyncJob(sbAdmin, {
     companyId,
     resource: "collaborators",
@@ -107,55 +282,150 @@ serve(async (req) => {
     createdBy: user.id,
     currentStep: "Iniciando sincronização...",
   });
+  await updateJob(sbAdmin, jobId, { cursor: cursor as unknown as Record<string, unknown> });
 
-  // deno-lint-ignore no-explicit-any
-  const ert = (globalThis as any).EdgeRuntime as
-    | { waitUntil?: (p: Promise<unknown>) => void }
-    | undefined;
-  const work = runCollaboratorsSync(sbAdmin, jobId, {
-    companyId,
-    incluirDesativados,
-    includeFinancials,
-    includeDetails,
-  }).catch(async (err: Error) => {
-    console.error(`sync-collaborators job ${jobId} crashed:`, err);
-    await markJobFailed(sbAdmin, jobId, err.message ?? "Erro desconhecido");
-  });
-
-  if (ert?.waitUntil) {
-    ert.waitUntil(work);
-  } else {
-    // Em ambientes sem EdgeRuntime (testes locais), só dispara sem await
-    void work;
-  }
+  scheduleBackground(() =>
+    runJobSlice(sbAdmin, supabaseUrl, serviceKey, jobId, cursor).catch(async (err: Error) => {
+      console.error(`sync-collaborators job ${jobId} crashed:`, err);
+      await markJobFailed(sbAdmin, jobId, err.message ?? "Erro desconhecido");
+    })
+  );
 
   return jsonResponse({ success: true, jobId, status: "running" }, 202);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// runCollaboratorsSync — trabalho real, idêntico ao anterior mas com
-// atualizações periódicas de progresso no sync_job.
+// runJobSlice — uma fatia de trabalho com tempo máximo de SLICE_BUDGET_MS.
+// Quando esgota, persiste cursor e auto-invoca pra continuar.
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function runCollaboratorsSync(
+async function runJobSlice(
+  // deno-lint-ignore no-explicit-any
+  sbAdmin: any,
+  supabaseUrl: string,
+  serviceKey: string,
+  jobId: string,
+  cursor: JobCursor,
+): Promise<void> {
+  const sliceStart = Date.now();
+  const budgetExpired = () => Date.now() - sliceStart > SLICE_BUDGET_MS;
+  const tick = throttledJobUpdater(sbAdmin, jobId, 800);
+
+  if (cursor.continuationCount === 0) {
+    await markJobRunning(sbAdmin, jobId, "Carregando lookups (empresas/setores/cargos)...");
+  } else {
+    await updateJob(sbAdmin, jobId, {
+      current_step: `Retomando (continuação ${cursor.continuationCount})...`,
+    });
+  }
+
+  const { companyId, incluirDesativados, includeFinancials, includeDetails } = cursor.options;
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // FASE 1: init — lookup, fetch agenda, diff, upsert, deactivate
+  // (executa só na primeira invocação. Geralmente cabe bem dentro do budget.)
+  // ───────────────────────────────────────────────────────────────────────────
+  if (cursor.phase === "init") {
+    try {
+      await runInitPhase(sbAdmin, jobId, cursor, tick);
+    } catch (err) {
+      const msg = err instanceof SoftcomCloudError
+        ? `Falha ao ler Softcom Cloud (HTTP ${err.status}): ${err.message}`
+        : `Falha na fase inicial: ${(err as Error).message}`;
+      await markJobFailed(sbAdmin, jobId, msg);
+      return;
+    }
+
+    // Decide próxima fase
+    if (includeFinancials && cursor.successes.length > 0) {
+      cursor.phase = "financials";
+      cursor.financialsSummary = newFinancialsSummary();
+    } else if (includeDetails && cursor.successes.length > 0) {
+      cursor.phase = "details";
+      cursor.detailsSummary = newDetailsSummary();
+    } else {
+      cursor.phase = "done";
+    }
+    await persistCursor(sbAdmin, jobId, cursor);
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // FASE 2: financials (opt-in, paralelizado em chunks)
+  // ───────────────────────────────────────────────────────────────────────────
+  if (cursor.phase === "financials") {
+    if (!cursor.financialsSummary) cursor.financialsSummary = newFinancialsSummary();
+
+    const result = await runFinancialsPhase(
+      sbAdmin, jobId, cursor, tick, budgetExpired,
+    );
+
+    if (result === "budget_expired") {
+      await persistCursor(sbAdmin, jobId, cursor);
+      await scheduleContinuation(sbAdmin, supabaseUrl, serviceKey, jobId, cursor);
+      return;
+    }
+    // Concluído
+    if (includeDetails && cursor.successes.length > 0) {
+      cursor.phase = "details";
+      cursor.detailsSummary = newDetailsSummary();
+    } else {
+      cursor.phase = "done";
+    }
+    await persistCursor(sbAdmin, jobId, cursor);
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // FASE 3: details (opt-in, paralelizado)
+  // ───────────────────────────────────────────────────────────────────────────
+  if (cursor.phase === "details") {
+    if (!cursor.detailsSummary) cursor.detailsSummary = newDetailsSummary();
+
+    const result = await runDetailsPhase(
+      sbAdmin, jobId, cursor, tick, budgetExpired,
+    );
+
+    if (result === "budget_expired") {
+      await persistCursor(sbAdmin, jobId, cursor);
+      await scheduleContinuation(sbAdmin, supabaseUrl, serviceKey, jobId, cursor);
+      return;
+    }
+    cursor.phase = "done";
+    await persistCursor(sbAdmin, jobId, cursor);
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // DONE
+  // ───────────────────────────────────────────────────────────────────────────
+  await tick({}, true);
+  await markJobCompleted(sbAdmin, jobId, {
+    fetched: cursor.fetched,
+    inserted: cursor.inserted,
+    updated: cursor.updated,
+    deactivated: cursor.deactivated,
+    successes_count: cursor.successes.length,
+    errors_count: cursor.errors.length,
+    errors: cursor.errors,
+    successes: cursor.successes,
+    financials: cursor.financialsSummary,
+    details: cursor.detailsSummary,
+    continuations: cursor.continuationCount,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FASE 1: init (lookups, fetch agenda, diff, upsert, deactivate)
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function runInitPhase(
   // deno-lint-ignore no-explicit-any
   sbAdmin: any,
   jobId: string,
-  args: {
-    companyId: string;
-    incluirDesativados: boolean;
-    includeFinancials: boolean;
-    includeDetails: boolean;
-  },
+  cursor: JobCursor,
+  tick: (patch: Record<string, unknown>, flush?: boolean) => Promise<void>,
 ): Promise<void> {
-  const { companyId, incluirDesativados, includeFinancials, includeDetails } = args;
-  const tick = throttledJobUpdater(sbAdmin, jobId, 800);
+  const { companyId, incluirDesativados } = cursor.options;
 
-  await markJobRunning(sbAdmin, jobId, "Carregando lookups (empresas/setores/cargos)...");
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // 1. Pré-carregar lookups (external_id remoto → uuid local)
-  // ───────────────────────────────────────────────────────────────────────────
+  // 1. Lookups
   const [storesMap, teamsMap, positionsMap, existingCollabs] = await Promise.all([
     loadExternalIdMap(sbAdmin, "stores", companyId),
     loadExternalIdMap(sbAdmin, "teams", companyId),
@@ -163,74 +433,52 @@ async function runCollaboratorsSync(
     loadExistingCollaborators(sbAdmin, companyId),
   ]);
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // 2. Buscar colaboradores da API (paginado)
-  // ───────────────────────────────────────────────────────────────────────────
-  const remote: RemoteColaborador[] = [];
+  // 2. Fetch agenda (paginado)
   await updateJob(sbAdmin, jobId, { current_step: "Buscando colaboradores na agenda..." });
+  const remote: RemoteColaborador[] = [];
 
-  try {
-    // TEMP TEST — atalho que pula a paginação e busca só N colabs (debug).
-    if (TEST_ONLY_COLAB_IDS != null && TEST_ONLY_COLAB_IDS.length > 0) {
-      for (const id of TEST_ONLY_COLAB_IDS) {
-        try {
-          const colab = await getColaborador(id);
-          remote.push(colab);
-        } catch (e) {
-          console.warn(`Falha ao buscar colab teste ${id}:`, (e as Error).message);
-        }
+  if (TEST_ONLY_COLAB_IDS != null && TEST_ONLY_COLAB_IDS.length > 0) {
+    for (const id of TEST_ONLY_COLAB_IDS) {
+      try {
+        remote.push(await getColaborador(id));
+      } catch (e) {
+        console.warn(`Falha ao buscar colab teste ${id}:`, (e as Error).message);
       }
-    } else {
-      let page = 1;
-      let totalPages = 1;
-      do {
-        const resp = await listColaboradores({
-          page,
-          pageSize: PAGE_SIZE,
-          incluirDesativados,
-        });
-        remote.push(...resp.data);
-        totalPages = resp.pagination.totalPages || 1;
-        await tick({
-          current_step: `Buscando agenda — página ${page}/${totalPages} (${remote.length} colabs)`,
-          total: resp.pagination.total ?? remote.length,
-        });
-        page++;
-      } while (page <= totalPages && page <= MAX_PAGES);
     }
-  } catch (err) {
-    const status = err instanceof SoftcomCloudError ? err.status : 502;
-    await markJobFailed(
-      sbAdmin,
-      jobId,
-      `Falha ao ler Softcom Cloud (HTTP ${status}): ${(err as Error).message}`,
-    );
-    return;
+  } else {
+    let page = 1;
+    let totalPages = 1;
+    do {
+      const resp = await listColaboradores({ page, pageSize: PAGE_SIZE, incluirDesativados });
+      remote.push(...resp.data);
+      totalPages = resp.pagination.totalPages || 1;
+      await tick({
+        current_step: `Buscando agenda — página ${page}/${totalPages} (${remote.length} colabs)`,
+        total: resp.pagination.total ?? remote.length,
+      });
+      page++;
+    } while (page <= totalPages && page <= MAX_PAGES);
   }
 
-  // Total real agora que terminou de paginar
+  cursor.fetched = remote.length;
   await updateJob(sbAdmin, jobId, {
     total: remote.length,
     current_step: `Preparando upsert de ${remote.length} colaboradores...`,
   });
 
-  // ───────────────────────────────────────────────────────────────────────────
   // 3. Diff + upsert
-  // ───────────────────────────────────────────────────────────────────────────
-  const errors: Array<{ external_id: string; name: string; cpf: string | null; error: string }> = [];
-  const successes: Array<{ external_id: string; name: string; action: "inserted" | "updated" }> = [];
   const remoteExtIds = new Set(remote.map((r) => String(r.id)));
   const rowsToUpsert: Record<string, unknown>[] = [];
-  const rowMetaByExt = new Map<string, { name: string }>();
+  const rowMetaByExt = new Map<string, { name: string; cpf: string | null }>();
 
   for (const r of remote) {
     const displayName = (r.nome ?? r.nomeSuporte ?? `Colab ${r.id}`).toString().trim();
     try {
       const row = mapColaboradorToRow(r, companyId, storesMap, teamsMap, positionsMap);
       rowsToUpsert.push(row);
-      rowMetaByExt.set(String(r.id), { name: displayName });
+      rowMetaByExt.set(String(r.id), { name: displayName, cpf: r.cpf ?? null });
     } catch (e) {
-      errors.push({
+      cursor.errors.push({
         external_id: String(r.id),
         name: displayName,
         cpf: r.cpf ?? null,
@@ -239,8 +487,6 @@ async function runCollaboratorsSync(
     }
   }
 
-  let inserted = 0;
-  let updated = 0;
   let processed = 0;
   if (rowsToUpsert.length > 0) {
     const chunkSize = 50;
@@ -248,13 +494,11 @@ async function runCollaboratorsSync(
       const chunk = rowsToUpsert.slice(i, i + chunkSize);
       const { data: upsertData, error: upErr } = await sbAdmin
         .from("collaborators")
-        .upsert(chunk, {
-          onConflict: "company_id,external_id",
-          ignoreDuplicates: false,
-        })
+        .upsert(chunk, { onConflict: "company_id,external_id", ignoreDuplicates: false })
         .select("external_id");
 
       if (upErr) {
+        // Tenta linha-a-linha pra reportar quais falharam
         for (const row of chunk) {
           const extId = String(row.external_id);
           const meta = rowMetaByExt.get(extId);
@@ -264,16 +508,16 @@ async function runCollaboratorsSync(
             .select("external_id")
             .maybeSingle();
           if (singleErr) {
-            errors.push({
+            cursor.errors.push({
               external_id: extId,
               name: meta?.name ?? `Colab ${extId}`,
-              cpf: (row.cpf as string) ?? null,
+              cpf: meta?.cpf ?? null,
               error: singleErr.message,
             });
           } else if (singleData) {
             const action = existingCollabs.has(extId) ? "updated" : "inserted";
-            if (action === "updated") updated++; else inserted++;
-            successes.push({ external_id: extId, name: meta?.name ?? `Colab ${extId}`, action });
+            if (action === "updated") cursor.updated++; else cursor.inserted++;
+            cursor.successes.push({ external_id: extId, name: meta?.name ?? `Colab ${extId}`, action });
           }
           processed++;
         }
@@ -282,25 +526,22 @@ async function runCollaboratorsSync(
           const extId = row.external_id as string;
           const meta = rowMetaByExt.get(extId);
           const action = existingCollabs.has(extId) ? "updated" : "inserted";
-          if (action === "updated") updated++; else inserted++;
-          successes.push({ external_id: extId, name: meta?.name ?? `Colab ${extId}`, action });
+          if (action === "updated") cursor.updated++; else cursor.inserted++;
+          cursor.successes.push({ external_id: extId, name: meta?.name ?? `Colab ${extId}`, action });
           processed++;
         }
       }
       await tick({
         processed,
-        inserted,
-        updated,
+        inserted: cursor.inserted,
+        updated: cursor.updated,
         current_step: `Salvando colaboradores: ${processed}/${rowsToUpsert.length}`,
-        errors: errors.slice(-20).map((e) => ({ external_id: e.external_id, name: e.name, error: e.error })),
+        errors: cursor.errors.slice(-20).map((e) => ({ external_id: e.external_id, name: e.name, error: e.error })),
       });
     }
   }
 
-  // Desativar quem sumiu da API (status='inativo')
-  // Skip defensivo quando TEST_ONLY_COLAB_IDS está ligado — senão marcaríamos
-  // os 299 colabs ausentes do remote como inativos.
-  let deactivated = 0;
+  // 4. Desativar quem sumiu (skip se TEST_ONLY ligado)
   if (TEST_ONLY_COLAB_IDS == null || TEST_ONLY_COLAB_IDS.length === 0) {
     const idsToDeactivate: string[] = [];
     for (const [extId, info] of existingCollabs) {
@@ -316,191 +557,292 @@ async function runCollaboratorsSync(
         .from("collaborators")
         .update({ status: "inativo" })
         .in("id", idsToDeactivate);
-      if (deactErr) {
-        await markJobFailed(sbAdmin, jobId, `Desativação falhou: ${deactErr.message}`);
-        return;
-      }
-      deactivated = idsToDeactivate.length;
-      await updateJob(sbAdmin, jobId, { deactivated });
+      if (deactErr) throw new Error(`Desativação falhou: ${deactErr.message}`);
+      cursor.deactivated = idsToDeactivate.length;
+      await updateJob(sbAdmin, jobId, { deactivated: cursor.deactivated });
     }
   }
+}
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // 5. Financeiros (opt-in) — busca adicionais e aplica por colaborador
-  //    upsertado. N+1 (1 request por colab); por isso é flag, default false.
-  // ───────────────────────────────────────────────────────────────────────────
-  let financialsSummary: {
-    processed: number;
-    salaryCreated: number;
-    salaryUpdated: number;
-    inssGenerated: number;
-    irpfGenerated: number;
-    fgtsGenerated: number;
-    payrollUpserted: number;
-    assignmentsUpserted: number;
-    benefitsCreated: number;
-    errors: number;
-    errorDetails: Array<{ collaboratorName: string; external_id: string; tipo: string; error: string }>;
-  } | null = null;
+// ─────────────────────────────────────────────────────────────────────────────
+// FASE 2: financials — paralelizado, com cursor persistente.
+// Retorna "budget_expired" se precisou parar antes de terminar.
+// ─────────────────────────────────────────────────────────────────────────────
 
-  if (includeFinancials && successes.length > 0) {
-    financialsSummary = {
-      processed: 0,
-      salaryCreated: 0,
-      salaryUpdated: 0,
-      inssGenerated: 0,
-      irpfGenerated: 0,
-      fgtsGenerated: 0,
-      payrollUpserted: 0,
-      assignmentsUpserted: 0,
-      benefitsCreated: 0,
-      errors: 0,
-      errorDetails: [],
-    };
+async function runFinancialsPhase(
+  // deno-lint-ignore no-explicit-any
+  sbAdmin: any,
+  jobId: string,
+  cursor: JobCursor,
+  tick: (patch: Record<string, unknown>, flush?: boolean) => Promise<void>,
+  budgetExpired: () => boolean,
+): Promise<"completed" | "budget_expired"> {
+  const successes = cursor.successes;
+  const total = successes.length;
+  const summary = cursor.financialsSummary!;
 
-    // Mapa external_id → row local pra obter id + store_id + current_salary
-    const { data: collabsLocal } = await sbAdmin
-      .from("collaborators")
-      .select("id, external_id, store_id, current_salary")
-      .eq("company_id", companyId)
-      .in("external_id", successes.map((s) => s.external_id));
-    const localByExt = new Map<string, { id: string; store_id: string | null; current_salary: number | null }>(
-      (collabsLocal ?? []).map((c: { id: string; external_id: string; store_id: string | null; current_salary: number | null }) => [c.external_id, c]),
-    );
+  // Carrega mapa local (id + store_id + current_salary) só pros restantes
+  const remaining = successes.slice(cursor.financialsIdx);
+  if (remaining.length === 0) return "completed";
 
-    let finIdx = 0;
-    for (const s of successes) {
-      finIdx++;
-      const local = localByExt.get(s.external_id);
-      if (!local) continue;
-      try {
-        const adicionais = await listAdicionais(s.external_id);
-        const fin = await applyFinancials(sbAdmin, {
-          companyId,
-          collaboratorId: local.id,
-          storeId: local.store_id,
-          currentSalary: local.current_salary,
-          adicionais,
-        });
-        financialsSummary.processed++;
-        if (fin.salaryEntry.created) financialsSummary.salaryCreated++;
-        if (fin.salaryEntry.updated) financialsSummary.salaryUpdated++;
-        if (fin.taxEntries.inss.created || fin.taxEntries.inss.updated) financialsSummary.inssGenerated++;
-        if (fin.taxEntries.irpf.created || fin.taxEntries.irpf.updated) financialsSummary.irpfGenerated++;
-        if (fin.taxEntries.fgts.created || fin.taxEntries.fgts.updated) financialsSummary.fgtsGenerated++;
-        financialsSummary.payrollUpserted += fin.payrollEntries.upserted;
-        financialsSummary.assignmentsUpserted += fin.benefitsAssignments.upserted;
-        financialsSummary.benefitsCreated += fin.benefitsAssignments.benefitsCreated;
-        financialsSummary.errors += fin.errors.length;
-        for (const fe of fin.errors) {
-          financialsSummary.errorDetails.push({
-            collaboratorName: s.name,
-            external_id: fe.external_id,
-            tipo: fe.tipo,
-            error: fe.error,
+  const { data: collabsLocal } = await sbAdmin
+    .from("collaborators")
+    .select("id, external_id, store_id, current_salary")
+    .eq("company_id", cursor.options.companyId)
+    .in("external_id", remaining.map((s) => s.external_id));
+  const localByExt = new Map<string, { id: string; store_id: string | null; current_salary: number | null }>(
+    (collabsLocal ?? []).map((c: { id: string; external_id: string; store_id: string | null; current_salary: number | null }) => [c.external_id, c]),
+  );
+
+  // Loop em chunks paralelos
+  while (cursor.financialsIdx < total) {
+    if (budgetExpired()) return "budget_expired";
+
+    const chunk = successes.slice(cursor.financialsIdx, cursor.financialsIdx + FINANCIALS_CONCURRENCY);
+    const results = await Promise.allSettled(
+      chunk.map(async (s) => {
+        const local = localByExt.get(s.external_id);
+        if (!local) return { skipped: true, name: s.name, external_id: s.external_id };
+        try {
+          const adicionais = await listAdicionais(s.external_id);
+          const fin = await applyFinancials(sbAdmin, {
+            companyId: cursor.options.companyId,
+            collaboratorId: local.id,
+            storeId: local.store_id,
+            currentSalary: local.current_salary,
+            adicionais,
           });
+          return { ok: true, name: s.name, external_id: s.external_id, fin };
+        } catch (e) {
+          return { error: (e as Error).message, name: s.name, external_id: s.external_id };
         }
-      } catch (e) {
-        financialsSummary.errors++;
-        financialsSummary.errorDetails.push({
-          collaboratorName: s.name,
-          external_id: s.external_id,
-          tipo: "EXCEPTION",
-          error: (e as Error).message,
-        });
-      }
-      await tick({
-        current_step: `Aplicando financeiros: ${finIdx}/${successes.length} — ${s.name}`,
-      });
-    }
-  }
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // 6. Detalhes (opt-in) — busca sub-abas (afastamentos, absenteismos,
-  //    ferias, planos, pdvs, exames, eventos, etc) por colaborador. Custoso:
-  //    9 requests por colab. Default false.
-  // ───────────────────────────────────────────────────────────────────────────
-  let detailsSummary: {
-    processed: number;
-    totals: Record<string, number>;
-    errors: number;
-    errorDetails: Array<{ collaboratorName: string; kind: string; error: string }>;
-  } | null = null;
-
-  if (includeDetails && successes.length > 0) {
-    detailsSummary = {
-      processed: 0,
-      totals: {
-        absences: 0, leaves: 0, emails: 0, internships: 0,
-        pdvs: 0, healthPlans: 0, healthPlanDeductions: 0,
-        vacations: 0, exams: 0, timelineEvents: 0,
-      },
-      errors: 0,
-      errorDetails: [],
-    };
-
-    // Carrega ids locais correspondentes aos sucessos
-    const { data: collabsLocal } = await sbAdmin
-      .from("collaborators")
-      .select("id, external_id")
-      .eq("company_id", companyId)
-      .in("external_id", successes.map((s) => s.external_id));
-    const localByExt = new Map<string, string>(
-      (collabsLocal ?? []).map((c: { id: string; external_id: string }) => [c.external_id, c.id]),
+      }),
     );
 
-    let detIdx = 0;
-    for (const s of successes) {
-      detIdx++;
-      const localId = localByExt.get(s.external_id);
-      if (!localId) continue;
-      try {
-        const det = await applyCollaboratorDetails(sbAdmin, {
-          companyId,
-          collaboratorId: localId,
-          remoteId: s.external_id,
+    // Agrega
+    for (const r of results) {
+      if (r.status === "rejected") {
+        // Promise.allSettled garante que nunca cai aqui (capturamos no try), mas defensivo
+        summary.errors++;
+        summary.errorDetails.push({
+          collaboratorName: "?",
+          external_id: "?",
+          tipo: "EXCEPTION",
+          error: String(r.reason),
         });
-        detailsSummary.processed++;
-        for (const [kind, result] of Object.entries(det)) {
-          detailsSummary.totals[kind] = (detailsSummary.totals[kind] ?? 0) + result.upserted;
-          if (result.error) {
-            detailsSummary.errors++;
-            detailsSummary.errorDetails.push({
-              collaboratorName: s.name,
-              kind,
-              error: result.error,
-            });
-          }
-        }
-      } catch (e) {
-        detailsSummary.errors++;
-        detailsSummary.errorDetails.push({
-          collaboratorName: s.name,
-          kind: "EXCEPTION",
-          error: (e as Error).message,
+        continue;
+      }
+      const v = r.value;
+      if ("skipped" in v) continue;
+      if ("error" in v) {
+        summary.errors++;
+        summary.errorDetails.push({
+          collaboratorName: v.name,
+          external_id: v.external_id,
+          tipo: "EXCEPTION",
+          error: v.error,
+        });
+        continue;
+      }
+      const { fin } = v;
+      summary.processed++;
+      if (fin.salaryEntry.created) summary.salaryCreated++;
+      if (fin.salaryEntry.updated) summary.salaryUpdated++;
+      if (fin.taxEntries.inss.created || fin.taxEntries.inss.updated) summary.inssGenerated++;
+      if (fin.taxEntries.irpf.created || fin.taxEntries.irpf.updated) summary.irpfGenerated++;
+      if (fin.taxEntries.fgts.created || fin.taxEntries.fgts.updated) summary.fgtsGenerated++;
+      summary.payrollUpserted += fin.payrollEntries.upserted;
+      summary.assignmentsUpserted += fin.benefitsAssignments.upserted;
+      summary.benefitsCreated += fin.benefitsAssignments.benefitsCreated;
+      summary.errors += fin.errors.length;
+      for (const fe of fin.errors) {
+        summary.errorDetails.push({
+          collaboratorName: v.name,
+          external_id: fe.external_id,
+          tipo: fe.tipo,
+          error: fe.error,
         });
       }
-      await tick({
-        current_step: `Sincronizando detalhes: ${detIdx}/${successes.length} — ${s.name}`,
-      });
+    }
+
+    cursor.financialsIdx += chunk.length;
+    await tick({
+      current_step: `Aplicando financeiros: ${cursor.financialsIdx}/${total} (paralelo ${FINANCIALS_CONCURRENCY}x)`,
+    });
+
+    // Persiste cursor periodicamente
+    if (cursor.financialsIdx % CURSOR_PERSIST_EVERY === 0) {
+      await persistCursor(sbAdmin, jobId, cursor);
     }
   }
 
-  // Flush final do throttle + marca como concluído
-  await tick({}, true);
+  return "completed";
+}
 
-  await markJobCompleted(sbAdmin, jobId, {
-    fetched: remote.length,
-    inserted,
-    updated,
-    deactivated,
-    successes_count: successes.length,
-    errors_count: errors.length,
-    errors,
-    successes,
-    financials: financialsSummary,
-    details: detailsSummary,
+// ─────────────────────────────────────────────────────────────────────────────
+// FASE 3: details — paralelizado, com cursor persistente.
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function runDetailsPhase(
+  // deno-lint-ignore no-explicit-any
+  sbAdmin: any,
+  jobId: string,
+  cursor: JobCursor,
+  tick: (patch: Record<string, unknown>, flush?: boolean) => Promise<void>,
+  budgetExpired: () => boolean,
+): Promise<"completed" | "budget_expired"> {
+  const successes = cursor.successes;
+  const total = successes.length;
+  const summary = cursor.detailsSummary!;
+
+  const remaining = successes.slice(cursor.detailsIdx);
+  if (remaining.length === 0) return "completed";
+
+  const { data: collabsLocal } = await sbAdmin
+    .from("collaborators")
+    .select("id, external_id")
+    .eq("company_id", cursor.options.companyId)
+    .in("external_id", remaining.map((s) => s.external_id));
+  const localByExt = new Map<string, string>(
+    (collabsLocal ?? []).map((c: { id: string; external_id: string }) => [c.external_id, c.id]),
+  );
+
+  while (cursor.detailsIdx < total) {
+    if (budgetExpired()) return "budget_expired";
+
+    const chunk = successes.slice(cursor.detailsIdx, cursor.detailsIdx + DETAILS_CONCURRENCY);
+    const results = await Promise.allSettled(
+      chunk.map(async (s) => {
+        const localId = localByExt.get(s.external_id);
+        if (!localId) return { skipped: true };
+        try {
+          const det = await applyCollaboratorDetails(sbAdmin, {
+            companyId: cursor.options.companyId,
+            collaboratorId: localId,
+            remoteId: s.external_id,
+          });
+          return { ok: true, name: s.name, det };
+        } catch (e) {
+          return { error: (e as Error).message, name: s.name };
+        }
+      }),
+    );
+
+    for (const r of results) {
+      if (r.status === "rejected") {
+        summary.errors++;
+        summary.errorDetails.push({
+          collaboratorName: "?",
+          kind: "EXCEPTION",
+          error: String(r.reason),
+        });
+        continue;
+      }
+      const v = r.value;
+      if ("skipped" in v) continue;
+      if ("error" in v) {
+        summary.errors++;
+        summary.errorDetails.push({
+          collaboratorName: v.name,
+          kind: "EXCEPTION",
+          error: v.error,
+        });
+        continue;
+      }
+      summary.processed++;
+      for (const [kind, result] of Object.entries(v.det)) {
+        summary.totals[kind] = (summary.totals[kind] ?? 0) + (result as { upserted: number }).upserted;
+        const err = (result as { error?: string }).error;
+        if (err) {
+          summary.errors++;
+          summary.errorDetails.push({ collaboratorName: v.name, kind, error: err });
+        }
+      }
+    }
+
+    cursor.detailsIdx += chunk.length;
+    await tick({
+      current_step: `Sincronizando detalhes: ${cursor.detailsIdx}/${total} (paralelo ${DETAILS_CONCURRENCY}x)`,
+    });
+
+    if (cursor.detailsIdx % CURSOR_PERSIST_EVERY === 0) {
+      await persistCursor(sbAdmin, jobId, cursor);
+    }
+  }
+
+  return "completed";
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Auto-continuação: fetch self-invoke com service_role + resumeJobId
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function scheduleContinuation(
+  // deno-lint-ignore no-explicit-any
+  sbAdmin: any,
+  supabaseUrl: string,
+  serviceKey: string,
+  jobId: string,
+  cursor: JobCursor,
+): Promise<void> {
+  cursor.continuationCount++;
+  if (cursor.continuationCount > MAX_CONTINUATIONS) {
+    await markJobFailed(
+      sbAdmin,
+      jobId,
+      `Limite de ${MAX_CONTINUATIONS} continuações atingido — job parou em ${cursor.phase} ` +
+      `(financials=${cursor.financialsIdx}, details=${cursor.detailsIdx})`,
+    );
+    return;
+  }
+  await persistCursor(sbAdmin, jobId, cursor);
+  await updateJob(sbAdmin, jobId, {
+    current_step: `Pausando pra evitar timeout — disparando continuação ${cursor.continuationCount}/${MAX_CONTINUATIONS}...`,
   });
+
+  // Fire-and-forget. NÃO await — esta invocação tem que terminar pra liberar
+  // o worker, e a nova invocação rodará independente.
+  const url = `${supabaseUrl}/functions/v1/sync-collaborators`;
+  try {
+    // Dispara sem await final, mas a Promise é "agendada" via fetch
+    // (não bloqueamos a saída desta função).
+    fetch(url, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${serviceKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ resumeJobId: jobId }),
+    }).catch((e) => console.warn(`Self-invoke fetch failed: ${e}`));
+  } catch (e) {
+    console.warn(`Self-invoke threw: ${(e as Error).message}`);
+  }
+}
+
+async function persistCursor(
+  // deno-lint-ignore no-explicit-any
+  sbAdmin: any,
+  jobId: string,
+  cursor: JobCursor,
+): Promise<void> {
+  await updateJob(sbAdmin, jobId, {
+    cursor: cursor as unknown as Record<string, unknown>,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EdgeRuntime.waitUntil helper (com fallback pra ambientes locais)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function scheduleBackground(fn: () => Promise<unknown>): void {
+  // deno-lint-ignore no-explicit-any
+  const ert = (globalThis as any).EdgeRuntime as
+    | { waitUntil?: (p: Promise<unknown>) => void }
+    | undefined;
+  const p = fn();
+  if (ert?.waitUntil) ert.waitUntil(p);
+  // Em ambientes sem EdgeRuntime, só dispara sem await
+  else void p;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -550,7 +892,6 @@ function mapColaboradorToRow(
   const contractedStoreId =
     r.empresaContratada != null ? stores.get(String(r.empresaContratada)) ?? null : null;
 
-  // CPF: cleanCPF (só dígitos) ou null
   const cpf = r.cpf ? String(r.cpf).replace(/\D/g, "") : null;
   if (!cpf) throw new Error("cpf vazio");
   const name = (r.nome ?? r.nomeSuporte ?? `Colab ${r.id}`).trim();
@@ -558,8 +899,6 @@ function mapColaboradorToRow(
   return {
     company_id: companyId,
     external_id: String(r.id),
-
-    // identificação
     name,
     cpf,
     rg: r.rg ?? null,
@@ -575,25 +914,16 @@ function mapColaboradorToRow(
     pix_key: r.contaPix ?? null,
     discord_id: r.discordId ?? null,
     discord_username: r.usuarioDiscord ?? null,
-    // nomeSuporte vai pra softcom_surname (campo "Sobrenome Softcom" da UI).
-    // Mantemos também em support_username pra compatibilidade.
     softcom_surname: r.nomeSuporte ?? null,
     support_username: r.nomeSuporte ?? null,
-    // Código interno = ID da agenda. Campo é readonly na UI.
     internal_code: String(r.id),
-
-    // endereço
     address: r.endereco ?? null,
     district: r.bairro ?? null,
     city: r.cidade ?? null,
     state: r.uf ?? null,
     postal_code: r.cep ?? null,
-
-    // ramais
     phone_extension: r.ramalFixo ?? null,
     radios_freeform: r.ramais ?? null,
-
-    // lotação
     store_id: storeId,
     team_id: teamId,
     position_id: positionId,
@@ -606,8 +936,6 @@ function mapColaboradorToRow(
     sales_group: r.grupoVendas ?? null,
     is_homeoffice: Boolean(r.homeoffice),
     has_agenda_access: Boolean(r.possuiAgenda),
-
-    // contratação
     admission_date: parseDate(r.dataAdmissao),
     termination_date: parseDate(r.dataDemissao),
     inspira_date: parseDate(r.inspiraData),
@@ -618,21 +946,15 @@ function mapColaboradorToRow(
     status: r.desativado === true ? "inativo" : "ativo",
     is_pcd: Boolean(r.pcd),
     is_apprentice: Boolean(r.jovemAprendiz),
-
-    // CTPS + bancário
     ctps: r.ctps ?? null,
     ctps_series: r.ctpsSerie ?? null,
     ctps_uf: r.ctpsUf ?? null,
     bank_account: r.conta ?? null,
-
-    // comissões
     commission_monthly: numOrNull(r.comissaoMensal),
     commission_license: numOrNull(r.comissaoLicenca),
     commission_upgrade: numOrNull(r.comissaoUpgrade),
     commission_tef_install: numOrNull(r.comissaoTefInstalacao),
     commission_tef_monthly: numOrNull(r.comissaoTefMensal),
-
-    // gerência
     is_manager_leader: Boolean(r.gerenteLider),
     is_manager_director: Boolean(r.gerenteDiretor),
     is_manager_support: Boolean(r.gerenteApoio),
@@ -642,7 +964,6 @@ function mapColaboradorToRow(
 
 function parseDate(raw: string | null | undefined): string | null {
   if (!raw) return null;
-  // Aceita ISO 8601, retorna YYYY-MM-DD
   const d = new Date(raw);
   if (Number.isNaN(d.getTime())) return null;
   return d.toISOString().slice(0, 10);
@@ -654,9 +975,6 @@ function numOrNull(v: number | null | undefined): number | null {
 }
 
 function mapRegime(tipo: string | null | undefined): string {
-  // Enum collaborator_regime no SoftHouse aceita apenas: 'clt' | 'pj' | 'estagiario'.
-  // Jovem aprendiz e temporário viram 'clt' — já existem booleans separados
-  // (is_apprentice, is_temp) que cobrem esse caso.
   if (!tipo) return "clt";
   const norm = String(tipo).toLowerCase();
   if (norm.includes("estag")) return "estagiario";
