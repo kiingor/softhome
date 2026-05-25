@@ -83,6 +83,10 @@ interface JobOptions {
   incluirDesativados: boolean;
   includeFinancials: boolean;
   includeDetails: boolean;
+  /** Se true, filtra pendingExtIds pra só colabs que AINDA não têm
+   *  payroll_entries com external_id='salario-base'. Útil pra completar
+   *  syncs que travaram no meio sem refazer os que já estão prontos. */
+  onlyMissingFinancials?: boolean;
 }
 
 interface SuccessRef {
@@ -250,15 +254,17 @@ serve(async (req) => {
   let incluirDesativados = false;
   let includeFinancials = false;
   let includeDetails = false;
+  let onlyMissingFinancials = false;
   try {
     companyId = String(body.companyId ?? "").trim();
     if (!companyId) throw new Error("missing companyId");
     incluirDesativados = Boolean(body.incluirDesativados);
     includeFinancials = Boolean(body.includeFinancials);
     includeDetails = Boolean(body.includeDetails);
+    onlyMissingFinancials = Boolean(body.onlyMissingFinancials);
   } catch (e) {
     return jsonResponse(
-      { error: "Body deve ter { companyId, incluirDesativados?, includeFinancials?, includeDetails? }: " + (e as Error).message },
+      { error: "Body deve ter { companyId, incluirDesativados?, includeFinancials?, includeDetails?, onlyMissingFinancials? }: " + (e as Error).message },
       400,
     );
   }
@@ -266,13 +272,13 @@ serve(async (req) => {
   const allowed = await checkPermission(sbUser, user.id, companyId, "colaboradores");
   if (!allowed) return jsonResponse({ error: "Sem permissão" }, 403);
 
-  const options: JobOptions = { companyId, incluirDesativados, includeFinancials, includeDetails };
+  const options: JobOptions = { companyId, incluirDesativados, includeFinancials, includeDetails, onlyMissingFinancials };
   const cursor = newCursor(options);
 
   const jobId = await createSyncJob(sbAdmin, {
     companyId,
     resource: "collaborators",
-    options: { incluirDesativados, includeFinancials, includeDetails },
+    options: { incluirDesativados, includeFinancials, includeDetails, onlyMissingFinancials },
     createdBy: user.id,
     currentStep: "Iniciando sincronização...",
   });
@@ -417,7 +423,7 @@ async function runInitPhase(
   cursor.remoteExtIds = remote.map((r) => String(r.id));
 
   // Filtra por salário > 0
-  const pending: RemoteColaborador[] = [];
+  let pending: RemoteColaborador[] = [];
   for (const r of remote) {
     const salary = typeof r.salarioAtual === "number" ? r.salarioAtual : 0;
     if (!(salary > 0)) {
@@ -425,6 +431,39 @@ async function runInitPhase(
       continue;
     }
     pending.push(r);
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Filtro opcional: onlyMissingFinancials — pula colabs que já têm entry
+  // de salário base no banco. Útil pra completar syncs que travaram no meio
+  // sem refazer os que já estão prontos.
+  // ──────────────────────────────────────────────────────────────────────
+  if (cursor.options.onlyMissingFinancials) {
+    // Carrega todos os colabs locais com seus IDs + external_ids
+    const { data: localCollabs } = await sbAdmin
+      .from("collaborators")
+      .select("id, external_id")
+      .eq("company_id", companyId)
+      .not("external_id", "is", null);
+    // Carrega quais colabs já têm entry de salário base
+    const { data: withSalary } = await sbAdmin
+      .from("payroll_entries")
+      .select("collaborator_id")
+      .eq("company_id", companyId)
+      .eq("external_id", "salario-base");
+    const withSalaryIds = new Set(
+      (withSalary ?? []).map((e: { collaborator_id: string }) => e.collaborator_id),
+    );
+    const extIdsWithFin = new Set(
+      (localCollabs ?? [])
+        .filter((c: { id: string }) => withSalaryIds.has(c.id))
+        .map((c: { external_id: string }) => c.external_id),
+    );
+    const beforeFilter = pending.length;
+    pending = pending.filter((r) => !extIdsWithFin.has(String(r.id)));
+    console.log(
+      `onlyMissingFinancials: ${beforeFilter} → ${pending.length} (pulou ${extIdsWithFin.size} já prontos)`,
+    );
   }
 
   cursor.pendingExtIds = pending.map((r) => String(r.id));
