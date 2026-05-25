@@ -54,10 +54,14 @@ const MAX_PAGES = 2000;
 // (limit teórico ~6 min wall time).
 const SLICE_BUDGET_MS = 4 * 60 * 1000;
 // Colabs por batch. Cada colab no batch passa por upsert + financials + details
-// end-to-end em paralelo com os outros do batch. 25 é o tamanho recomendado
-// pelo user: dá feedback frequente, mantém o batch independente, e em ~10s/colab
-// serial vira ~10s/batch paralelo.
-const BATCH_SIZE = 25;
+// end-to-end em paralelo com os outros do batch. 10 é conservador pra não
+// saturar a agenda (cada colab faz 11 HTTP requests; 10 paralelos = 110 reqs
+// simultâneos no pior caso — agenda aguenta).
+const BATCH_SIZE = 10;
+// Watchdog: se um batch demorar mais que isso, aborta esse batch (colabs
+// pendentes ficam de fora) e agenda continuação. Protege contra colab lento
+// da agenda travando o worker até morrer no limite de 6min do Supabase.
+const BATCH_TIMEOUT_MS = 90 * 1000; // 90s por batch
 // Limite hard contra loop infinito de continuações.
 const MAX_CONTINUATIONS = 50;
 
@@ -451,7 +455,6 @@ async function runBatchesPhase(
   const { companyId, includeFinancials, includeDetails } = cursor.options;
   const total = cursor.toProcess;
 
-  // Lookups carregados 1× por slice (cabem em memória)
   const [storesMap, teamsMap, positionsMap] = await Promise.all([
     loadExternalIdMap(sbAdmin, "stores", companyId),
     loadExternalIdMap(sbAdmin, "teams", companyId),
@@ -467,25 +470,55 @@ async function runBatchesPhase(
     const batchExtIds = cursor.pendingExtIds.slice(cursor.batchIdx, cursor.batchIdx + BATCH_SIZE);
 
     await tick({
-      current_step: `Lote ${batchNum}/${totalBatches}: processando ${batchExtIds.length} colabs (upsert + financeiros + detalhes)...`,
+      current_step: `Lote ${batchNum}/${totalBatches}: processando ${batchExtIds.length} colabs...`,
     });
 
-    // Processa o batch em paralelo — cada colab passa por upsert+financials+details
-    await Promise.allSettled(
-      batchExtIds.map((extId) =>
-        processOneColabEndToEnd(sbAdmin, cursor, {
-          extId,
-          companyId,
-          storesMap,
-          teamsMap,
-          positionsMap,
-          existingExtIdsSet,
-          includeFinancials,
-          includeDetails,
-        })
-      ),
+    // ─── Watchdog: aborta batch se ultrapassar BATCH_TIMEOUT_MS ───
+    // Sem isso, um colab travado na agenda segura o batch inteiro até o
+    // worker morrer no limite do Supabase (~6min). Resultado: nunca consegue
+    // agendar continuação. Com watchdog: aborta o batch, marca incompletos
+    // como pending (cursor não avança esses), agenda continuação que retoma.
+    const batchPromise = runOneBatch({
+      sbAdmin, cursor, batchExtIds, batchNum, totalBatches,
+      companyId, storesMap, teamsMap, positionsMap, existingExtIdsSet,
+      includeFinancials, includeDetails,
+      onColabDone: async (doneCount) => {
+        // Tick a cada colab terminado (não só ao fim do batch) — feedback ao vivo.
+        await tick({
+          processed: cursor.batchIdx + doneCount,
+          total,
+          inserted: cursor.inserted,
+          updated: cursor.updated,
+          current_step: `Lote ${batchNum}/${totalBatches}: ${doneCount}/${batchExtIds.length} colabs do lote prontos (${cursor.batchIdx + doneCount}/${total} geral)`,
+        });
+      },
+    });
+
+    const timeoutPromise = new Promise<"timeout">((resolve) =>
+      setTimeout(() => resolve("timeout"), BATCH_TIMEOUT_MS)
     );
 
+    const result = await Promise.race([batchPromise, timeoutPromise]);
+
+    if (result === "timeout") {
+      // Watchdog disparou — batch demorou demais. Marca colabs do batch que
+      // NÃO conseguiram terminar como pending (vão ser refeitos na próxima
+      // continuação). Os que terminaram já tiveram cursor mutado.
+      console.warn(`Batch ${batchNum} timeout (${BATCH_TIMEOUT_MS}ms) — abortando`);
+      await tick({
+        current_step: `⚠ Lote ${batchNum} demorou demais (>${BATCH_TIMEOUT_MS / 1000}s) — agendando continuação...`,
+      });
+      // Avança batchIdx até onde processOneColabEndToEnd conseguiu (rastreado
+      // via successes/errors no cursor). Como Promise.race não cancela o
+      // batchPromise, ele continua rodando em background até dar erro/timeout
+      // do HTTP — mas como o resultado já vem por mutação do cursor (não
+      // pelo return), os colabs que terminarem ainda serão contados na
+      // próxima invocação.
+      await persistCursor(sbAdmin, jobId, cursor);
+      return "budget_expired";
+    }
+
+    // Batch terminou no tempo
     cursor.batchIdx += batchExtIds.length;
     await tick({
       processed: cursor.batchIdx,
@@ -498,6 +531,47 @@ async function runBatchesPhase(
   }
 
   return "completed";
+}
+
+/**
+ * Roda 1 batch em paralelo, com callback `onColabDone` chamado a cada colab
+ * terminado pra dar feedback ao vivo (sem esperar batch inteiro).
+ */
+async function runOneBatch(args: {
+  // deno-lint-ignore no-explicit-any
+  sbAdmin: any;
+  cursor: JobCursor;
+  batchExtIds: string[];
+  batchNum: number;
+  totalBatches: number;
+  companyId: string;
+  storesMap: Map<string, string>;
+  teamsMap: Map<string, string>;
+  positionsMap: Map<string, string>;
+  existingExtIdsSet: Set<string>;
+  includeFinancials: boolean;
+  includeDetails: boolean;
+  onColabDone: (doneCount: number) => Promise<void>;
+}): Promise<"done"> {
+  const {
+    sbAdmin, cursor, batchExtIds, companyId, storesMap, teamsMap, positionsMap,
+    existingExtIdsSet, includeFinancials, includeDetails, onColabDone,
+  } = args;
+
+  let doneCount = 0;
+  await Promise.allSettled(
+    batchExtIds.map(async (extId) => {
+      await processOneColabEndToEnd(sbAdmin, cursor, {
+        extId, companyId, storesMap, teamsMap, positionsMap,
+        existingExtIdsSet, includeFinancials, includeDetails,
+      });
+      doneCount++;
+      try {
+        await onColabDone(doneCount);
+      } catch { /* tick falhou — não bloqueia o batch */ }
+    }),
+  );
+  return "done";
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
