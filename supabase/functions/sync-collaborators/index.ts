@@ -87,6 +87,10 @@ interface JobOptions {
    *  payroll_entries com external_id='salario-base'. Útil pra completar
    *  syncs que travaram no meio sem refazer os que já estão prontos. */
   onlyMissingFinancials?: boolean;
+  /** Se true, filtra pendingExtIds pra só colabs que AINDA não têm
+   *  rows em collaborator_pdvs OU vacation_periods (proxy pra "details
+   *  já rodaram"). Útil pra completar syncs que travaram no meio. */
+  onlyMissingDetails?: boolean;
 }
 
 interface SuccessRef {
@@ -174,7 +178,7 @@ function newCursor(options: JobOptions): JobCursor {
       totals: {
         absences: 0, leaves: 0, emails: 0, internships: 0,
         pdvs: 0, healthPlans: 0, healthPlanDeductions: 0,
-        vacations: 0, exams: 0, timelineEvents: 0,
+        vacations: 0, exams: 0, timelineEvents: 0, dependents: 0,
       },
       errors: 0,
     },
@@ -255,6 +259,7 @@ serve(async (req) => {
   let includeFinancials = false;
   let includeDetails = false;
   let onlyMissingFinancials = false;
+  let onlyMissingDetails = false;
   try {
     companyId = String(body.companyId ?? "").trim();
     if (!companyId) throw new Error("missing companyId");
@@ -262,9 +267,10 @@ serve(async (req) => {
     includeFinancials = Boolean(body.includeFinancials);
     includeDetails = Boolean(body.includeDetails);
     onlyMissingFinancials = Boolean(body.onlyMissingFinancials);
+    onlyMissingDetails = Boolean(body.onlyMissingDetails);
   } catch (e) {
     return jsonResponse(
-      { error: "Body deve ter { companyId, incluirDesativados?, includeFinancials?, includeDetails?, onlyMissingFinancials? }: " + (e as Error).message },
+      { error: "Body deve ter { companyId, incluirDesativados?, includeFinancials?, includeDetails?, onlyMissingFinancials?, onlyMissingDetails? }: " + (e as Error).message },
       400,
     );
   }
@@ -272,13 +278,13 @@ serve(async (req) => {
   const allowed = await checkPermission(sbUser, user.id, companyId, "colaboradores");
   if (!allowed) return jsonResponse({ error: "Sem permissão" }, 403);
 
-  const options: JobOptions = { companyId, incluirDesativados, includeFinancials, includeDetails, onlyMissingFinancials };
+  const options: JobOptions = { companyId, incluirDesativados, includeFinancials, includeDetails, onlyMissingFinancials, onlyMissingDetails };
   const cursor = newCursor(options);
 
   const jobId = await createSyncJob(sbAdmin, {
     companyId,
     resource: "collaborators",
-    options: { incluirDesativados, includeFinancials, includeDetails, onlyMissingFinancials },
+    options: { incluirDesativados, includeFinancials, includeDetails, onlyMissingFinancials, onlyMissingDetails },
     createdBy: user.id,
     currentStep: "Iniciando sincronização...",
   });
@@ -463,6 +469,46 @@ async function runInitPhase(
     pending = pending.filter((r) => !extIdsWithFin.has(String(r.id)));
     console.log(
       `onlyMissingFinancials: ${beforeFilter} → ${pending.length} (pulou ${extIdsWithFin.size} já prontos)`,
+    );
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Filtro opcional: onlyMissingDetails — pula colabs que já têm rows
+  // em collaborator_pdvs OU vacation_periods (proxy: details já rodaram).
+  // ──────────────────────────────────────────────────────────────────────
+  if (cursor.options.onlyMissingDetails) {
+    const { data: localCollabs } = await sbAdmin
+      .from("collaborators")
+      .select("id, external_id")
+      .eq("company_id", companyId)
+      .not("external_id", "is", null);
+    // Pega collaborator_ids que aparecem em pdvs OU vacation_periods
+    const [{ data: withPdvs }, { data: withVacs }] = await Promise.all([
+      sbAdmin
+        .from("collaborator_pdvs")
+        .select("collaborator_id")
+        .eq("company_id", companyId),
+      sbAdmin
+        .from("vacation_periods")
+        .select("collaborator_id")
+        .eq("company_id", companyId),
+    ]);
+    const withDetIds = new Set<string>();
+    for (const r of (withPdvs ?? []) as { collaborator_id: string }[]) {
+      withDetIds.add(r.collaborator_id);
+    }
+    for (const r of (withVacs ?? []) as { collaborator_id: string }[]) {
+      withDetIds.add(r.collaborator_id);
+    }
+    const extIdsWithDet = new Set(
+      (localCollabs ?? [])
+        .filter((c: { id: string }) => withDetIds.has(c.id))
+        .map((c: { external_id: string }) => c.external_id),
+    );
+    const beforeFilter = pending.length;
+    pending = pending.filter((r) => !extIdsWithDet.has(String(r.id)));
+    console.log(
+      `onlyMissingDetails: ${beforeFilter} → ${pending.length} (pulou ${extIdsWithDet.size} já prontos)`,
     );
   }
 
