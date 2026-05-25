@@ -343,9 +343,21 @@ async function runJobSlice(
     if (includeFinancials && cursor.successes.length > 0) {
       cursor.phase = "financials";
       cursor.financialsSummary = newFinancialsSummary();
+      // Reseta barra pra refletir progresso da NOVA fase (não fica preso
+      // no contador da fase 1)
+      await updateJob(sbAdmin, jobId, {
+        processed: 0,
+        total: cursor.successes.length,
+        current_step: `Iniciando financeiros (${cursor.successes.length} colabs)...`,
+      });
     } else if (includeDetails && cursor.successes.length > 0) {
       cursor.phase = "details";
       cursor.detailsSummary = newDetailsSummary();
+      await updateJob(sbAdmin, jobId, {
+        processed: 0,
+        total: cursor.successes.length,
+        current_step: `Iniciando detalhes (${cursor.successes.length} colabs)...`,
+      });
     } else {
       cursor.phase = "done";
     }
@@ -371,6 +383,11 @@ async function runJobSlice(
     if (includeDetails && cursor.successes.length > 0) {
       cursor.phase = "details";
       cursor.detailsSummary = newDetailsSummary();
+      await updateJob(sbAdmin, jobId, {
+        processed: 0,
+        total: cursor.successes.length,
+        current_step: `Iniciando detalhes (${cursor.successes.length} colabs)...`,
+      });
     } else {
       cursor.phase = "done";
     }
@@ -535,11 +552,16 @@ async function runInitPhase(
             .select("external_id")
             .maybeSingle();
           if (singleErr) {
+            // Mensagem amigável pra erro de CPF duplicado (caso clássico:
+            // existe outro colab local com mesmo CPF mas external_id diferente)
+            const friendlyError = singleErr.message.includes("cpf_company_id")
+              ? `CPF ${row.cpf ?? "—"} já cadastrado em outro colaborador desta empresa`
+              : singleErr.message;
             cursor.errors.push({
               external_id: extId,
               name: meta?.name ?? `Colab ${extId}`,
               cpf: meta?.cpf ?? null,
-              error: singleErr.message,
+              error: friendlyError,
             });
           } else if (singleData) {
             const action = existingCollabs.has(extId) ? "updated" : "inserted";
@@ -694,6 +716,8 @@ async function runFinancialsPhase(
 
     cursor.financialsIdx += chunk.length;
     await tick({
+      processed: cursor.financialsIdx,
+      total,
       current_step: `Aplicando financeiros: ${cursor.financialsIdx}/${total} (paralelo ${FINANCIALS_CONCURRENCY}x)`,
     });
 
@@ -789,6 +813,8 @@ async function runDetailsPhase(
 
     cursor.detailsIdx += chunk.length;
     await tick({
+      processed: cursor.detailsIdx,
+      total,
       current_step: `Sincronizando detalhes: ${cursor.detailsIdx}/${total} (paralelo ${DETAILS_CONCURRENCY}x)`,
     });
 
@@ -824,25 +850,53 @@ async function scheduleContinuation(
   }
   await persistCursor(sbAdmin, jobId, cursor);
   await updateJob(sbAdmin, jobId, {
-    current_step: `Pausando pra evitar timeout — disparando continuação ${cursor.continuationCount}/${MAX_CONTINUATIONS}...`,
+    current_step: `Disparando continuação ${cursor.continuationCount}/${MAX_CONTINUATIONS}...`,
   });
 
-  // Fire-and-forget. NÃO await — esta invocação tem que terminar pra liberar
-  // o worker, e a nova invocação rodará independente.
+  // Self-invoke da edge function. IMPORTANTE: agora await o fetch (com
+  // timeout) — fire-and-forget anterior podia ser GC'd antes do request HTTP
+  // chegar no servidor. A nova invocação retorna 202 imediato (porque o
+  // trabalho real roda em waitUntil dela), então este await é só pra
+  // confirmar que a requisição chegou.
   const url = `${supabaseUrl}/functions/v1/sync-collaborators`;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s
   try {
-    // Dispara sem await final, mas a Promise é "agendada" via fetch
-    // (não bloqueamos a saída desta função).
-    fetch(url, {
+    const resp = await fetch(url, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${serviceKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ resumeJobId: jobId }),
-    }).catch((e) => console.warn(`Self-invoke fetch failed: ${e}`));
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => "<no body>");
+      console.error(`Self-invoke failed HTTP ${resp.status}: ${text}`);
+      await updateJob(sbAdmin, jobId, {
+        current_step: `⚠ Continuação falhou (HTTP ${resp.status}). Job ficou em ${cursor.phase} ${cursor.financialsIdx}/${cursor.detailsIdx}.`,
+      });
+      await markJobFailed(
+        sbAdmin,
+        jobId,
+        `Auto-continuação falhou: HTTP ${resp.status}. ${text.slice(0, 300)}`,
+      );
+    } else {
+      console.log(`Self-invoke OK pra job ${jobId}, continuação ${cursor.continuationCount}`);
+    }
   } catch (e) {
-    console.warn(`Self-invoke threw: ${(e as Error).message}`);
+    clearTimeout(timeoutId);
+    const errMsg = (e as Error).message;
+    console.error(`Self-invoke threw: ${errMsg}`);
+    await markJobFailed(
+      sbAdmin,
+      jobId,
+      `Auto-continuação não pôde ser disparada: ${errMsg}. ` +
+      `Estado atual: ${cursor.phase} financials=${cursor.financialsIdx} details=${cursor.detailsIdx}. ` +
+      `Rode Sincronizar de novo pra continuar do zero.`,
+    );
   }
 }
 
@@ -919,8 +973,11 @@ function mapColaboradorToRow(
   const contractedStoreId =
     r.empresaContratada != null ? stores.get(String(r.empresaContratada)) ?? null : null;
 
-  const cpf = r.cpf ? String(r.cpf).replace(/\D/g, "") : null;
-  if (!cpf) throw new Error("cpf vazio");
+  // CPF: aceita vazio. Migration 20260525143000 tornou a coluna nullable e
+  // o UNIQUE virou parcial (só impede dup quando cpf não é null). RH preenche
+  // depois manual pelos colabs sem cpf.
+  const cpfRaw = r.cpf ? String(r.cpf).replace(/\D/g, "") : "";
+  const cpf = cpfRaw.length > 0 ? cpfRaw : null;
   const name = (r.nome ?? r.nomeSuporte ?? `Colab ${r.id}`).trim();
 
   return {
