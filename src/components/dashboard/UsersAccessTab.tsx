@@ -64,6 +64,10 @@ interface CompanyUser {
   user_id: string | null;
   is_active: boolean;
   accepted_at: string | null;
+  /** True quando o user existe no auth + tem permissões mas não tem registro em company_users. */
+  is_orphan?: boolean;
+  /** Origem do registro: company_users | permissions_only | owner. */
+  source?: "company_users" | "permissions_only" | "owner";
 }
 
 interface UserPermission {
@@ -99,87 +103,26 @@ export const UsersAccessTab = () => {
   const [resendConfirmPassword, setResendConfirmPassword] = useState("");
   const [showResendPassword, setShowResendPassword] = useState(false);
 
-  // Fetch company users — exclui colaboradores (eles acessam pelo Portal,
-  // não pelo dashboard). Aqui ficam só os usuários cadastrados via Configurações
-  // + o owner da empresa (que pode não estar em company_users).
+  // Fetch via edge function list-company-users.
+  //
+  // Antes: query direta em company_users + filtro client-side por email/user_id
+  // contra collaborators. Bug: o filtro de email era frágil — qualquer email de
+  // user dashboard que batesse com email de colab (caso normal) era escondido.
+  // E faltava buscar "órfãos": user_ids que têm permissão em user_permissions
+  // mas nunca foram inseridos em company_users.
+  //
+  // Agora: edge function (com SERVICE_ROLE) consolida company_users +
+  // user_permissions + owner, com fallback em auth.users pra email/nome dos
+  // órfãos. Exclui só colabs via user_id (sem filtro por email).
   const { data: companyUsers, isLoading: isLoadingUsers } = useQuery({
     queryKey: ["company-users", currentCompany?.id, user?.id],
     queryFn: async () => {
-      const [usersRes, collabsRes, companyRes] = await Promise.all([
-        supabase
-          .from("company_users")
-          .select("*")
-          .eq("company_id", currentCompany!.id)
-          .order("created_at", { ascending: false }),
-        // Carrega user_id E email dos colaboradores pra filtragem dupla:
-        // remove company_users que (a) estão linkados a um colab (user_id)
-        // OU (b) têm email que bate com algum colaborador. Evita aparecer
-        // duplicado mesmo se sync/import populou ambas as tabelas.
-        supabase
-          .from("collaborators")
-          .select("user_id, email")
-          .eq("company_id", currentCompany!.id),
-        supabase
-          .from("companies")
-          .select("owner_id")
-          .eq("id", currentCompany!.id)
-          .maybeSingle(),
-      ]);
-
-      if (usersRes.error) throw usersRes.error;
-      if (collabsRes.error) throw collabsRes.error;
-
-      const collabUserIds = new Set(
-        (collabsRes.data ?? [])
-          .map((c) => (c as { user_id: string | null }).user_id)
-          .filter((id): id is string => !!id),
-      );
-      const collabEmails = new Set(
-        (collabsRes.data ?? [])
-          .map((c) => (c as { email: string | null }).email?.toLowerCase().trim())
-          .filter((e): e is string => !!e),
-      );
-
-      const filtered = (usersRes.data as CompanyUser[]).filter((u) => {
-        const linkedToCollab = u.user_id && collabUserIds.has(u.user_id);
-        const emailMatchesCollab =
-          u.email && collabEmails.has(u.email.toLowerCase().trim());
-        return !linkedToCollab && !emailMatchesCollab;
+      const { data, error } = await supabase.functions.invoke("list-company-users", {
+        body: { company_id: currentCompany!.id },
       });
-
-      // Garante que o owner da empresa apareça mesmo se não estiver em company_users
-      const ownerId = (companyRes.data as { owner_id: string | null } | null)
-        ?.owner_id;
-      const ownerInList = ownerId
-        ? filtered.some((u) => u.user_id === ownerId)
-        : true;
-
-      if (ownerId && !ownerInList) {
-        // Busca dados do owner via profiles (full_name); email vem do auth
-        // context se for o próprio admin logado
-        const { data: ownerProfile } = await supabase
-          .from("profiles")
-          .select("full_name")
-          .eq("user_id", ownerId)
-          .maybeSingle();
-
-        const ownerEmail =
-          user?.id === ownerId ? user?.email ?? "" : "";
-
-        const ownerEntry: CompanyUser = {
-          id: `owner:${ownerId}`,
-          email: ownerEmail || "(sem email cadastrado)",
-          full_name:
-            (ownerProfile as { full_name: string | null } | null)?.full_name ??
-            null,
-          user_id: ownerId,
-          is_active: true,
-          accepted_at: null,
-        };
-        filtered.unshift(ownerEntry);
-      }
-
-      return filtered;
+      if (error) throw error;
+      const result = data as { users: CompanyUser[] } | null;
+      return result?.users ?? [];
     },
     enabled: !!currentCompany?.id,
   });
@@ -328,14 +271,44 @@ export const UsersAccessTab = () => {
   });
 
   // Delete user mutation
+  // Lida com 3 casos:
+  // 1. User normal (id = uuid de company_users): DELETE em company_users
+  // 2. Órfão (id começa com "orphan:"): só remove user_permissions desta
+  //    company (não tem company_users pra deletar)
+  // 3. Owner (id começa com "owner:"): bloqueia — owner não pode ser removido
   const deleteMutation = useMutation({
-    mutationFn: async (userId: string) => {
-      const { error } = await supabase
-        .from("company_users")
-        .delete()
-        .eq("id", userId);
+    mutationFn: async () => {
+      if (!userToDelete) throw new Error("Nenhum usuário selecionado");
+      if (userToDelete.source === "owner") {
+        throw new Error("O proprietário da empresa não pode ser removido daqui.");
+      }
+      const userAuthId = userToDelete.user_id;
 
-      if (error) throw error;
+      if (userToDelete.is_orphan) {
+        // Só remove permissões (não há linha em company_users)
+        if (!userAuthId) throw new Error("Usuário órfão sem user_id válido");
+        const { error: permErr } = await supabase
+          .from("user_permissions")
+          .delete()
+          .eq("user_id", userAuthId)
+          .eq("company_id", currentCompany!.id);
+        if (permErr) throw permErr;
+      } else {
+        // Remove de company_users + limpa permissões na company atual
+        const { error: cuErr } = await supabase
+          .from("company_users")
+          .delete()
+          .eq("id", userToDelete.id);
+        if (cuErr) throw cuErr;
+
+        if (userAuthId) {
+          await supabase
+            .from("user_permissions")
+            .delete()
+            .eq("user_id", userAuthId)
+            .eq("company_id", currentCompany!.id);
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["company-users"] });
@@ -345,8 +318,8 @@ export const UsersAccessTab = () => {
         setSelectedUser(null);
       }
     },
-    onError: () => {
-      toast.error("Erro ao remover usuário.");
+    onError: (err: Error) => {
+      toast.error(err.message || "Erro ao remover usuário.");
     },
   });
 
@@ -1014,7 +987,7 @@ export const UsersAccessTab = () => {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => userToDelete && deleteMutation.mutate(userToDelete.id)}
+              onClick={() => deleteMutation.mutate()}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Remover
