@@ -694,7 +694,7 @@ const DashboardHome = () => {
             {profile?.full_name ? `, ${profile.full_name.split(" ")[0]}` : ""}
             <span className="text-primary"> 👋</span>
           </h1>
-          <p className="text-muted-foreground text-sm mt-1 flex items-center gap-3 flex-wrap">
+          <div className="text-muted-foreground text-sm mt-1 flex items-center gap-3 flex-wrap">
             <span className="capitalize">
               {format(today, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
             </span>
@@ -707,7 +707,7 @@ const DashboardHome = () => {
                 {totalAttentionCount} açã{totalAttentionCount === 1 ? "o requer" : "ões requerem"} sua atenção
               </Badge>
             )}
-          </p>
+          </div>
         </div>
       </div>
 

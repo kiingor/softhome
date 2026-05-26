@@ -30,6 +30,7 @@ import {
   DotsThree as MoreHorizontal,
   LockKey,
   WarningCircle,
+  PencilSimple as Pencil,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import {
@@ -88,6 +89,8 @@ export const UsersAccessTab = () => {
   const [selectedUser, setSelectedUser] = useState<CompanyUser | null>(null);
   const [permissionsDialogOpen, setPermissionsDialogOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<CompanyUser | null>(null);
+  const [userToEdit, setUserToEdit] = useState<CompanyUser | null>(null);
+  const [editName, setEditName] = useState("");
   const [inviteForm, setInviteForm] = useState({ 
     email: "", 
     full_name: "", 
@@ -320,6 +323,37 @@ export const UsersAccessTab = () => {
     },
     onError: (err: Error) => {
       toast.error(err.message || "Erro ao remover usuário.");
+    },
+  });
+
+  // Edit user name mutation — funciona pra users normais, órfãos e owner.
+  // Atualiza auth.users.user_metadata.full_name (canônico) + company_users
+  // se houver (via edge function com SERVICE_ROLE).
+  const editNameMutation = useMutation({
+    mutationFn: async () => {
+      if (!userToEdit?.user_id) throw new Error("Usuário sem user_id válido");
+      const trimmed = editName.trim();
+      if (!trimmed) throw new Error("Nome não pode ser vazio");
+
+      const { data, error } = await supabase.functions.invoke("update-user-name", {
+        body: {
+          company_id: currentCompany!.id,
+          user_id: userToEdit.user_id,
+          full_name: trimmed,
+        },
+      });
+      if (error) throw error;
+      const result = data as { error?: string } | null;
+      if (result?.error) throw new Error(result.error);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["company-users"] });
+      toast.success("Nome atualizado!");
+      setUserToEdit(null);
+      setEditName("");
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Erro ao atualizar nome.");
     },
   });
 
@@ -677,46 +711,57 @@ export const UsersAccessTab = () => {
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        {!isOwner ? (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <MoreHorizontal className="w-4 h-4" />
-                                <span className="sr-only">Ações</span>
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-56">
-                              {canManage && companyUser.user_id && (
-                                <DropdownMenuItem
-                                  onClick={() => {
-                                    setSelectedUser(companyUser);
-                                    setPermissionsDialogOpen(true);
-                                  }}
-                                  disabled={!companyUser.accepted_at}
-                                >
-                                  <LockKey className="w-4 h-4 mr-2" />
-                                  Permissões
-                                </DropdownMenuItem>
-                              )}
-                              {companyUser.user_id && (
-                                <DropdownMenuItem onClick={() => setResendUser(companyUser)}>
-                                  <Mail className="w-4 h-4 mr-2" />
-                                  Reenviar dados de acesso
-                                </DropdownMenuItem>
-                              )}
-                              {(canManage || companyUser.user_id) && <DropdownMenuSeparator />}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreHorizontal className="w-4 h-4" />
+                              <span className="sr-only">Ações</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-56">
+                            {canManage && (
                               <DropdownMenuItem
-                                onClick={() => setUserToDelete(companyUser)}
-                                className="text-destructive focus:text-destructive"
+                                onClick={() => {
+                                  setUserToEdit(companyUser);
+                                  setEditName(companyUser.full_name ?? "");
+                                }}
                               >
-                                <Trash2 className="w-4 h-4 mr-2" />
-                                Excluir
+                                <Pencil className="w-4 h-4 mr-2" />
+                                Editar nome
                               </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        ) : (
-                          <span className="text-xs text-muted-foreground pr-2">—</span>
-                        )}
+                            )}
+                            {!isOwner && canManage && companyUser.user_id && (
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setSelectedUser(companyUser);
+                                  setPermissionsDialogOpen(true);
+                                }}
+                                disabled={!companyUser.accepted_at}
+                              >
+                                <LockKey className="w-4 h-4 mr-2" />
+                                Permissões
+                              </DropdownMenuItem>
+                            )}
+                            {!isOwner && companyUser.user_id && (
+                              <DropdownMenuItem onClick={() => setResendUser(companyUser)}>
+                                <Mail className="w-4 h-4 mr-2" />
+                                Reenviar dados de acesso
+                              </DropdownMenuItem>
+                            )}
+                            {!isOwner && (
+                              <>
+                                {(canManage || companyUser.user_id) && <DropdownMenuSeparator />}
+                                <DropdownMenuItem
+                                  onClick={() => setUserToDelete(companyUser)}
+                                  className="text-destructive focus:text-destructive"
+                                >
+                                  <Trash2 className="w-4 h-4 mr-2" />
+                                  Excluir
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   );
@@ -968,6 +1013,72 @@ export const UsersAccessTab = () => {
                 <Mail className="w-4 h-4 mr-2" />
               )}
               Reenviar Acesso
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Name Dialog */}
+      <Dialog
+        open={!!userToEdit}
+        onOpenChange={(open) => {
+          if (!open) {
+            setUserToEdit(null);
+            setEditName("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar nome do usuário</DialogTitle>
+            <DialogDescription>
+              {userToEdit?.email}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="editName">Nome completo</Label>
+            <Input
+              id="editName"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              placeholder="Ex.: Maria da Silva"
+              autoFocus
+              maxLength={120}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && editName.trim() && !editNameMutation.isPending) {
+                  e.preventDefault();
+                  editNameMutation.mutate();
+                }
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setUserToEdit(null);
+                setEditName("");
+              }}
+              disabled={editNameMutation.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => editNameMutation.mutate()}
+              disabled={
+                !editName.trim() ||
+                editName.trim() === (userToEdit?.full_name ?? "") ||
+                editNameMutation.isPending
+              }
+            >
+              {editNameMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Salvando...
+                </>
+              ) : (
+                "Salvar"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
