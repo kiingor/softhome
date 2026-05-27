@@ -168,7 +168,7 @@ const DashboardHome = () => {
       if (!currentCompany?.id) return [];
       const { data, error } = await supabase
         .from("collaborators")
-        .select("id, name, status, position_id, store_id, team_id, admission_date, birth_date")
+        .select("id, name, softcom_surname, status, position_id, store_id, team_id, admission_date, birth_date")
         .eq("company_id", currentCompany.id);
       if (error) throw error;
       return data || [];
@@ -915,13 +915,15 @@ const DashboardHome = () => {
                 </div>
               ) : (
                 <ul className="divide-y divide-border">
-                  {upcomingBirthdays.slice(0, 6).map((b) => (
+                  {upcomingBirthdays.slice(0, 6).map((b) => {
+                    const displayName = b.collab.softcom_surname?.trim() || b.collab.name;
+                    return (
                     <li key={b.collab.id} className="flex items-center gap-3 px-6 py-3">
                       <div className="w-10 h-10 rounded-full bg-pink-50 dark:bg-pink-950/30 ring-2 ring-pink-200 dark:ring-pink-900/40 grid place-items-center text-sm font-bold text-pink-700 dark:text-pink-300 shrink-0">
-                        {getInitials(b.collab.name)}
+                        {getInitials(displayName)}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-foreground truncate">{b.collab.name}</p>
+                        <p className="text-sm font-medium text-foreground truncate">{displayName}</p>
                         <p className="text-xs text-muted-foreground">
                           {format(b.date, "dd 'de' MMM", { locale: ptBR })}
                         </p>
@@ -937,7 +939,8 @@ const DashboardHome = () => {
                         </span>
                       </div>
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               )}
             </CardContent>
