@@ -1,0 +1,21 @@
+# <tipo>(<escopo>): <descricao curta no imperativo, ≤72 chars>
+#
+# Tipos: feat, fix, chore, refactor, docs, test
+# Escopo (opcional): folha, ferias, sync, auth, dashboard, usuarios, etc.
+#
+# Exemplos:
+#   feat(folha): adiciona filtro de empresa nos lancamentos
+#   fix(sync): trata 429 com exponential backoff
+#   chore: upgrade supabase-cli pra 1.200
+#
+# ─── Linha em branco acima ───
+#
+# Corpo: explica o PORQUE da mudanca, nao o O QUE (diff ja mostra).
+# Contexto, decisao tomada, alternativas descartadas.
+# Linhas com no maximo 72 chars.
+#
+# Cita issues/tasks se houver:
+#   Refs #45
+#   Closes #67
+#
+# ─── Linhas comecando com # sao ignoradas ───
