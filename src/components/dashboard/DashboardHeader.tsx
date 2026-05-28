@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useDashboard } from "@/contexts/DashboardContext";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,10 +10,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { SignOut as LogOut, Gear as Settings, MagnifyingGlass } from "@phosphor-icons/react";
+import {
+  SignOut as LogOut,
+  Gear as Settings,
+  MagnifyingGlass,
+  Key,
+} from "@phosphor-icons/react";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { NotificationBell } from "./NotificationBell";
+import { ChangePasswordDialog } from "./ChangePasswordDialog";
 
 const roleLabels: Record<string, string> = {
   admin: "Administrador G&C",
@@ -30,6 +37,7 @@ interface DashboardHeaderProps {
 const DashboardHeader = ({ onOpenSearch }: DashboardHeaderProps = {}) => {
   const { user, profile, roles, signOut } = useDashboard();
   const navigate = useNavigate();
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/.test(navigator.platform);
 
   const handleSignOut = async () => {
@@ -106,6 +114,10 @@ const DashboardHeader = ({ onOpenSearch }: DashboardHeaderProps = {}) => {
               <Settings className="w-4 h-4 mr-2" />
               Configurações
             </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setChangePasswordOpen(true)}>
+              <Key className="w-4 h-4 mr-2" />
+              Alterar senha
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive">
               <LogOut className="w-4 h-4 mr-2" />
@@ -114,6 +126,11 @@ const DashboardHeader = ({ onOpenSearch }: DashboardHeaderProps = {}) => {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      <ChangePasswordDialog
+        open={changePasswordOpen}
+        onOpenChange={setChangePasswordOpen}
+      />
     </header>
   );
 };
