@@ -234,6 +234,7 @@ export const UsersAccessTab = () => {
         body: {
           user_id: data.userId,
           new_password: data.newPassword,
+          company_id: currentCompany!.id,
         },
       });
 
