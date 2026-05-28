@@ -428,15 +428,16 @@ async function runInitPhase(
   cursor.fetched = remote.length;
   cursor.remoteExtIds = remote.map((r) => String(r.id));
 
-  // Filtra por salário > 0
-  let pending: RemoteColaborador[] = [];
+  // Conta colabs sem salário (informativo no relatório). Eles AINDA são
+  // sincronizados — só não recebem entry de salário/encargos na folha.
+  // Histórico: antes a sync pulava esses colabs completamente, mas isso
+  // congelava dados pessoais e deixava encargos órfãos (FGTS/IRPF sem
+  // salário base na UI). Apply-financials cuida de limpar entries
+  // antigas quando o salário vira 0/null.
+  let pending: RemoteColaborador[] = remote.slice();
   for (const r of remote) {
     const salary = typeof r.salarioAtual === "number" ? r.salarioAtual : 0;
-    if (!(salary > 0)) {
-      cursor.skippedNoSalary++;
-      continue;
-    }
-    pending.push(r);
+    if (!(salary > 0)) cursor.skippedNoSalary++;
   }
 
   // ──────────────────────────────────────────────────────────────────────
