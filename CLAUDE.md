@@ -109,8 +109,26 @@ docs/
 ### Microcopy
 Tom amigável em pt-BR. Ver `docs/DESIGN_SYSTEM.md` seção "Microcopy".
 
-### Commits
-Conventional commits: `feat:`, `fix:`, `chore:`, `refactor:`, `docs:`, `test:`. Português ou inglês, mantém consistência por sessão.
+### Git workflow
+
+**GitHub Flow simplificado** — `main` é sempre deployável (= produção via Vercel). Toda mudança passa por branch curta + PR + squash merge. Ver [`CONTRIBUTING.md`](CONTRIBUTING.md) pra guia completo.
+
+**Branches:**
+- `main` — só recebe merge via PR
+- `feat/<descricao>`, `fix/<descricao>`, `chore/<descricao>`, `refactor/<descricao>`, `docs/<descricao>` — uma por tarefa
+
+**Regra de ouro:** após cada merge, apague a branch local e crie uma nova pra próxima tarefa:
+```bash
+git checkout main && git pull
+git branch -D <branch-antiga>      # remoto já é deletado automaticamente
+git checkout -b feat/proxima
+```
+
+**Commits:** Conventional Commits em pt-BR — `feat:`, `fix:`, `chore:`, `refactor:`, `docs:`, `test:`. Título curto (≤72 chars). Corpo explica o "porquê", não o "o quê". Use `git commit` (sem `-m`) pra abrir template (configurado em `.gitmessage`).
+
+**Squash merge sempre** — main fica linear, 1 commit por feature. Settings do repo bloqueiam outros tipos de merge.
+
+**Edge functions** mudaram? Roda `npm run deploy:fns` (deploy todas) ou `npm run deploy:fn <nome>` (uma só) antes/depois do merge — Vercel cuida do frontend mas Supabase functions precisam deploy manual.
 
 ## Comandos importantes
 
@@ -132,11 +150,36 @@ npx supabase migration new <nome>
 # Aplicar migrations no projeto cloud
 npx supabase db push
 
-# Build
-bun run build
+# Deploy edge functions (Vercel só faz o frontend)
+npm run deploy:fns            # deploy todas
+npm run deploy:fn <nome>      # deploy só uma
 
-# Lint
+# Build + lint
+bun run build
 bun run lint
+```
+
+### Fluxo Git em 1 minuto
+
+```bash
+# Início de tarefa
+git checkout main && git pull origin main
+git checkout -b feat/<descricao>
+
+# Durante o trabalho
+git add <arquivos>
+git commit                              # abre template (.gitmessage)
+git push -u origin feat/<descricao>
+
+# Quando terminar
+gh pr create                            # ou pelo UI do GitHub
+# → squash merge no GitHub → Vercel deploya automático
+# → npm run deploy:fns se mexeu em supabase/functions/
+
+# Próxima tarefa
+git checkout main && git pull
+git branch -D feat/<descricao>
+git checkout -b feat/proxima
 ```
 
 ## Roadmap atual
@@ -157,8 +200,10 @@ Cada fase é PR(s) próprias com merge em `main` quando estável.
 1. Lê `docs/PLANEJAMENTO.md` se não tem certeza do escopo
 2. Lê o ADR relevante se a tarefa toca decisão arquitetural
 3. Verifica skills disponíveis em `.claude/skills/` antes de modelar/escrever do zero
-4. Se a tarefa é nova feature, cria branch `feat/<modulo>-<descricao>`
-5. Toda mudança em schema → migration + tipos regenerados + RLS
+4. **Antes de qualquer commit:** confere se está numa branch `feat/`, `fix/`, etc. — nunca commita direto na `main`
+5. Se a tarefa é nova feature, cria branch `feat/<modulo>-<descricao>`
+6. Toda mudança em schema → migration + tipos regenerados + RLS
+7. Mudou edge function? Roda `npm run deploy:fns` no fim
 
 ## O que NUNCA fazer
 
