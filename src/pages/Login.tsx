@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -121,9 +121,12 @@ const Login = () => {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Senha</Label>
-                <a href="#" className="text-sm text-primary hover:underline">
+                <Link
+                  to="/esqueci-senha"
+                  className="text-sm text-primary hover:underline"
+                >
                   Esqueceu a senha?
-                </a>
+                </Link>
               </div>
               <div className="relative">
                 <Input
