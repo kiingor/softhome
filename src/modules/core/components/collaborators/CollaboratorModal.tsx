@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -398,6 +398,70 @@ const CollaboratorModal = ({
     },
     enabled: !!collaboratorId && open,
   });
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Salário "do cadastro" (display-only)
+  //
+  // A aba Financeiro mostra a competência ATUAL (mês do sistema). Os
+  // lançamentos de salário-base, porém, ficam presos no mês em que a última
+  // sync rodou (external_id='salario-base' é único por colab → 1 linha só).
+  // Quando o mês vira — ou quando a folha do mês ainda não foi aberta — a
+  // competência atual fica sem salário, e o cadastro aparece zerado mesmo
+  // com o colaborador tendo salário (current_salary preenchido).
+  //
+  // Aqui sintetizamos salário-base + encargos a partir de current_salary
+  // quando NÃO existe salario_base real pra competência. É só pra exibição
+  // (id 'synthetic-*', flag _synthetic) — nada é gravado no banco. Some
+  // automaticamente assim que a folha do mês gerar os lançamentos reais.
+  const displayEntries = useMemo(() => {
+    if (isNew) return pendingEntries as any[];
+    const real = (payrollEntries ?? []) as any[];
+    const hasRealSalary = real.some(
+      (e) => e.type === "salario_base" && Number(e.value) > 0,
+    );
+    const baseSalary = Number((collaborator as any)?.current_salary ?? 0);
+    if (hasRealSalary || !(baseSalary > 0)) return real;
+
+    const synthetic: any[] = [
+      {
+        id: "synthetic-salario-base",
+        external_id: "salario-base",
+        type: "salario_base",
+        description: "Salário Base",
+        value: baseSalary,
+        is_fixed: true,
+        _synthetic: true,
+      },
+    ];
+    if (formData.regime === "clt") {
+      const deps = formData.dependents_count ?? 0;
+      const taxes = calcAllTaxes({ grossSalary: baseSalary, dependents: deps });
+      if (taxes.inss > 0) {
+        synthetic.push({
+          id: "synthetic-inss", external_id: "inss-base", type: "inss",
+          description: "INSS (tabela 2026)", value: taxes.inss,
+          is_fixed: true, _synthetic: true,
+        });
+      }
+      if (taxes.irpf > 0) {
+        synthetic.push({
+          id: "synthetic-irpf", external_id: "irpf-base", type: "irpf",
+          description: deps > 0
+            ? `IRPF (tabela 2026, ${deps} dep.)`
+            : "IRPF (tabela 2026)",
+          value: taxes.irpf, is_fixed: true, _synthetic: true,
+        });
+      }
+      if (taxes.fgts > 0) {
+        synthetic.push({
+          id: "synthetic-fgts", external_id: "fgts-base", type: "fgts",
+          description: "FGTS (8%)", value: taxes.fgts,
+          is_fixed: true, _synthetic: true,
+        });
+      }
+    }
+    return [...synthetic, ...real];
+  }, [isNew, pendingEntries, payrollEntries, collaborator, formData.regime, formData.dependents_count]);
 
   // Fetch benefit assignments for existing collaborator
   const { data: benefitAssignments = [], refetch: refetchAssignments } = useQuery({
@@ -1431,10 +1495,12 @@ const CollaboratorModal = ({
         .reduce((sum, e) => (e.type === "fgts" ? sum + e.value : sum), 0);
       benefitsTotal = pendingBenefits.reduce((sum, b) => sum + b.monthly_value, 0);
     } else {
-      entriesTotal = payrollEntries
+      // displayEntries inclui o salário sintético do cadastro quando a
+      // competência atual não tem salario_base real (ver useMemo acima).
+      entriesTotal = displayEntries
         .filter(isRecurringMonthly)
         .reduce((sum, e) => sum + signedEntryValue(e), 0);
-      taxTotal = payrollEntries
+      taxTotal = displayEntries
         .filter(isRecurringMonthly)
         .reduce((sum, e) => (e.type === "fgts" ? sum + e.value : sum), 0);
       benefitsTotal = benefitAssignments.reduce((sum, a: any) => {
@@ -2211,7 +2277,7 @@ const CollaboratorModal = ({
                       </div>
                       
                       {(() => {
-                        const allEntries = isNew ? pendingEntries : payrollEntries;
+                        const allEntries = isNew ? pendingEntries : displayEntries;
                         const visibleEntries = allEntries.filter((e: any) => {
                           if (e.type === "beneficio") return false;
                           // FGTS só pra CLT. PJ/estagiário não tem encargo de FGTS.
@@ -2266,6 +2332,9 @@ const CollaboratorModal = ({
                                     </Badge>
                                     {entry.is_fixed && (
                                       <Badge variant="outline" className="text-[10px] h-4 px-1.5">Fixo</Badge>
+                                    )}
+                                    {entry._synthetic && (
+                                      <Badge variant="outline" className="text-[10px] h-4 px-1.5 text-muted-foreground">do cadastro</Badge>
                                     )}
                                     {entry.installment_number && (
                                       <Badge variant="outline" className="text-[10px] h-4 px-1.5">
