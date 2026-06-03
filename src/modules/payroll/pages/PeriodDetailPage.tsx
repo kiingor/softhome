@@ -178,6 +178,15 @@ export default function PeriodDetailPage() {
     });
   }, [entries, storeFilter, teamFilter]);
 
+  // Aba "Lançamentos" (RH) NÃO lista Bonificação (type='bonificacao', vinda do
+  // "CUSTO SETOR" da agenda) — é custo interno de setor, não lançamento de
+  // folha do colaborador. Some da listagem, do contador e do net mostrado
+  // aqui. A aba Pagamentos, os totais do topo e a exportação seguem intactos.
+  const lancamentoEntries = useMemo(
+    () => filteredEntries.filter((e) => e.type !== "bonificacao"),
+    [filteredEntries],
+  );
+
   const isFiltering = storeFilter !== "all" || teamFilter !== "all";
 
   const toggleCollab = (id: string) => {
@@ -207,7 +216,7 @@ export default function PeriodDetailPage() {
       net: number;
     };
     const map = new Map<string, Group>();
-    for (const e of filteredEntries) {
+    for (const e of lancamentoEntries) {
       const collabId = e.collaborator_id ?? "_orphan";
       if (!map.has(collabId)) {
         map.set(collabId, {
@@ -287,7 +296,7 @@ export default function PeriodDetailPage() {
     return [...map.values()].sort((a, b) =>
       a.name.localeCompare(b.name, "pt-BR"),
     );
-  }, [filteredEntries]);
+  }, [lancamentoEntries]);
 
   const allExpanded =
     groupedByCollab.length > 0 &&
@@ -624,7 +633,7 @@ export default function PeriodDetailPage() {
                 </Button>
               )}
             </div>
-          ) : filteredEntries.length === 0 ? (
+          ) : lancamentoEntries.length === 0 ? (
             <div className="text-center py-12 space-y-2">
               <p className="text-sm text-muted-foreground">
                 Nenhum lançamento com esses filtros.
@@ -645,8 +654,8 @@ export default function PeriodDetailPage() {
               <div className="flex items-center justify-between mb-2 px-1">
                 <p className="text-xs text-muted-foreground">
                   {groupedByCollab.length} colaborador
-                  {groupedByCollab.length === 1 ? "" : "es"} · {filteredEntries.length}{" "}
-                  lançamento{filteredEntries.length === 1 ? "" : "s"}
+                  {groupedByCollab.length === 1 ? "" : "es"} · {lancamentoEntries.length}{" "}
+                  lançamento{lancamentoEntries.length === 1 ? "" : "s"}
                   {isFiltering && (
                     <span className="ml-1">
                       (de {entries.length} no total)
