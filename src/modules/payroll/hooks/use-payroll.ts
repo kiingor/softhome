@@ -27,6 +27,24 @@ import { getCollabsToSkipNextMonth } from "@/lib/payroll/vacationSkipRules";
 import { postVacationToPayroll } from "@/hooks/useVacations";
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Salário do colaborador pra folha.
+//
+// Prioriza `current_salary` (salário REAL da pessoa, sincronizado da agenda)
+// e cai pro salário do CARGO (position.salary) só como fallback. Antes a folha
+// usava só o salário do cargo — colaborador cujo cargo está sem salário (mas a
+// pessoa tem salário próprio) sumia da folha com "0 lançamentos", mesmo
+// aparecendo certo no cadastro. Agora folha e cadastro batem na mesma fonte.
+// ─────────────────────────────────────────────────────────────────────────────
+function resolvePayrollSalary(c: {
+  current_salary?: number | null;
+  position?: { salary?: number } | null;
+}): number {
+  const personal = Number(c.current_salary ?? 0);
+  if (personal > 0) return personal;
+  return Number((c.position as { salary?: number } | null)?.salary ?? 0);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Lista de períodos da empresa atual (dashboard mensal)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -97,7 +115,7 @@ export function usePayrollPeriods() {
         const { data: collaborators } = await supabase
           .from("collaborators")
           .select(
-            "id, position_id, store_id, dependents_count, position:positions(salary)",
+            "id, position_id, store_id, dependents_count, current_salary, position:positions(salary)",
           )
           .eq("company_id", companyId)
           .eq("status", "ativo");
@@ -157,8 +175,9 @@ export function usePayrollPeriods() {
 
         const autoEntries: PayrollEntry[] = [];
         for (const c of collaborators ?? []) {
-          const fullSalary =
-            (c.position as { salary?: number } | null)?.salary ?? 0;
+          const fullSalary = resolvePayrollSalary(
+            c as { current_salary?: number | null; position?: { salary?: number } | null },
+          );
           if (fullSalary <= 0) continue;
           // Pula colab que teve gozo no mês anterior (recibo já cobriu)
           if (skipSalaryNext.has(c.id)) continue;
@@ -246,7 +265,9 @@ export function usePayrollPeriods() {
         // ─────────────────────────────────────────────────────────────────────
         const sfCandidates = (collaborators ?? []).filter((c) => {
           if (skipSalaryNext.has(c.id)) return false;
-          const sal = (c.position as { salary?: number } | null)?.salary ?? 0;
+          const sal = resolvePayrollSalary(
+            c as { current_salary?: number | null; position?: { salary?: number } | null },
+          );
           // Filtro grosso pra evitar query desnecessária quando salário já é
           // acima do limite. Salário-família só pra baixa renda (~R$ 1.9k).
           return sal > 0 && sal <= SALARIO_FAMILIA_LIMITE_2026;
@@ -289,7 +310,9 @@ export function usePayrollPeriods() {
           const sfEntries: PayrollEntry[] = [];
           const refDate = new Date(year, month - 1, 15); // meio do mês como referência
           for (const c of sfCandidates) {
-            const fullSalary = (c.position as { salary?: number } | null)?.salary ?? 0;
+            const fullSalary = resolvePayrollSalary(
+              c as { current_salary?: number | null; position?: { salary?: number } | null },
+            );
             const deps = depsByCollab.get(c.id) ?? [];
             const eligible = eligibleChildrenForSalarioFamilia(deps, refDate);
             const calc = calcSalarioFamilia({
@@ -772,14 +795,16 @@ export function usePayrollPeriods() {
       const { data: collaborators } = await supabase
         .from("collaborators")
         .select(
-          "id, store_id, dependents_count, position:positions(salary)",
+          "id, store_id, dependents_count, current_salary, position:positions(salary)",
         )
         .eq("company_id", companyId)
         .eq("status", "ativo");
 
       const newAutoEntries: PayrollEntry[] = [];
       for (const c of collaborators ?? []) {
-        const salary = (c.position as { salary?: number } | null)?.salary ?? 0;
+        const salary = resolvePayrollSalary(
+          c as { current_salary?: number | null; position?: { salary?: number } | null },
+        );
         if (salary <= 0) continue;
         const deps = (c as { dependents_count?: number }).dependents_count ?? 0;
         const taxes = calcAllTaxes({ grossSalary: salary, dependents: deps });
@@ -967,7 +992,7 @@ export function usePayrollPeriods() {
       const { data: collaborators } = await supabase
         .from("collaborators")
         .select(
-          "id, store_id, dependents_count, position:positions(salary)",
+          "id, store_id, dependents_count, current_salary, position:positions(salary)",
         )
         .eq("company_id", companyId)
         .eq("status", "ativo");
@@ -975,7 +1000,9 @@ export function usePayrollPeriods() {
       // 3. Reinjeta usando calcAllTaxes
       const newTaxEntries: PayrollEntry[] = [];
       for (const c of collaborators ?? []) {
-        const salary = (c.position as { salary?: number } | null)?.salary ?? 0;
+        const salary = resolvePayrollSalary(
+          c as { current_salary?: number | null; position?: { salary?: number } | null },
+        );
         if (salary <= 0) continue;
         const deps = (c as { dependents_count?: number }).dependents_count ?? 0;
         const taxes = calcAllTaxes({ grossSalary: salary, dependents: deps });
