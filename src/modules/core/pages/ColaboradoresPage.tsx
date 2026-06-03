@@ -141,6 +141,10 @@ const ColaboradoresPage = () => {
   const [syncJobId, setSyncJobId] = useState<string | null>(null);
   const [syncProgressOpen, setSyncProgressOpen] = useState(false);
   const [isSyncConfirmOpen, setIsSyncConfirmOpen] = useState(false);
+  // 'full'       = sync completa (colab + financials + detalhes)
+  // 'onlySalary' = só puxa salário/encargos dos colabs que ainda não têm
+  //                salário-base lançado (não toca em exames/planos/detalhes)
+  const [syncMode, setSyncMode] = useState<"full" | "onlySalary">("full");
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
   const canSync = canCreate || isAdmin;
 
@@ -415,12 +419,17 @@ const ColaboradoresPage = () => {
     }
     setIsSyncing(true);
     try {
+      const body: Record<string, unknown> = {
+        companyId: currentCompany.id,
+        includeFinancials: true,
+        // 'onlySalary' não mexe em exames/planos/dependentes — ajustes manuais
+        // ficam preservados. Também filtra pra só os colabs que ainda não têm
+        // salário-base lançado, pra evitar re-processar quem já está OK.
+        includeDetails: syncMode === "full",
+        onlyMissingFinancials: syncMode === "onlySalary",
+      };
       const { data, error } = await supabase.functions.invoke('sync-collaborators', {
-        body: {
-          companyId: currentCompany.id,
-          includeFinancials: true,
-          includeDetails: true,
-        },
+        body,
       });
       if (error) throw error;
       const errMsg = (data as { error?: string } | null)?.error;
@@ -503,15 +512,46 @@ const ColaboradoresPage = () => {
           {(canSync || isDeveloper) && (
             <div className="flex items-center gap-2">
               {canSync && (
-                <Button
-                  variant="outline"
-                  onClick={() => setIsSyncConfirmOpen(true)}
-                  disabled={isSyncing || !currentCompany?.id}
-                  title="Importa colaboradores da agenda (api.softcom.cloud)"
-                >
-                  <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
-                  {isSyncing ? 'Sincronizando...' : 'Sincronizar'}
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      disabled={isSyncing || !currentCompany?.id}
+                      title="Importa colaboradores da agenda (api.softcom.cloud)"
+                    >
+                      <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+                      {isSyncing ? 'Sincronizando...' : 'Sincronizar'}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-72">
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setSyncMode("full");
+                        setIsSyncConfirmOpen(true);
+                      }}
+                    >
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-medium">Tudo</span>
+                        <span className="text-xs text-muted-foreground">
+                          Dados, financeiros e detalhes (exames, férias, planos).
+                        </span>
+                      </div>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setSyncMode("onlySalary");
+                        setIsSyncConfirmOpen(true);
+                      }}
+                    >
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-medium">Só salários pendentes</span>
+                        <span className="text-xs text-muted-foreground">
+                          Puxa salário e encargos só de quem tá zerado. Não toca em exames/planos/detalhes.
+                        </span>
+                      </div>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               )}
               {/* Cadastro manual é controle de dev (cadastro padrão vem do sync). */}
               {isDeveloper && (
@@ -527,16 +567,32 @@ const ColaboradoresPage = () => {
         <AlertDialog open={isSyncConfirmOpen} onOpenChange={setIsSyncConfirmOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Sincronizar colaboradores com a agenda?</AlertDialogTitle>
+              <AlertDialogTitle>
+                {syncMode === "onlySalary"
+                  ? "Puxar só os salários pendentes?"
+                  : "Sincronizar colaboradores com a agenda?"}
+              </AlertDialogTitle>
               <AlertDialogDescription>
-                Vou importar todos os colaboradores que estão em <strong>api.softcom.cloud</strong> e marcar como inativos os que sumirem de lá. Colaboradores criados manualmente aqui não são tocados.
-                <br /><br />
-                Sincronize <strong>Empresas</strong>, <strong>Setores</strong> e <strong>Cargos</strong> primeiro pra que os vínculos venham corretos. Pode continuar?
+                {syncMode === "onlySalary" ? (
+                  <>
+                    Vou rodar só nos colabs que ainda não têm salário-base lançado e atualizar o financeiro deles a partir da agenda. <strong>Não toco em exames, planos ou outros detalhes</strong> — seus ajustes manuais ficam preservados.
+                    <br /><br />
+                    Quem já tem salário não é re-processado. Pode continuar?
+                  </>
+                ) : (
+                  <>
+                    Vou importar todos os colaboradores que estão em <strong>api.softcom.cloud</strong> e marcar como inativos os que sumirem de lá. Colaboradores criados manualmente aqui não são tocados.
+                    <br /><br />
+                    Sincronize <strong>Empresas</strong>, <strong>Setores</strong> e <strong>Cargos</strong> primeiro pra que os vínculos venham corretos. Pode continuar?
+                  </>
+                )}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={handleSync}>Sincronizar agora</AlertDialogAction>
+              <AlertDialogAction onClick={handleSync}>
+                {syncMode === "onlySalary" ? "Puxar salários agora" : "Sincronizar agora"}
+              </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>

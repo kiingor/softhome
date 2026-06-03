@@ -116,11 +116,20 @@ export async function applyFinancials(
     dependents = row?.dependents_count ?? 0;
   }
 
+  // Constantes pra reuso (limpeza e (re)criação de encargos).
+  const TAX_EXTERNAL_IDS_ALL = ["inss-base", "irpf-base", "fgts-base"] as const;
+  const hasValidSalary = typeof currentSalary === "number" && currentSalary > 0;
+
   // ────────────────────────────────────────────────────────────────────────
   // 1. Salário base — payroll_entry type='salario' fixo, idempotente por
   //    external_id='salario-base' (1 por colaborador)
+  //
+  //    Sem salário (null/0 na agenda): APAGA a entry antiga + encargos
+  //    antigos pra evitar inconsistência (UI mostraria FGTS/IRPF sem
+  //    salário base — happened em colabs cujo salarioAtual foi removido
+  //    na agenda depois de uma sync que tinha salário).
   // ────────────────────────────────────────────────────────────────────────
-  if (typeof currentSalary === "number" && currentSalary > 0) {
+  if (hasValidSalary) {
     const salaryRow = {
       company_id: companyId,
       collaborator_id: collaboratorId,
@@ -148,6 +157,16 @@ export async function applyFinancials(
       if (existed) result.salaryEntry.updated = true;
       else result.salaryEntry.created = true;
     }
+  } else {
+    // Sem salário válido → apaga salário-base + INSS/IRPF/FGTS órfãos.
+    await sbAdmin
+      .from("payroll_entries")
+      .delete()
+      .eq("collaborator_id", collaboratorId)
+      .in("external_id", ["salario-base", ...TAX_EXTERNAL_IDS_ALL]);
+    result.taxEntries.inss.skipped = true;
+    result.taxEntries.irpf.skipped = true;
+    result.taxEntries.fgts.skipped = true;
   }
 
   // ────────────────────────────────────────────────────────────────────────
@@ -155,7 +174,7 @@ export async function applyFinancials(
   //     Idempotente por external_id 'inss-base' | 'irpf-base' | 'fgts-base'.
   //     PJ/estagiário pula e limpa entries antigas (caso tenha mudado de regime).
   // ────────────────────────────────────────────────────────────────────────
-  if (typeof currentSalary === "number" && currentSalary > 0) {
+  if (hasValidSalary) {
     type TaxKind = "inss" | "irpf" | "fgts";
     const TAX_EXTERNAL_IDS: Record<TaxKind, string> = {
       inss: "inss-base",

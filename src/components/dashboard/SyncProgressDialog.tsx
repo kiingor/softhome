@@ -282,7 +282,7 @@ function FinalSummary({ result }: { result: Record<string, unknown> }) {
       </p>
       {skippedNoSalary > 0 && (
         <p className="text-amber-800 dark:text-amber-200">
-          {skippedNoSalary} ignorado{skippedNoSalary === 1 ? "" : "s"} (sem salário cadastrado).
+          {skippedNoSalary} sem salário na agenda — sincronizado{skippedNoSalary === 1 ? "" : "s"}, mas fic{skippedNoSalary === 1 ? "a" : "am"} fora da folha.
         </p>
       )}
       {financials && (
