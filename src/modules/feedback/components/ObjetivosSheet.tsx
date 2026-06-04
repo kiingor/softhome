@@ -29,7 +29,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ObjetivoForm } from "./ObjetivoForm";
-import { useObjetivos, useObjetivoMutations } from "../hooks/use-feedbacks";
+import { useObjetivos, useObjetivoMutations, useLancadorNames } from "../hooks/use-feedbacks";
 import { fmtDate } from "../lib";
 import type { FeedbackColaborador, Guardiao, Objetivo } from "../types";
 import type { ObjetivoFormValues } from "../schemas/objetivo.schema";
@@ -44,6 +44,7 @@ interface Props {
 export function ObjetivosSheet({ colaborador, guardiao, perms, onOpenChange }: Props) {
   const colaboradorId = colaborador?.id ?? null;
   const { data: objetivos = [], isLoading, isError, refetch } = useObjetivos(colaboradorId);
+  const lancadorNames = useLancadorNames(objetivos.map((o) => o.lancamentoUsuarioId));
   const { create, update, remove } = useObjetivoMutations(colaboradorId);
 
   const [formOpen, setFormOpen] = useState(false);
@@ -193,7 +194,9 @@ export function ObjetivosSheet({ colaborador, guardiao, perms, onOpenChange }: P
                     </p>
                   )}
                   <p className="text-[11px] text-muted-foreground mt-2">
-                    {fmtDate(o.datas)} · por #{o.lancamentoUsuarioId}
+                    {fmtDate(o.datas)} · por{" "}
+                    {lancadorNames.get(o.lancamentoUsuarioId) ??
+                      (o.lancamentoUsuarioId > 0 ? `#${o.lancamentoUsuarioId}` : "Sistema")}
                   </p>
                 </div>
               ))

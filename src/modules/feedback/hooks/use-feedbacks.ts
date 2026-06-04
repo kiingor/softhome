@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useDashboard } from "@/contexts/DashboardContext";
 import { feedbackService, type ObjetivoPayload } from "../services/feedback.service";
@@ -122,4 +122,37 @@ export function useObjetivoMutations(colaboradorId: number | null) {
   });
 
   return { create, update, remove };
+}
+
+/**
+ * Resolve nomes dos lançadores (lancamentoUsuarioId) via busca-colaborador?q=<id>
+ * — a busca casa número curto com o Registro (PK). Retorna um Map id → nome.
+ * Cada id vira uma query cacheada; ids repetidos resolvem uma vez só.
+ */
+export function useLancadorNames(ids: number[]) {
+  const { currentCompany } = useDashboard();
+  const companyId = currentCompany?.id;
+  const unique = Array.from(
+    new Set(ids.filter((id) => typeof id === "number" && id > 0)),
+  );
+
+  const results = useQueries({
+    queries: unique.map((id) => ({
+      queryKey: ["lancador-name", companyId, id],
+      queryFn: async () => {
+        const arr = await feedbackService.buscaColaborador(companyId!, String(id));
+        const hit = arr.find((c) => c.id === id) ?? null;
+        return hit ? hit.nomeSuporte ?? hit.nome ?? null : null;
+      },
+      enabled: !!companyId,
+      staleTime: 5 * 60 * 1000,
+    })),
+  });
+
+  const map = new Map<number, string>();
+  unique.forEach((id, i) => {
+    const name = results[i]?.data;
+    if (name) map.set(id, name);
+  });
+  return map;
 }
