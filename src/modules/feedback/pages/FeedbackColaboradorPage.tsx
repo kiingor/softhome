@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { EmptyState } from "@/shared/components/EmptyState";
+import { SearchableSelect } from "@/modules/core/components/collaborators/import/SearchableSelect";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useFeedbacks } from "../hooks/use-feedbacks";
 import { GuardiaoSelect } from "../components/GuardiaoSelect";
@@ -32,29 +33,59 @@ export default function FeedbackColaboradorPage() {
 
   const [guardiao, setGuardiao] = useState<Guardiao | null>(null);
   const [nameFilter, setNameFilter] = useState("");
+  const [setorFilter, setSetorFilter] = useState<string | null>(null);
   const [selected, setSelected] = useState<FeedbackColaborador | null>(null);
 
   const { data, isLoading, isError, isFetching, refetch } = useFeedbacks({
     lancamentoUsuarioId: guardiao?.id,
   });
 
-  const grouped = useMemo(() => {
+  // Setores distintos pro filtro (a partir do que veio do painel).
+  const setorOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of data?.colaboradores ?? []) {
+      if (c.setor) set.add(c.setor);
+    }
+    return Array.from(set)
+      .sort((a, b) => a.localeCompare(b, "pt-BR"))
+      .map((s) => ({ value: s, label: s }));
+  }, [data]);
+
+  // Filtro client-side por nome + setor.
+  const filtered = useMemo(() => {
     const q = nameFilter.trim().toLowerCase();
-    const list = (data?.colaboradores ?? []).filter(
-      (c) => !q || (c.nome ?? "").toLowerCase().includes(q),
+    return (data?.colaboradores ?? []).filter(
+      (c) =>
+        (!q || (c.nome ?? "").toLowerCase().includes(q)) &&
+        (!setorFilter || c.setor === setorFilter),
     );
+  }, [data, nameFilter, setorFilter]);
+
+  const grouped = useMemo(() => {
     const by: Record<FeedbackStatus, FeedbackColaborador[]> = {
       Pendente: [],
       "Em Atraso": [],
       "Em dia": [],
     };
-    for (const c of list) {
+    for (const c of filtered) {
       if (by[c.status]) by[c.status].push(c);
     }
     return by;
-  }, [data, nameFilter]);
+  }, [filtered]);
 
-  const totalColaboradores = data?.colaboradores.length ?? 0;
+  // KPIs respeitam os filtros (sem filtro, batem com o `totais` do servidor).
+  const totais = useMemo(
+    () => ({
+      colaboradores: filtered.length,
+      pendente: filtered.filter((c) => c.status === "Pendente").length,
+      emDia: filtered.filter((c) => c.status === "Em dia").length,
+      emAtraso: filtered.filter((c) => c.status === "Em Atraso").length,
+      feedbacks: filtered.reduce((sum, c) => sum + (c.feedbacks ?? 0), 0),
+    }),
+    [filtered],
+  );
+
+  const hasData = (data?.colaboradores.length ?? 0) > 0;
 
   if (!permsLoading && !canView) {
     return (
@@ -110,6 +141,19 @@ export default function FeedbackColaboradorPage() {
             </div>
             <GuardiaoSelect value={guardiao} onChange={setGuardiao} className="w-full md:w-72" />
           </div>
+          <div className="space-y-1.5">
+            <Label>Setor</Label>
+            <SearchableSelect
+              value={setorFilter}
+              onChange={setSetorFilter}
+              options={setorOptions}
+              placeholder="Todos os setores"
+              searchPlaceholder="Buscar setor..."
+              emptyText="Nenhum setor."
+              emptyOptionLabel="Todos os setores"
+              triggerClassName="w-full md:w-56"
+            />
+          </div>
           <div className="space-y-1.5 md:ml-auto">
             <Label htmlFor="name-filter">Buscar colaborador</Label>
             <div className="relative">
@@ -134,7 +178,7 @@ export default function FeedbackColaboradorPage() {
           ))}
         </div>
       ) : data ? (
-        <FeedbackKpis totais={data.totais} />
+        <FeedbackKpis totais={totais} />
       ) : null}
 
       {/* Painel por status */}
@@ -155,7 +199,7 @@ export default function FeedbackColaboradorPage() {
             </Button>
           }
         />
-      ) : totalColaboradores === 0 ? (
+      ) : !hasData ? (
         <EmptyState
           icon={<ChatCircleText className="w-7 h-7 text-primary" />}
           title="Nada por aqui ainda"
@@ -164,6 +208,12 @@ export default function FeedbackColaboradorPage() {
               ? "Esse Guardião não tem feedbacks lançados. Tenta tirar o filtro?"
               : "Ninguém no painel por enquanto."
           }
+        />
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          icon={<ChatCircleText className="w-7 h-7 text-primary" />}
+          title="Ninguém com esse filtro"
+          description="Tenta ajustar o setor ou o nome."
         />
       ) : (
         <div className="flex gap-4 overflow-x-auto pb-2">
