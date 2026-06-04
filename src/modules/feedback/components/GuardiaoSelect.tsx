@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CaretUpDown, ShieldCheck, X, CircleNotch as Loader2 } from "@phosphor-icons/react";
+import { CaretUpDown, ShieldCheck, X, User, CircleNotch as Loader2 } from "@phosphor-icons/react";
 import {
   Command,
   CommandGroup,
@@ -49,7 +49,7 @@ export function GuardiaoSelect({ value, onChange, disabled, className }: Props) 
           <CaretUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-[260px] p-0" align="start">
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-[280px] p-0" align="start">
         <Command shouldFilter={false}>
           <CommandInput
             value={term}
@@ -60,14 +60,14 @@ export function GuardiaoSelect({ value, onChange, disabled, className }: Props) 
             {value && (
               <CommandGroup>
                 <CommandItem
-                  value="__limpar__"
+                  value="__clear__"
                   onSelect={() => {
                     onChange(null);
                     setOpen(false);
                   }}
                 >
-                  <X className="mr-2 h-4 w-4 text-muted-foreground" />
-                  <span className="text-muted-foreground">Limpar seleção</span>
+                  <X className="mr-2 h-4 w-4 opacity-70" />
+                  <span className="opacity-70">Limpar seleção</span>
                 </CommandItem>
               </CommandGroup>
             )}
@@ -84,7 +84,11 @@ export function GuardiaoSelect({ value, onChange, disabled, className }: Props) 
             ) : (
               <CommandGroup>
                 {results.map((r) => {
+                  const hasFullName = !!r.nome;
                   const nome = r.nome ?? r.nomeSuporte ?? `#${r.id}`;
+                  const secondary = (hasFullName ? [r.nomeSuporte, r.setor] : [r.setor])
+                    .filter(Boolean)
+                    .join(" · ");
                   return (
                     <CommandItem
                       key={r.id}
@@ -94,10 +98,11 @@ export function GuardiaoSelect({ value, onChange, disabled, className }: Props) 
                         setOpen(false);
                       }}
                     >
-                      <div className="min-w-0">
-                        <div className="truncate">{nome}</div>
-                        {r.setor && (
-                          <div className="text-xs text-muted-foreground truncate">{r.setor}</div>
+                      <User className="mr-2 h-4 w-4 shrink-0 opacity-70" />
+                      <div className="flex flex-col flex-1 min-w-0">
+                        <span className="font-medium truncate">{nome}</span>
+                        {secondary && (
+                          <span className="text-xs opacity-70 truncate">{secondary}</span>
                         )}
                       </div>
                     </CommandItem>

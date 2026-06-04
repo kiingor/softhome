@@ -4,12 +4,14 @@ import {
   Lock,
   ArrowsClockwise,
   ChatCircleText,
+  Info,
 } from "@phosphor-icons/react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { EmptyState } from "@/shared/components/EmptyState";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useFeedbacks } from "../hooks/use-feedbacks";
@@ -88,12 +90,25 @@ export default function FeedbackColaboradorPage() {
       <Card>
         <CardContent className="p-4 flex flex-col md:flex-row md:items-end gap-4">
           <div className="space-y-1.5">
-            <Label>Guardião(ã) da Cultura</Label>
+            <div className="flex items-center gap-1.5">
+              <Label>Guardião(ã) da Cultura</Label>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label="Sobre o Guardião(ã) da Cultura"
+                  >
+                    <Info className="h-4 w-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  Opcional. Filtra o painel por quem lançou os feedbacks — e define quem lança ao
+                  registrar um novo.
+                </TooltipContent>
+              </Tooltip>
+            </div>
             <GuardiaoSelect value={guardiao} onChange={setGuardiao} className="w-full md:w-72" />
-            <p className="text-xs text-muted-foreground max-w-xs">
-              Opcional. Filtra o painel por quem lançou os feedbacks — e define quem lança ao
-              registrar um novo.
-            </p>
           </div>
           <div className="space-y-1.5 md:ml-auto">
             <Label htmlFor="name-filter">Buscar colaborador</Label>
