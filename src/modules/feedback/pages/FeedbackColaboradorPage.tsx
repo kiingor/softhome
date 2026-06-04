@@ -4,12 +4,21 @@ import {
   Lock,
   ArrowsClockwise,
   ChatCircleText,
+  Info,
+  Plus,
 } from "@phosphor-icons/react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { EmptyState } from "@/shared/components/EmptyState";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useFeedbacks } from "../hooks/use-feedbacks";
@@ -17,6 +26,7 @@ import { GuardiaoSelect } from "../components/GuardiaoSelect";
 import { FeedbackKpis } from "../components/FeedbackKpis";
 import { FeedbackStatusColumn } from "../components/FeedbackStatusColumn";
 import { ObjetivosSheet } from "../components/ObjetivosSheet";
+import { NovoFeedbackDialog } from "../components/NovoFeedbackDialog";
 import {
   FEEDBACK_STATUS_ORDER,
   type FeedbackColaborador,
@@ -30,29 +40,64 @@ export default function FeedbackColaboradorPage() {
 
   const [guardiao, setGuardiao] = useState<Guardiao | null>(null);
   const [nameFilter, setNameFilter] = useState("");
+  const [setorFilter, setSetorFilter] = useState<string>("all");
+  const [empresaFilter, setEmpresaFilter] = useState<string>("all");
   const [selected, setSelected] = useState<FeedbackColaborador | null>(null);
+  const [novoOpen, setNovoOpen] = useState(false);
 
   const { data, isLoading, isError, isFetching, refetch } = useFeedbacks({
     lancamentoUsuarioId: guardiao?.id,
   });
 
-  const grouped = useMemo(() => {
+  // Setores e empresas distintos pros filtros (a partir do que veio do painel).
+  const setorOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of data?.colaboradores ?? []) if (c.setor) set.add(c.setor);
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [data]);
+
+  const empresaOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of data?.colaboradores ?? []) if (c.empresa) set.add(c.empresa);
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [data]);
+
+  // Filtro client-side por nome + setor + empresa.
+  const filtered = useMemo(() => {
     const q = nameFilter.trim().toLowerCase();
-    const list = (data?.colaboradores ?? []).filter(
-      (c) => !q || (c.nome ?? "").toLowerCase().includes(q),
+    return (data?.colaboradores ?? []).filter(
+      (c) =>
+        (!q || (c.nome ?? "").toLowerCase().includes(q)) &&
+        (setorFilter === "all" || c.setor === setorFilter) &&
+        (empresaFilter === "all" || c.empresa === empresaFilter),
     );
+  }, [data, nameFilter, setorFilter, empresaFilter]);
+
+  const grouped = useMemo(() => {
     const by: Record<FeedbackStatus, FeedbackColaborador[]> = {
       Pendente: [],
       "Em Atraso": [],
       "Em dia": [],
     };
-    for (const c of list) {
+    for (const c of filtered) {
       if (by[c.status]) by[c.status].push(c);
     }
     return by;
-  }, [data, nameFilter]);
+  }, [filtered]);
 
-  const totalColaboradores = data?.colaboradores.length ?? 0;
+  // KPIs respeitam os filtros (sem filtro, batem com o `totais` do servidor).
+  const totais = useMemo(
+    () => ({
+      colaboradores: filtered.length,
+      pendente: filtered.filter((c) => c.status === "Pendente").length,
+      emDia: filtered.filter((c) => c.status === "Em dia").length,
+      emAtraso: filtered.filter((c) => c.status === "Em Atraso").length,
+      feedbacks: filtered.reduce((sum, c) => sum + (c.feedbacks ?? 0), 0),
+    }),
+    [filtered],
+  );
+
+  const hasData = (data?.colaboradores.length ?? 0) > 0;
 
   if (!permsLoading && !canView) {
     return (
@@ -73,40 +118,96 @@ export default function FeedbackColaboradorPage() {
             Acompanhe os feedbacks do time e registre objetivos por colaborador.
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => refetch()}
-          disabled={isFetching}
-          title="Atualizar"
-        >
-          <ArrowsClockwise className={isFetching ? "w-4 h-4 animate-spin" : "w-4 h-4"} />
-        </Button>
+        <div className="flex items-center gap-2">
+          {canCreate && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className={!guardiao ? "cursor-not-allowed" : undefined}>
+                  <Button onClick={() => setNovoOpen(true)} disabled={!guardiao}>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Novo feedback
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                {guardiao
+                  ? "Registrar feedback para um colaborador."
+                  : "Selecione o Guardião(ã) da Cultura primeiro."}
+              </TooltipContent>
+            </Tooltip>
+          )}
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => refetch()}
+            disabled={isFetching}
+            title="Atualizar"
+          >
+            <ArrowsClockwise className={isFetching ? "w-4 h-4 animate-spin" : "w-4 h-4"} />
+          </Button>
+        </div>
       </div>
 
       {/* Filtros */}
       <Card>
-        <CardContent className="p-4 flex flex-col md:flex-row md:items-end gap-4">
-          <div className="space-y-1.5">
-            <Label>Guardião(ã) da Cultura</Label>
-            <GuardiaoSelect value={guardiao} onChange={setGuardiao} className="w-full md:w-72" />
-            <p className="text-xs text-muted-foreground max-w-xs">
-              Opcional. Filtra o painel por quem lançou os feedbacks — e define quem lança ao
-              registrar um novo.
-            </p>
-          </div>
-          <div className="space-y-1.5 md:ml-auto">
-            <Label htmlFor="name-filter">Buscar colaborador</Label>
-            <div className="relative">
+        <CardContent className="p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative flex-1 min-w-[240px]">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
-                id="name-filter"
                 value={nameFilter}
                 onChange={(e) => setNameFilter(e.target.value)}
-                placeholder="Filtrar pelo nome..."
-                className="pl-9 md:w-64"
+                placeholder="Buscar colaborador pelo nome..."
+                className="pl-9"
               />
             </div>
+
+            <div className="flex items-center gap-1">
+              <GuardiaoSelect value={guardiao} onChange={setGuardiao} className="w-56" />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label="Sobre o Guardião(ã) da Cultura"
+                  >
+                    <Info className="h-4 w-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  Guardião(ã) da Cultura (opcional). Filtra o painel por quem lançou os feedbacks — e
+                  define quem lança ao registrar um novo.
+                </TooltipContent>
+              </Tooltip>
+            </div>
+
+            <Select value={setorFilter} onValueChange={setSetorFilter}>
+              <SelectTrigger className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os setores</SelectItem>
+                {setorOptions.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {s}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={empresaFilter} onValueChange={setEmpresaFilter}>
+              <SelectTrigger className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as empresas</SelectItem>
+                {empresaOptions.map((e) => (
+                  <SelectItem key={e} value={e}>
+                    {e}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </CardContent>
       </Card>
@@ -119,7 +220,7 @@ export default function FeedbackColaboradorPage() {
           ))}
         </div>
       ) : data ? (
-        <FeedbackKpis totais={data.totais} />
+        <FeedbackKpis totais={totais} />
       ) : null}
 
       {/* Painel por status */}
@@ -140,7 +241,7 @@ export default function FeedbackColaboradorPage() {
             </Button>
           }
         />
-      ) : totalColaboradores === 0 ? (
+      ) : !hasData ? (
         <EmptyState
           icon={<ChatCircleText className="w-7 h-7 text-primary" />}
           title="Nada por aqui ainda"
@@ -149,6 +250,12 @@ export default function FeedbackColaboradorPage() {
               ? "Esse Guardião não tem feedbacks lançados. Tenta tirar o filtro?"
               : "Ninguém no painel por enquanto."
           }
+        />
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          icon={<ChatCircleText className="w-7 h-7 text-primary" />}
+          title="Ninguém com esse filtro"
+          description="Tenta ajustar os filtros (setor, empresa ou nome)."
         />
       ) : (
         <div className="flex gap-4 overflow-x-auto pb-2">
@@ -171,6 +278,8 @@ export default function FeedbackColaboradorPage() {
           if (!open) setSelected(null);
         }}
       />
+
+      <NovoFeedbackDialog open={novoOpen} onOpenChange={setNovoOpen} guardiao={guardiao} />
     </div>
   );
 }

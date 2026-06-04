@@ -10,6 +10,8 @@ export interface FeedbackColaborador {
   feedbacks: number;
   dataUltimoFeedback: string | null;
   status: FeedbackStatus;
+  setor?: string | null;
+  empresa?: string | null;
 }
 
 /** KPIs agregados do painel (respeitam o filtro de Guardião). */

@@ -27,7 +27,12 @@ export function ColaboradorFeedbackCard({
           <CaretRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
         </div>
       </div>
-      <p className="text-[11px] text-muted-foreground mt-1">
+      {(colaborador.setor || colaborador.empresa) && (
+        <p className="text-[11px] text-muted-foreground mt-1 truncate">
+          {[colaborador.setor, colaborador.empresa].filter(Boolean).join(" · ")}
+        </p>
+      )}
+      <p className="text-[11px] text-muted-foreground mt-0.5">
         {colaborador.dataUltimoFeedback
           ? `Último feedback: ${fmtDate(colaborador.dataUltimoFeedback)}`
           : "Ainda sem feedback"}

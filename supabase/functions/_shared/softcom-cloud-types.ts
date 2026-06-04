@@ -314,6 +314,10 @@ export interface RemoteFeedbackColaborador {
   /** Data do feedback mais recente (`YYYY-MM-DD`), `null` se nunca houve. */
   dataUltimoFeedback: string | null;
   status: "Pendente" | "Em dia" | "Em Atraso";
+  /** Setor do colaborador (texto livre no legado). */
+  setor?: string | null;
+  /** Empresa/PDV do colaborador (ex: "MATRIZ"). */
+  empresa?: string | null;
   [extra: string]: unknown;
 }
 
