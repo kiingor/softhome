@@ -15,6 +15,7 @@ import type {
   RemoteAbsenteismo,
   RemoteAdicional,
   RemoteAfastamento,
+  RemoteBuscaColaborador,
   RemoteCargo,
   RemoteColaborador,
   RemoteDecimoTerceiro,
@@ -23,7 +24,9 @@ import type {
   RemoteEstagio,
   RemoteEvento,
   RemoteExame,
+  RemoteFeedbacksResponse,
   RemoteFerias,
+  RemoteObjetivo,
   RemoteParente,
   RemotePdv,
   RemotePlano,
@@ -457,13 +460,88 @@ export async function deleteSubResource(
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Feedbacks / Objetivos (Guardião da Cultura) — pass-through, sem espelho local
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** GET /v1/feedbacks — painel por colaborador + `totais` (KPIs). */
+export async function listFeedbacks(
+  opts: { suporteId?: number | string; lancamentoUsuarioId?: number | string } = {},
+): Promise<RemoteFeedbacksResponse> {
+  const qs = new URLSearchParams();
+  if (opts.suporteId != null && opts.suporteId !== "") {
+    qs.set("suporteId", String(opts.suporteId));
+  }
+  if (opts.lancamentoUsuarioId != null && opts.lancamentoUsuarioId !== "") {
+    qs.set("lancamentoUsuarioId", String(opts.lancamentoUsuarioId));
+  }
+  const query = qs.toString();
+  return await softcomFetch<RemoteFeedbacksResponse>({
+    path: `/v1/feedbacks${query ? "?" + query : ""}`,
+  });
+}
+
+/** GET /v1/busca-colaborador?q= — typeahead pra selecionar o Guardião da Cultura. */
+export async function buscaColaborador(q?: string): Promise<RemoteBuscaColaborador[]> {
+  const term = q?.trim();
+  const query = term ? `?q=${encodeURIComponent(term)}` : "";
+  return await softcomFetch<RemoteBuscaColaborador[]>({
+    path: `/v1/busca-colaborador${query}`,
+  });
+}
+
+/** GET /v1/colaboradores/{id}/objetivos — lista objetivos/feedbacks do colaborador. */
+export async function listObjetivos(
+  collabId: number | string,
+): Promise<RemoteObjetivo[]> {
+  return await softcomFetch<RemoteObjetivo[]>({
+    path: `/v1/colaboradores/${encodeURIComponent(String(collabId))}/objetivos`,
+  });
+}
+
+/** POST /v1/colaboradores/{id}/objetivos — cria objetivo. Retorna o criado. */
+export async function createObjetivo(
+  collabId: number | string,
+  body: Record<string, unknown>,
+): Promise<RemoteObjetivo> {
+  return await softcomFetch<RemoteObjetivo>({
+    path: `/v1/colaboradores/${encodeURIComponent(String(collabId))}/objetivos`,
+    method: "POST",
+    body,
+  });
+}
+
+/** PATCH /v1/colaboradores/{id}/objetivos/{itemId} — edição parcial. */
+export async function updateObjetivo(
+  collabId: number | string,
+  itemId: number | string,
+  body: Record<string, unknown>,
+): Promise<unknown> {
+  return await softcomDirectFetch(
+    `/v1/colaboradores/${encodeURIComponent(String(collabId))}/objetivos/${encodeURIComponent(String(itemId))}`,
+    "PATCH",
+    body,
+  );
+}
+
+/** DELETE /v1/colaboradores/{id}/objetivos/{itemId} — remove objetivo. */
+export async function deleteObjetivo(
+  collabId: number | string,
+  itemId: number | string,
+): Promise<unknown> {
+  return await softcomDirectFetch(
+    `/v1/colaboradores/${encodeURIComponent(String(collabId))}/objetivos/${encodeURIComponent(String(itemId))}`,
+    "DELETE",
+  );
+}
+
 /**
  * fetch direto que aceita PUT/DELETE (o softcomFetch interno só tinha GET/POST).
  * Mesma config de auth/timeout.
  */
 async function softcomDirectFetch(
   path: string,
-  method: "PUT" | "DELETE",
+  method: "PUT" | "DELETE" | "PATCH",
   body?: unknown,
 ): Promise<unknown> {
   const apiKey = Deno.env.get("SOFTCOM_CLOUD_API_KEY");

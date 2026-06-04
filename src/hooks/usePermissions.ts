@@ -22,7 +22,8 @@ export type ModuleType =
   | "folha"
   | "folha_pagamentos"
   | "decimo_terceiro"
-  | "recrutador";
+  | "recrutador"
+  | "feedback";
 
 export interface ModulePermissions {
   canView: boolean;
@@ -54,6 +55,7 @@ export const MODULE_LABELS: Record<ModuleType, string> = {
   folha_pagamentos: "Folha — Pagamentos",
   decimo_terceiro: "13º Salário",
   recrutador: "Agente Recrutador",
+  feedback: "Feedback do Colaborador",
 };
 
 export type ModuleGroup = {
@@ -81,7 +83,7 @@ export const MODULE_GROUPS: ModuleGroup[] = [
   {
     label: "Engajamento & Análise",
     description: "Jornada do colaborador e relatórios",
-    modules: ["jornada", "relatorios"],
+    modules: ["jornada", "feedback", "relatorios"],
   },
   {
     label: "Sistema",
