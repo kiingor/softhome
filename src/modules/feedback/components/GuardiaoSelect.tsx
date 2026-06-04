@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { CaretUpDown, ShieldCheck, X, User, CircleNotch as Loader2 } from "@phosphor-icons/react";
 import {
   Command,
@@ -18,9 +18,18 @@ interface Props {
   onChange: (g: Guardiao | null) => void;
   disabled?: boolean;
   className?: string;
+  placeholder?: string;
+  icon?: ReactNode;
 }
 
-export function GuardiaoSelect({ value, onChange, disabled, className }: Props) {
+export function GuardiaoSelect({
+  value,
+  onChange,
+  disabled,
+  className,
+  placeholder = "Selecionar Guardião(ã)",
+  icon,
+}: Props) {
   const [open, setOpen] = useState(false);
   const [term, setTerm] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -56,8 +65,8 @@ export function GuardiaoSelect({ value, onChange, disabled, className }: Props) 
           className={cn("justify-between font-normal", !value && "text-muted-foreground", className)}
         >
           <span className="flex items-center gap-2 truncate">
-            <ShieldCheck className="h-4 w-4 shrink-0 text-primary" />
-            {value ? value.nome : "Selecionar Guardião(ã)"}
+            {icon ?? <ShieldCheck className="h-4 w-4 shrink-0 text-primary" />}
+            {value ? value.nome : placeholder}
           </span>
           <CaretUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>

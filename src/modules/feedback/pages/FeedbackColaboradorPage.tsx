@@ -5,6 +5,7 @@ import {
   ArrowsClockwise,
   ChatCircleText,
   Info,
+  Plus,
 } from "@phosphor-icons/react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -25,6 +26,7 @@ import { GuardiaoSelect } from "../components/GuardiaoSelect";
 import { FeedbackKpis } from "../components/FeedbackKpis";
 import { FeedbackStatusColumn } from "../components/FeedbackStatusColumn";
 import { ObjetivosSheet } from "../components/ObjetivosSheet";
+import { NovoFeedbackDialog } from "../components/NovoFeedbackDialog";
 import {
   FEEDBACK_STATUS_ORDER,
   type FeedbackColaborador,
@@ -41,6 +43,7 @@ export default function FeedbackColaboradorPage() {
   const [setorFilter, setSetorFilter] = useState<string>("all");
   const [empresaFilter, setEmpresaFilter] = useState<string>("all");
   const [selected, setSelected] = useState<FeedbackColaborador | null>(null);
+  const [novoOpen, setNovoOpen] = useState(false);
 
   const { data, isLoading, isError, isFetching, refetch } = useFeedbacks({
     lancamentoUsuarioId: guardiao?.id,
@@ -115,15 +118,34 @@ export default function FeedbackColaboradorPage() {
             Acompanhe os feedbacks do time e registre objetivos por colaborador.
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => refetch()}
-          disabled={isFetching}
-          title="Atualizar"
-        >
-          <ArrowsClockwise className={isFetching ? "w-4 h-4 animate-spin" : "w-4 h-4"} />
-        </Button>
+        <div className="flex items-center gap-2">
+          {canCreate && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className={!guardiao ? "cursor-not-allowed" : undefined}>
+                  <Button onClick={() => setNovoOpen(true)} disabled={!guardiao}>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Novo feedback
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                {guardiao
+                  ? "Registrar feedback para um colaborador."
+                  : "Selecione o Guardião(ã) da Cultura primeiro."}
+              </TooltipContent>
+            </Tooltip>
+          )}
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => refetch()}
+            disabled={isFetching}
+            title="Atualizar"
+          >
+            <ArrowsClockwise className={isFetching ? "w-4 h-4 animate-spin" : "w-4 h-4"} />
+          </Button>
+        </div>
       </div>
 
       {/* Filtros */}
@@ -256,6 +278,8 @@ export default function FeedbackColaboradorPage() {
           if (!open) setSelected(null);
         }}
       />
+
+      <NovoFeedbackDialog open={novoOpen} onOpenChange={setNovoOpen} guardiao={guardiao} />
     </div>
   );
 }
