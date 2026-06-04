@@ -43,6 +43,7 @@ import Bonus13ListPage from "./modules/bonus13/pages/Bonus13ListPage";
 import Bonus13DetailPage from "./modules/bonus13/pages/Bonus13DetailPage";
 import RecrutadorPage from "./modules/agents/pages/RecrutadorPage";
 import AnalistaPage from "./modules/agents/pages/AnalistaPage";
+import FeedbackColaboradorPage from "./modules/feedback/pages/FeedbackColaboradorPage";
 
 // Portal do Colaborador
 import { PortalProvider } from "./contexts/PortalContext";
@@ -119,6 +120,7 @@ const App = () => {
             <Route path="decimo-terceiro/:id" element={<Bonus13DetailPage />} />
             <Route path="recrutador" element={<RecrutadorPage />} />
             <Route path="analista" element={<AnalistaPage />} />
+            <Route path="feedback" element={<FeedbackColaboradorPage />} />
           </Route>
 
           {/* Portal do Colaborador - Login */}

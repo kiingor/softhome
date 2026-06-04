@@ -2,7 +2,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useDashboard } from "@/contexts/DashboardContext";
 import { useSidebarPermissions } from "@/hooks/useSidebarPermissions";
 import { supabase } from "@/integrations/supabase/client";
-import { SquaresFour as LayoutDashboard, Users, Buildings as Building2, Briefcase, Gift, FileText, ChartBar as BarChart3, Gear as Settings, SignOut as LogOut, TreeStructure as FolderTree, CurrencyDollar as DollarSign, CircleNotch as Loader2, Calendar, ClipboardText as ClipboardCheck, Trophy, UserPlus, IdentificationCard, Robot, Confetti } from "@phosphor-icons/react";
+import { SquaresFour as LayoutDashboard, Users, Buildings as Building2, Briefcase, Gift, FileText, ChartBar as BarChart3, Gear as Settings, SignOut as LogOut, TreeStructure as FolderTree, CurrencyDollar as DollarSign, CircleNotch as Loader2, Calendar, ClipboardText as ClipboardCheck, Trophy, UserPlus, IdentificationCard, Robot, Confetti, ChatCircleText } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -51,6 +51,7 @@ const menuCategories: MenuCategory[] = [
     items: [
       { icon: UserPlus, label: "Admissões", href: "/dashboard/admissoes", module: "admissoes" },
       { icon: Trophy, label: "Jornada", href: "/dashboard/jornada", module: "jornada" },
+      { icon: ChatCircleText, label: "Feedback Colaborador", href: "/dashboard/feedback", module: "feedback" },
       { icon: DollarSign, label: "Folha", href: "/dashboard/folha", module: "folha" },
       { icon: Confetti, label: "13º Salário", href: "/dashboard/decimo-terceiro", module: "decimo_terceiro" },
       { icon: Calendar, label: "Férias", href: "/dashboard/ferias", module: "ferias" },

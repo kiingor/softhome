@@ -270,6 +270,69 @@ export interface RemotePlano {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Feedbacks / Objetivos (Guardião da Cultura) — dado AO VIVO, sem espelho local
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Item de objetivo/feedback (tabela `Rec_Colaboradores_Objetivo`). */
+export interface RemoteObjetivo {
+  id: number;
+  /** Tipo livre no legado (ex: "Comentario", "Objetivo", "META"). */
+  tipo: string | null;
+  /** Data do objetivo (coluna `Datas`). */
+  datas: string | null;
+  /** Comentário (coluna `Comerntario`, grafia legada — exposto como `comentario`). */
+  comentario: string | null;
+  /** Visível para o colaborador (coluna `MostrarSuporte`). */
+  mostrarSuporte: boolean;
+  /** Quem lançou (coluna `LancamentoUsuario_ID`, FK pra `Suportes.Registro`). */
+  lancamentoUsuarioId: number;
+  /** Data/hora do lançamento (coluna `LancamentoDatas`). */
+  lancamentoDatas: string | null;
+  [extra: string]: unknown;
+}
+
+/** Resultado do typeahead `/v1/busca-colaborador`. */
+export interface RemoteBuscaColaborador {
+  /** Coluna `Registro` da `Suportes` (PK). */
+  id: number;
+  nomeSuporte: string | null;
+  nome: string | null;
+  telefones: string | null;
+  telefones2: string | null;
+  email: string | null;
+  setor: string | null;
+  desativado: boolean | null;
+  [extra: string]: unknown;
+}
+
+/** Um colaborador no painel `/v1/feedbacks`. */
+export interface RemoteFeedbackColaborador {
+  id: number;
+  nome: string | null;
+  /** Quantidade de feedbacks. `0` se nenhum. */
+  feedbacks: number;
+  /** Data do feedback mais recente (`YYYY-MM-DD`), `null` se nunca houve. */
+  dataUltimoFeedback: string | null;
+  status: "Pendente" | "Em dia" | "Em Atraso";
+  [extra: string]: unknown;
+}
+
+/** KPIs agregados do painel `/v1/feedbacks` (respeitam os filtros). */
+export interface RemoteFeedbacksTotais {
+  colaboradores: number;
+  pendente: number;
+  emDia: number;
+  emAtraso: number;
+  feedbacks: number;
+}
+
+/** Resposta de `/v1/feedbacks`. */
+export interface RemoteFeedbacksResponse {
+  totais: RemoteFeedbacksTotais;
+  colaboradores: RemoteFeedbackColaborador[];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Mapeamento → entidades locais
 // ─────────────────────────────────────────────────────────────────────────────
 
