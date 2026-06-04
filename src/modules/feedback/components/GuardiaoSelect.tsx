@@ -32,6 +32,19 @@ export function GuardiaoSelect({ value, onChange, disabled, className }: Props) 
 
   const { data: results = [], isFetching } = useColaboradorSearch(debounced, open);
 
+  // Só Guardiões válidos: ativos, com setor e sem "_" no login. A agenda já
+  // exclui Desativado=1; setor vazio/"DESATIVADO" também sai. Como o
+  // /v1/busca-colaborador não devolve o campo de senha, usamos o "_" no login
+  // como heurística pra contas de serviço/sem senha (ex.: FR_MARCOS_MACEIO, ADM_BOT).
+  const visible = results.filter((r) => {
+    if (r.desativado) return false;
+    const setor = (r.setor ?? "").trim();
+    if (!setor || setor.toUpperCase() === "DESATIVADO") return false;
+    const login = (r.nomeSuporte ?? r.nome ?? "").trim();
+    if (login.includes("_")) return false;
+    return true;
+  });
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -77,32 +90,28 @@ export function GuardiaoSelect({ value, onChange, disabled, className }: Props) 
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Buscando...
               </div>
-            ) : results.length === 0 ? (
+            ) : visible.length === 0 ? (
               <div className="py-6 text-center text-sm text-muted-foreground">
                 {debounced ? "Ninguém encontrado." : "Digite pra buscar."}
               </div>
             ) : (
               <CommandGroup>
-                {results.map((r) => {
-                  const hasFullName = !!r.nome;
-                  const nome = r.nome ?? r.nomeSuporte ?? `#${r.id}`;
-                  const secondary = (hasFullName ? [r.nomeSuporte, r.setor] : [r.setor])
-                    .filter(Boolean)
-                    .join(" · ");
+                {visible.map((r) => {
+                  const label = r.nomeSuporte ?? r.nome ?? `#${r.id}`;
                   return (
                     <CommandItem
                       key={r.id}
                       value={String(r.id)}
                       onSelect={() => {
-                        onChange({ id: r.id, nome });
+                        onChange({ id: r.id, nome: label });
                         setOpen(false);
                       }}
                     >
                       <User className="mr-2 h-4 w-4 shrink-0 opacity-70" />
                       <div className="flex flex-col flex-1 min-w-0">
-                        <span className="font-medium truncate">{nome}</span>
-                        {secondary && (
-                          <span className="text-xs opacity-70 truncate">{secondary}</span>
+                        <span className="font-medium truncate">{label}</span>
+                        {r.setor && (
+                          <span className="text-xs opacity-70 truncate">{r.setor}</span>
                         )}
                       </div>
                     </CommandItem>
