@@ -7,13 +7,18 @@ import {
   Info,
 } from "@phosphor-icons/react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { EmptyState } from "@/shared/components/EmptyState";
-import { SearchableSelect } from "@/modules/core/components/collaborators/import/SearchableSelect";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useFeedbacks } from "../hooks/use-feedbacks";
 import { GuardiaoSelect } from "../components/GuardiaoSelect";
@@ -33,33 +38,37 @@ export default function FeedbackColaboradorPage() {
 
   const [guardiao, setGuardiao] = useState<Guardiao | null>(null);
   const [nameFilter, setNameFilter] = useState("");
-  const [setorFilter, setSetorFilter] = useState<string | null>(null);
+  const [setorFilter, setSetorFilter] = useState<string>("all");
+  const [empresaFilter, setEmpresaFilter] = useState<string>("all");
   const [selected, setSelected] = useState<FeedbackColaborador | null>(null);
 
   const { data, isLoading, isError, isFetching, refetch } = useFeedbacks({
     lancamentoUsuarioId: guardiao?.id,
   });
 
-  // Setores distintos pro filtro (a partir do que veio do painel).
+  // Setores e empresas distintos pros filtros (a partir do que veio do painel).
   const setorOptions = useMemo(() => {
     const set = new Set<string>();
-    for (const c of data?.colaboradores ?? []) {
-      if (c.setor) set.add(c.setor);
-    }
-    return Array.from(set)
-      .sort((a, b) => a.localeCompare(b, "pt-BR"))
-      .map((s) => ({ value: s, label: s }));
+    for (const c of data?.colaboradores ?? []) if (c.setor) set.add(c.setor);
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [data]);
 
-  // Filtro client-side por nome + setor.
+  const empresaOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of data?.colaboradores ?? []) if (c.empresa) set.add(c.empresa);
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [data]);
+
+  // Filtro client-side por nome + setor + empresa.
   const filtered = useMemo(() => {
     const q = nameFilter.trim().toLowerCase();
     return (data?.colaboradores ?? []).filter(
       (c) =>
         (!q || (c.nome ?? "").toLowerCase().includes(q)) &&
-        (!setorFilter || c.setor === setorFilter),
+        (setorFilter === "all" || c.setor === setorFilter) &&
+        (empresaFilter === "all" || c.empresa === empresaFilter),
     );
-  }, [data, nameFilter, setorFilter]);
+  }, [data, nameFilter, setorFilter, empresaFilter]);
 
   const grouped = useMemo(() => {
     const by: Record<FeedbackStatus, FeedbackColaborador[]> = {
@@ -119,10 +128,20 @@ export default function FeedbackColaboradorPage() {
 
       {/* Filtros */}
       <Card>
-        <CardContent className="p-4 flex flex-col md:flex-row md:items-end gap-4">
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-1.5">
-              <Label>Guardião(ã) da Cultura</Label>
+        <CardContent className="p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative flex-1 min-w-[240px]">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={nameFilter}
+                onChange={(e) => setNameFilter(e.target.value)}
+                placeholder="Buscar colaborador pelo nome..."
+                className="pl-9"
+              />
+            </div>
+
+            <div className="flex items-center gap-1">
+              <GuardiaoSelect value={guardiao} onChange={setGuardiao} className="w-56" />
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -134,38 +153,39 @@ export default function FeedbackColaboradorPage() {
                   </button>
                 </TooltipTrigger>
                 <TooltipContent className="max-w-xs">
-                  Opcional. Filtra o painel por quem lançou os feedbacks — e define quem lança ao
-                  registrar um novo.
+                  Guardião(ã) da Cultura (opcional). Filtra o painel por quem lançou os feedbacks — e
+                  define quem lança ao registrar um novo.
                 </TooltipContent>
               </Tooltip>
             </div>
-            <GuardiaoSelect value={guardiao} onChange={setGuardiao} className="w-full md:w-72" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Setor</Label>
-            <SearchableSelect
-              value={setorFilter}
-              onChange={setSetorFilter}
-              options={setorOptions}
-              placeholder="Todos os setores"
-              searchPlaceholder="Buscar setor..."
-              emptyText="Nenhum setor."
-              emptyOptionLabel="Todos os setores"
-              triggerClassName="w-full md:w-56"
-            />
-          </div>
-          <div className="space-y-1.5 md:ml-auto">
-            <Label htmlFor="name-filter">Buscar colaborador</Label>
-            <div className="relative">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                id="name-filter"
-                value={nameFilter}
-                onChange={(e) => setNameFilter(e.target.value)}
-                placeholder="Filtrar pelo nome..."
-                className="pl-9 md:w-64"
-              />
-            </div>
+
+            <Select value={setorFilter} onValueChange={setSetorFilter}>
+              <SelectTrigger className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os setores</SelectItem>
+                {setorOptions.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {s}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={empresaFilter} onValueChange={setEmpresaFilter}>
+              <SelectTrigger className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as empresas</SelectItem>
+                {empresaOptions.map((e) => (
+                  <SelectItem key={e} value={e}>
+                    {e}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </CardContent>
       </Card>
@@ -213,7 +233,7 @@ export default function FeedbackColaboradorPage() {
         <EmptyState
           icon={<ChatCircleText className="w-7 h-7 text-primary" />}
           title="Ninguém com esse filtro"
-          description="Tenta ajustar o setor ou o nome."
+          description="Tenta ajustar os filtros (setor, empresa ou nome)."
         />
       ) : (
         <div className="flex gap-4 overflow-x-auto pb-2">
