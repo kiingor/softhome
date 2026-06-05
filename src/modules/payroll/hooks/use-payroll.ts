@@ -44,6 +44,63 @@ function resolvePayrollSalary(c: {
   return Number((c.position as { salary?: number } | null)?.salary ?? 0);
 }
 
+const BASE_PAYROLL_TYPES = ["salario_base", "inss", "irpf", "fgts"] as const;
+type BasePayrollType = (typeof BASE_PAYROLL_TYPES)[number];
+
+async function loadBasePayrollCoverage(
+  companyId: string,
+  month: number,
+  year: number,
+): Promise<Map<string, Set<BasePayrollType>>> {
+  const { data, error } = await supabase
+    .from("payroll_entries")
+    .select("collaborator_id, type")
+    .eq("company_id", companyId)
+    .eq("month", month)
+    .eq("year", year)
+    .in("type", Array.from(BASE_PAYROLL_TYPES));
+
+  if (error) throw error;
+
+  const coveredByCollab = new Map<string, Set<BasePayrollType>>();
+  for (const e of data ?? []) {
+    const cid = (e as { collaborator_id: string }).collaborator_id;
+    const type = (e as { type: BasePayrollType }).type;
+    const set = coveredByCollab.get(cid) ?? new Set<BasePayrollType>();
+    set.add(type);
+    coveredByCollab.set(cid, set);
+  }
+  return coveredByCollab;
+}
+
+async function loadVacationSalarySkip(
+  companyId: string,
+  month: number,
+  year: number,
+): Promise<Set<string>> {
+  const prevMonth = month === 1 ? 12 : month - 1;
+  const prevYear = month === 1 ? year - 1 : year;
+  const { data, error } = await supabase
+    .from("vacation_requests")
+    .select("collaborator_id, payroll_month, payroll_year")
+    .eq("company_id", companyId)
+    .eq("status", "approved")
+    .eq("payroll_month", prevMonth)
+    .eq("payroll_year", prevYear);
+
+  if (error) throw error;
+
+  return getCollabsToSkipNextMonth(
+    (data ?? []) as Array<{
+      collaborator_id: string;
+      payroll_month: number | null;
+      payroll_year: number | null;
+    }>,
+    month,
+    year,
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Lista de períodos da empresa atual (dashboard mensal)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -131,20 +188,11 @@ export function usePayrollPeriods() {
         // mesmo mês, geraria entries duplicadas (sem external_id). Antes de
         // inserir, montamos um Map<collab_id, Set<type>> do que JÁ existe
         // neste mês, e pulamos esses tipos por colab.
-        const { data: existingByMonth } = await supabase
-          .from("payroll_entries")
-          .select("collaborator_id, type")
-          .eq("company_id", companyId)
-          .eq("month", month)
-          .eq("year", year)
-          .in("type", ["salario_base", "inss", "irpf", "fgts"]);
-        const coveredByCollab = new Map<string, Set<string>>();
-        for (const e of existingByMonth ?? []) {
-          const cid = (e as { collaborator_id: string }).collaborator_id;
-          const set = coveredByCollab.get(cid) ?? new Set<string>();
-          set.add((e as { type: string }).type);
-          coveredByCollab.set(cid, set);
-        }
+        const coveredByCollab = await loadBasePayrollCoverage(
+          companyId,
+          month,
+          year,
+        );
 
         // Regra de produto: recibo de férias (lançado no mês do gozo) cobre
         // também o salário do MÊS SEGUINTE. Lista colabs cujo RECIBO foi
@@ -154,21 +202,8 @@ export function usePayrollPeriods() {
         // por end_date — assim cobre o caso de "Adiantar Férias" também
         // (gozo em Set, adianta o recibo pra Ago → ao abrir folha de Set,
         // queremos pular o colab mesmo que end_date continue em Set).
-        const prevMonthAuto = month === 1 ? 12 : month - 1;
-        const prevYearAuto = month === 1 ? year - 1 : year;
-        const { data: vacPostedPrev } = await supabase
-          .from("vacation_requests")
-          .select("collaborator_id, payroll_month, payroll_year")
-          .eq("company_id", companyId)
-          .eq("status", "approved")
-          .eq("payroll_month", prevMonthAuto)
-          .eq("payroll_year", prevYearAuto);
-        const skipSalaryNext = getCollabsToSkipNextMonth(
-          (vacPostedPrev ?? []) as Array<{
-            collaborator_id: string;
-            payroll_month: number | null;
-            payroll_year: number | null;
-          }>,
+        const skipSalaryNext = await loadVacationSalarySkip(
+          companyId,
           month,
           year,
         );
@@ -763,13 +798,15 @@ export function usePayrollPeriods() {
       const { month, year } = periodToMonthYear(reference_month);
 
       // Entries fixas já existentes → para deduplicar
-      const { data: existingEntries } = await supabase
+      const { data: existingEntries, error: existingEntriesError } = await supabase
         .from("payroll_entries")
         .select("collaborator_id, type, description")
         .eq("company_id", companyId)
         .eq("month", month)
         .eq("year", year)
-        .eq("is_fixed", true);
+        .in("type", ["salario_base", "beneficio", "inss", "irpf", "fgts"]);
+
+      if (existingEntriesError) throw existingEntriesError;
 
       const existingSalaries = new Set(
         (existingEntries ?? [])
@@ -792,7 +829,7 @@ export function usePayrollPeriods() {
       );
 
       // Salários + encargos pra colaboradores que ainda não foram populados
-      const { data: collaborators } = await supabase
+      const { data: collaborators, error: collaboratorsError } = await supabase
         .from("collaborators")
         .select(
           "id, store_id, dependents_count, current_salary, position:positions(salary)",
@@ -800,12 +837,21 @@ export function usePayrollPeriods() {
         .eq("company_id", companyId)
         .eq("status", "ativo");
 
+      if (collaboratorsError) throw collaboratorsError;
+
+      const skipSalaryNext = await loadVacationSalarySkip(
+        companyId,
+        month,
+        year,
+      );
+
       const newAutoEntries: PayrollEntry[] = [];
       for (const c of collaborators ?? []) {
         const salary = resolvePayrollSalary(
           c as { current_salary?: number | null; position?: { salary?: number } | null },
         );
         if (salary <= 0) continue;
+        if (skipSalaryNext.has(c.id)) continue;
         const deps = (c as { dependents_count?: number }).dependents_count ?? 0;
         const taxes = calcAllTaxes({ grossSalary: salary, dependents: deps });
         const baseEntry = {
@@ -970,8 +1016,8 @@ export function usePayrollPeriods() {
   });
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Recalcula INSS/IRPF/FGTS de um período: apaga os encargos atuais e
-  // reinjeta usando calcAllTaxes (tabela 2026 + dependentes do colaborador).
+  // Recalcula INSS/IRPF/FGTS de um período, preservando/recuperando salario_base.
+  // Apaga os encargos atuais e reinjeta usando calcAllTaxes.
   // Útil pra periodos antigos com valores obsoletos.
   // ─────────────────────────────────────────────────────────────────────────
   const recalculateTaxes = useMutation({
@@ -979,8 +1025,19 @@ export function usePayrollPeriods() {
       if (!companyId) throw new Error("Empresa não encontrada");
       const { month, year } = periodToMonthYear(reference_month);
 
+      const existingBaseCoverage = await loadBasePayrollCoverage(
+        companyId,
+        month,
+        year,
+      );
+      const skipSalaryNext = await loadVacationSalarySkip(
+        companyId,
+        month,
+        year,
+      );
+
       // 1. Apaga encargos existentes do período
-      await supabase
+      const { error: deleteTaxesError } = await supabase
         .from("payroll_entries")
         .delete()
         .eq("company_id", companyId)
@@ -988,8 +1045,10 @@ export function usePayrollPeriods() {
         .eq("year", year)
         .in("type", ["inss", "irpf", "fgts"]);
 
+      if (deleteTaxesError) throw deleteTaxesError;
+
       // 2. Pega salários ativos com dependentes
-      const { data: collaborators } = await supabase
+      const { data: collaborators, error: collaboratorsError } = await supabase
         .from("collaborators")
         .select(
           "id, store_id, dependents_count, current_salary, position:positions(salary)",
@@ -997,25 +1056,38 @@ export function usePayrollPeriods() {
         .eq("company_id", companyId)
         .eq("status", "ativo");
 
-      // 3. Reinjeta usando calcAllTaxes
-      const newTaxEntries: PayrollEntry[] = [];
+      if (collaboratorsError) throw collaboratorsError;
+
+      // 3. Reinjeta salario_base faltante + encargos usando calcAllTaxes
+      const newBaseEntries: PayrollEntry[] = [];
       for (const c of collaborators ?? []) {
         const salary = resolvePayrollSalary(
           c as { current_salary?: number | null; position?: { salary?: number } | null },
         );
         if (salary <= 0) continue;
+        if (skipSalaryNext.has(c.id)) continue;
         const deps = (c as { dependents_count?: number }).dependents_count ?? 0;
         const taxes = calcAllTaxes({ grossSalary: salary, dependents: deps });
+        const covered = existingBaseCoverage.get(c.id) ?? new Set<BasePayrollType>();
         const base = {
           company_id: companyId,
           collaborator_id: c.id,
           store_id: c.store_id,
           is_fixed: true,
+          is_payable: true,
           month,
           year,
         };
+        if (!covered.has("salario_base")) {
+          newBaseEntries.push({
+            ...base,
+            type: "salario_base" as const,
+            description: "Salário base",
+            value: salary,
+          } as PayrollEntry);
+        }
         if (taxes.inss > 0) {
-          newTaxEntries.push({
+          newBaseEntries.push({
             ...base,
             type: "inss" as const,
             description: "INSS (tabela 2026)",
@@ -1023,7 +1095,7 @@ export function usePayrollPeriods() {
           } as PayrollEntry);
         }
         if (taxes.fgts > 0) {
-          newTaxEntries.push({
+          newBaseEntries.push({
             ...base,
             type: "fgts" as const,
             description: "FGTS (8%)",
@@ -1031,7 +1103,7 @@ export function usePayrollPeriods() {
           } as PayrollEntry);
         }
         if (taxes.irpf > 0) {
-          newTaxEntries.push({
+          newBaseEntries.push({
             ...base,
             type: "irpf" as const,
             description:
@@ -1043,14 +1115,19 @@ export function usePayrollPeriods() {
         }
       }
 
-      if (newTaxEntries.length > 0) {
-        await supabase.from("payroll_entries").insert(newTaxEntries);
+      if (newBaseEntries.length > 0) {
+        const { error: insertBaseError } = await supabase
+          .from("payroll_entries")
+          .insert(newBaseEntries);
+        if (insertBaseError) throw insertBaseError;
       }
-      return { count: newTaxEntries.length };
+      return { count: newBaseEntries.length };
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["payroll-entries"] });
-      toast.success(`${result.count} encargos recalculados (tabela 2026) ✓`);
+      const label =
+        result.count === 1 ? "lançamento ajustado" : "lançamentos ajustados";
+      toast.success(`${result.count} ${label} na folha ✓`);
     },
     onError: (err: Error) => {
       toast.error(err.message ?? "Não rolou. Tenta de novo?");
