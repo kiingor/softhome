@@ -78,6 +78,7 @@ import {
   ENTRY_TYPE_COLORS,
   ALERT_KIND_LABELS,
   ALERT_SEVERITY_COLORS,
+  ALERT_SEVERITY_LABELS,
   formatPeriodLabel,
   periodToMonthYear,
   isEarning,
@@ -231,14 +232,16 @@ export default function PeriodDetailPage() {
       const v = Number(e.value);
       if (TAX_TYPES.has(e.type)) {
         g.taxBreakdown[e.type as "inss" | "irpf" | "fgts"] += v;
-        g.net -= v;
+        // FGTS é custo do empregador — não desconta do líquido do colaborador.
+        if (e.type !== "fgts") g.net -= v;
       } else {
         g.entries.push(e);
         g.net += isEarning(e.type) ? v : -v;
       }
     }
     // Ajusta valores exibidos:
-    // - Salário base absorve INSS + FGTS sempre, e a parte do IRPF que cabe a ele.
+    // - Salário base absorve INSS sempre e a parte do IRPF que cabe a ele.
+    //   FGTS NÃO entra no líquido (é custo do empregador), só aparece como info.
     // - Gratificação absorve só a parte do IRPF que cabe a ela (regra do user:
     //   gratificação só desconta IRPF).
     // - IRPF é distribuído proporcionalmente entre salário base + gratificações
@@ -275,8 +278,9 @@ export default function PeriodDetailPage() {
       // Aplica deduções
       if (salaryEntry) {
         const irpfPart = irpfShares.get(salaryEntry.id) ?? 0;
-        const total = inss + fgts + irpfPart;
-        if (total > 0) {
+        // FGTS fica de fora do líquido — entra só como info de custo do empregador.
+        const total = inss + irpfPart;
+        if (total > 0 || fgts > 0) {
           salaryEntry._adjustedValue = Number(salaryEntry.value) - total;
           salaryEntry._taxesApplied = {
             inss: inss || undefined,
@@ -562,7 +566,7 @@ export default function PeriodDetailPage() {
                     variant="outline"
                     className={`font-normal border-0 ${ALERT_SEVERITY_COLORS[a.severity]}`}
                   >
-                    {a.severity}
+                    {ALERT_SEVERITY_LABELS[a.severity] ?? a.severity}
                   </Badge>
                   <span className="text-muted-foreground">
                     {ALERT_KIND_LABELS[a.kind]}
@@ -731,13 +735,18 @@ export default function PeriodDetailPage() {
                               label: string;
                               value: number;
                             }> = [];
+                            const employerCosts: Array<{
+                              label: string;
+                              value: number;
+                            }> = [];
                             if (isAdjusted && taxes) {
                               if (taxes.inss)
                                 deductions.push({ label: "INSS", value: taxes.inss });
                               if (taxes.irpf)
                                 deductions.push({ label: "IRPF", value: taxes.irpf });
+                              // FGTS não desconta do colaborador — é custo da empresa.
                               if (taxes.fgts)
-                                deductions.push({ label: "FGTS", value: taxes.fgts });
+                                employerCosts.push({ label: "FGTS", value: taxes.fgts });
                             }
                             return (
                               <TableRow
@@ -762,7 +771,9 @@ export default function PeriodDetailPage() {
                                     <span className="truncate">
                                       {e.description ?? "—"}
                                     </span>
-                                    {isAdjusted && deductions.length > 0 && (
+                                    {isAdjusted &&
+                                      (deductions.length > 0 ||
+                                        employerCosts.length > 0) && (
                                       <HoverCard openDelay={150} closeDelay={100}>
                                         <HoverCardTrigger asChild>
                                           <button
@@ -804,6 +815,18 @@ export default function PeriodDetailPage() {
                                                 {formatCurrency(value)}
                                               </span>
                                             </div>
+                                            {employerCosts.map((c) => (
+                                              <div
+                                                key={c.label}
+                                                className="flex items-center justify-between gap-2 text-muted-foreground"
+                                                title="Custo do empregador — não desconta do colaborador"
+                                              >
+                                                <span>{c.label} (custo empresa)</span>
+                                                <span className="font-mono">
+                                                  {formatCurrency(c.value)}
+                                                </span>
+                                              </div>
+                                            ))}
                                           </div>
                                         </HoverCardContent>
                                       </HoverCard>

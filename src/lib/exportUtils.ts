@@ -57,7 +57,9 @@ const loadImageAsBase64 = async (url: string): Promise<string | null> => {
 
 const formatValueWithSign = (value: number, type: string): string => {
   const formatted = value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-  if (deductionTypes.includes(type) || type === "fgts") return `- ${formatted}`;
+  // FGTS é custo do empregador — não desconta do colaborador, exibe sem sinal.
+  if (type === "fgts") return formatted;
+  if (deductionTypes.includes(type)) return `- ${formatted}`;
   return `+ ${formatted}`;
 };
 
