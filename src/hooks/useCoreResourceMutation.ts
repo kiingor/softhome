@@ -28,7 +28,20 @@ interface MutateArgs {
   data?: Record<string, unknown>;
 }
 
-export function useCoreResourceMutation(resource: Resource) {
+interface ResourceOptions {
+  /**
+   * Empurra a mutação pra api.softcom.cloud antes de gravar local (default true).
+   * `cargos` (positions) usa false: a agenda responde 404 em escrita de cargo
+   * e os campos editados aqui (periodicidade de exame, % de encargos, grupo de
+   * risco) são locais — não existem no contrato remoto.
+   */
+  syncToRemote?: boolean;
+}
+
+export function useCoreResourceMutation(
+  resource: Resource,
+  options?: ResourceOptions,
+) {
   const { currentCompany } = useDashboard();
   const queryClient = useQueryClient();
   const meta = RESOURCE_LABEL[resource];
@@ -45,6 +58,7 @@ export function useCoreResourceMutation(resource: Resource) {
           companyId: currentCompany.id,
           id: args.id,
           data: args.data,
+          syncToRemote: options?.syncToRemote ?? true,
         },
       });
       if (error) {
@@ -69,7 +83,8 @@ export function useCoreResourceMutation(resource: Resource) {
           : vars.action === "update"
           ? "atualizada"
           : "removida";
-      toast.success(`${meta.singular} ${verb} ✓ (sincronizado com a agenda)`);
+      const suffix = (options?.syncToRemote ?? true) ? " (sincronizado com a agenda)" : "";
+      toast.success(`${meta.singular} ${verb} ✓${suffix}`);
     },
     onError: (err: Error) => {
       toast.error("Não rolou: " + err.message);
