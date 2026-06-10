@@ -144,10 +144,14 @@ export const DEDUCTION_TYPES = [
   "desconto",
   "inss",
   "irpf",
-  "fgts",
   "custo",
   "despesa",
 ] as const;
+
+// Encargos do empregador: aparecem na folha como informação (custo da empresa),
+// mas NÃO são descontados do líquido do colaborador. FGTS é 8% sobre o bruto e
+// é depositado pela empresa — nunca sai do salário de quem recebe.
+export const EMPLOYER_COST_TYPES = ["fgts"] as const;
 
 export function isEarning(type: string): boolean {
   return (EARNINGS_TYPES as readonly string[]).includes(type);
@@ -155,6 +159,10 @@ export function isEarning(type: string): boolean {
 
 export function isDeduction(type: string): boolean {
   return (DEDUCTION_TYPES as readonly string[]).includes(type);
+}
+
+export function isEmployerCost(type: string): boolean {
+  return (EMPLOYER_COST_TYPES as readonly string[]).includes(type);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -194,6 +202,12 @@ export const ALERT_SEVERITY_COLORS: Record<PayrollAlertSeverity, string> = {
     "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
   critical:
     "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300",
+};
+
+export const ALERT_SEVERITY_LABELS: Record<PayrollAlertSeverity, string> = {
+  info: "Aviso",
+  warning: "Atenção",
+  critical: "Crítico",
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

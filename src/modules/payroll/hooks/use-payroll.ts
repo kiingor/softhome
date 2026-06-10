@@ -25,6 +25,7 @@ import {
 import { calcVacation, type VacationCalcResult } from "@/lib/payroll/vacationCalc";
 import { getCollabsToSkipNextMonth } from "@/lib/payroll/vacationSkipRules";
 import { postVacationToPayroll } from "@/hooks/useVacations";
+import { fetchAllRows } from "@/lib/fetchAllRows";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Salário do colaborador pra folha.
@@ -52,15 +53,18 @@ async function loadBasePayrollCoverage(
   month: number,
   year: number,
 ): Promise<Map<string, Set<BasePayrollType>>> {
-  const { data, error } = await supabase
-    .from("payroll_entries")
-    .select("collaborator_id, type")
-    .eq("company_id", companyId)
-    .eq("month", month)
-    .eq("year", year)
-    .in("type", Array.from(BASE_PAYROLL_TYPES));
-
-  if (error) throw error;
+  const data = await fetchAllRows<{
+    collaborator_id: string;
+    type: BasePayrollType;
+  }>(() =>
+    supabase
+      .from("payroll_entries")
+      .select("collaborator_id, type")
+      .eq("company_id", companyId)
+      .eq("month", month)
+      .eq("year", year)
+      .in("type", Array.from(BASE_PAYROLL_TYPES)),
+  );
 
   const coveredByCollab = new Map<string, Set<BasePayrollType>>();
   for (const e of data ?? []) {
@@ -209,13 +213,22 @@ export function usePayrollPeriods() {
         );
 
         const autoEntries: PayrollEntry[] = [];
+        // Quem ficou de fora não pode sumir em silêncio — vira payroll_alert.
+        const skippedNoSalary: string[] = [];
+        const skippedVacation: string[] = [];
         for (const c of collaborators ?? []) {
           const fullSalary = resolvePayrollSalary(
             c as { current_salary?: number | null; position?: { salary?: number } | null },
           );
-          if (fullSalary <= 0) continue;
+          if (fullSalary <= 0) {
+            skippedNoSalary.push(c.id);
+            continue;
+          }
           // Pula colab que teve gozo no mês anterior (recibo já cobriu)
-          if (skipSalaryNext.has(c.id)) continue;
+          if (skipSalaryNext.has(c.id)) {
+            skippedVacation.push(c.id);
+            continue;
+          }
           const deps = (c as { dependents_count?: number }).dependents_count ?? 0;
           const covered = coveredByCollab.get(c.id) ?? new Set<string>();
 
@@ -286,7 +299,46 @@ export function usePayrollPeriods() {
         }
 
         if (autoEntries.length > 0) {
-          await supabase.from("payroll_entries").insert(autoEntries);
+          // Erro aqui era engolido em silêncio — colaborador sumia da folha
+          // sem aviso nenhum. Agora aborta a abertura com mensagem clara.
+          const { error: autoEntriesError } = await supabase
+            .from("payroll_entries")
+            .insert(autoEntries);
+          if (autoEntriesError) {
+            throw new Error(
+              "Falha ao lançar salários/encargos: " + autoEntriesError.message,
+            );
+          }
+        }
+
+        // Alertas pros que ficaram de fora do auto-popular (visibilidade RH).
+        const skippedAlerts = [
+          ...skippedNoSalary.map((id) => ({
+            company_id: companyId,
+            period_id: period.id,
+            collaborator_id: id,
+            kind: "collaborator_no_entry" as const,
+            severity: "warning" as const,
+            message:
+              "Sem salário no cadastro (nem na pessoa, nem no cargo) — salário base não foi lançado.",
+          })),
+          ...skippedVacation.map((id) => ({
+            company_id: companyId,
+            period_id: period.id,
+            collaborator_id: id,
+            kind: "collaborator_no_entry" as const,
+            severity: "info" as const,
+            message:
+              "Recibo de férias lançado no mês anterior cobre este mês — salário base não lançado.",
+          })),
+        ];
+        if (skippedAlerts.length > 0) {
+          const { error: alertsError } = await supabase
+            .from("payroll_alerts")
+            .insert(skippedAlerts);
+          if (alertsError) {
+            console.error("Falha ao criar alertas de colab sem salário:", alertsError.message);
+          }
         }
 
         // ─────────────────────────────────────────────────────────────────────
@@ -373,7 +425,12 @@ export function usePayrollPeriods() {
           }
 
           if (sfEntries.length > 0) {
-            await supabase.from("payroll_entries").insert(sfEntries);
+            const { error: sfError } = await supabase
+              .from("payroll_entries")
+              .insert(sfEntries);
+            if (sfError) {
+              throw new Error("Falha ao lançar salário-família: " + sfError.message);
+            }
           }
         }
 
@@ -480,7 +537,14 @@ export function usePayrollPeriods() {
             .filter(Boolean) as PayrollEntry[];
 
         if (benefitEntries.length > 0) {
-          await supabase.from("payroll_entries").insert(benefitEntries);
+          const { error: benefitEntriesError } = await supabase
+            .from("payroll_entries")
+            .insert(benefitEntries);
+          if (benefitEntriesError) {
+            throw new Error(
+              "Falha ao lançar benefícios: " + benefitEntriesError.message,
+            );
+          }
         }
       }
 
@@ -797,16 +861,20 @@ export function usePayrollPeriods() {
       if (!companyId) throw new Error("Empresa não encontrada");
       const { month, year } = periodToMonthYear(reference_month);
 
-      // Entries fixas já existentes → para deduplicar
-      const { data: existingEntries, error: existingEntriesError } = await supabase
-        .from("payroll_entries")
-        .select("collaborator_id, type, description")
-        .eq("company_id", companyId)
-        .eq("month", month)
-        .eq("year", year)
-        .in("type", ["salario_base", "beneficio", "inss", "irpf", "fgts"]);
-
-      if (existingEntriesError) throw existingEntriesError;
+      // Entries fixas já existentes → para deduplicar (paginado: passa de 1000)
+      const existingEntries = await fetchAllRows<{
+        collaborator_id: string;
+        type: string;
+        description: string | null;
+      }>(() =>
+        supabase
+          .from("payroll_entries")
+          .select("collaborator_id, type, description")
+          .eq("company_id", companyId)
+          .eq("month", month)
+          .eq("year", year)
+          .in("type", ["salario_base", "beneficio", "inss", "irpf", "fgts"]),
+      );
 
       const existingSalaries = new Set(
         (existingEntries ?? [])
@@ -846,12 +914,20 @@ export function usePayrollPeriods() {
       );
 
       const newAutoEntries: PayrollEntry[] = [];
+      const skippedNoSalary: string[] = [];
+      const skippedVacation: string[] = [];
       for (const c of collaborators ?? []) {
         const salary = resolvePayrollSalary(
           c as { current_salary?: number | null; position?: { salary?: number } | null },
         );
-        if (salary <= 0) continue;
-        if (skipSalaryNext.has(c.id)) continue;
+        if (salary <= 0) {
+          skippedNoSalary.push(c.id);
+          continue;
+        }
+        if (skipSalaryNext.has(c.id)) {
+          skippedVacation.push(c.id);
+          continue;
+        }
         const deps = (c as { dependents_count?: number }).dependents_count ?? 0;
         const taxes = calcAllTaxes({ grossSalary: salary, dependents: deps });
         const baseEntry = {
@@ -901,12 +977,64 @@ export function usePayrollPeriods() {
       }
 
       if (newAutoEntries.length > 0) {
-        await supabase.from("payroll_entries").insert(newAutoEntries);
+        const { error: newAutoEntriesError } = await supabase
+          .from("payroll_entries")
+          .insert(newAutoEntries);
+        if (newAutoEntriesError) {
+          throw new Error(
+            "Falha ao lançar salários/encargos: " + newAutoEntriesError.message,
+          );
+        }
       }
       // Manter compat com o retorno (nome legado)
       const newSalaryEntries = newAutoEntries.filter(
         (e) => e.type === "salario_base",
       );
+
+      // Atualiza alertas de "colaborador sem lançamento": apaga os não
+      // resolvidos e recria conforme o estado atual da repopulação.
+      const { data: periodRow } = await supabase
+        .from("payroll_periods")
+        .select("id")
+        .eq("company_id", companyId)
+        .eq("reference_month", reference_month)
+        .maybeSingle();
+      if (periodRow) {
+        await supabase
+          .from("payroll_alerts")
+          .delete()
+          .eq("period_id", periodRow.id)
+          .eq("kind", "collaborator_no_entry")
+          .is("resolved_at", null);
+        const skippedAlerts = [
+          ...skippedNoSalary.map((id) => ({
+            company_id: companyId,
+            period_id: periodRow.id,
+            collaborator_id: id,
+            kind: "collaborator_no_entry" as const,
+            severity: "warning" as const,
+            message:
+              "Sem salário no cadastro (nem na pessoa, nem no cargo) — salário base não foi lançado.",
+          })),
+          ...skippedVacation.map((id) => ({
+            company_id: companyId,
+            period_id: periodRow.id,
+            collaborator_id: id,
+            kind: "collaborator_no_entry" as const,
+            severity: "info" as const,
+            message:
+              "Recibo de férias lançado no mês anterior cobre este mês — salário base não lançado.",
+          })),
+        ];
+        if (skippedAlerts.length > 0) {
+          const { error: alertsError } = await supabase
+            .from("payroll_alerts")
+            .insert(skippedAlerts);
+          if (alertsError) {
+            console.error("Falha ao criar alertas de colab sem salário:", alertsError.message);
+          }
+        }
+      }
 
       // Benefícios
       const { data: assignments } = await supabase
@@ -993,7 +1121,14 @@ export function usePayrollPeriods() {
         .filter(Boolean) as PayrollEntry[];
 
       if (newBenefitEntries.length > 0) {
-        await supabase.from("payroll_entries").insert(newBenefitEntries);
+        const { error: newBenefitEntriesError } = await supabase
+          .from("payroll_entries")
+          .insert(newBenefitEntries);
+        if (newBenefitEntriesError) {
+          throw new Error(
+            "Falha ao lançar benefícios: " + newBenefitEntriesError.message,
+          );
+        }
       }
 
       return {
@@ -1036,14 +1171,18 @@ export function usePayrollPeriods() {
         year,
       );
 
-      // 1. Apaga encargos existentes do período
+      // 1. Apaga encargos de SALÁRIO do período: os criados pelo auto-populate
+      //    (sem external_id) e os da sync (inss-base/irpf-base/fgts-base).
+      //    NÃO toca nos INSS/IRRF do recibo de férias (external_id 'ferias-%'),
+      //    que têm os mesmos types mas pertencem ao recibo, não ao salário.
       const { error: deleteTaxesError } = await supabase
         .from("payroll_entries")
         .delete()
         .eq("company_id", companyId)
         .eq("month", month)
         .eq("year", year)
-        .in("type", ["inss", "irpf", "fgts"]);
+        .in("type", ["inss", "irpf", "fgts"])
+        .or("external_id.is.null,external_id.in.(inss-base,irpf-base,fgts-base)");
 
       if (deleteTaxesError) throw deleteTaxesError;
 
@@ -1172,17 +1311,20 @@ export function usePayrollEntries(periodId: string | undefined) {
     queryFn: async () => {
       if (!periodId || !companyId || !period) return [];
       const { month, year } = periodToMonthYear(period.reference_month);
-      const { data, error } = await supabase
-        .from("payroll_entries")
-        .select(
-          "*, collaborator:collaborators(id, name, cpf, regime, status, pix_key, softcom_surname, store_id, team_id)"
-        )
-        .eq("company_id", companyId)
-        .eq("month", month)
-        .eq("year", year)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as PayrollEntryWithCollaborator[];
+      // Pagina pra não perder lançamentos além do limite de 1000 do PostgREST.
+      const data = await fetchAllRows<PayrollEntryWithCollaborator>(
+        () =>
+          supabase
+            .from("payroll_entries")
+            .select(
+              "*, collaborator:collaborators(id, name, cpf, regime, status, pix_key, softcom_surname, store_id, team_id)"
+            )
+            .eq("company_id", companyId)
+            .eq("month", month)
+            .eq("year", year)
+            .order("created_at", { ascending: false }),
+      );
+      return data;
     },
     enabled: !!periodId && !!companyId && !!period,
   });

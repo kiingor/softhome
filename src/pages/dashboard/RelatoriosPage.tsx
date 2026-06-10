@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAllRows } from "@/lib/fetchAllRows";
 import { useDashboard } from "@/contexts/DashboardContext";
 import { useClosedPeriods } from "@/hooks/useClosedPeriods";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -117,18 +118,19 @@ const RelatoriosPage = () => {
     queryKey: ["payroll-entries-report", currentCompany?.id, selectedMonth, selectedYear],
     queryFn: async () => {
       if (!currentCompany?.id) return [];
-      const { data, error } = await supabase
-        .from("payroll_entries")
-        .select(`
+      // Pagina: passa de 1000 lançamentos/mês e o PostgREST corta nesse limite.
+      return await fetchAllRows<any>(() =>
+        supabase
+          .from("payroll_entries")
+          .select(`
           *,
           collaborator:collaborators(id, name, store_id)
         `)
-        .eq("company_id", currentCompany.id)
-        .eq("month", selectedMonth)
-        .eq("year", selectedYear)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data;
+          .eq("company_id", currentCompany.id)
+          .eq("month", selectedMonth)
+          .eq("year", selectedYear)
+          .order("created_at", { ascending: false }),
+      );
     },
     enabled: !!currentCompany?.id,
   });
@@ -541,9 +543,14 @@ const RelatoriosPage = () => {
                                 )}
                               </TableCell>
                               <TableCell className={`text-right font-medium ${
-                                deductionTypes.includes(entry.type) || entry.type === "fgts" ? "text-destructive" : "text-green-600"
+                                entry.type === "fgts"
+                                  ? "text-muted-foreground"
+                                  : deductionTypes.includes(entry.type)
+                                  ? "text-destructive"
+                                  : "text-green-600"
                               }`}>
-                                {deductionTypes.includes(entry.type) || entry.type === "fgts" ? "- " : "+ "}
+                                {/* FGTS é custo da empresa — sem sinal de desconto */}
+                                {entry.type === "fgts" ? "" : deductionTypes.includes(entry.type) ? "- " : "+ "}
                                 {formatCurrency(entry.value)}
                               </TableCell>
                             </TableRow>

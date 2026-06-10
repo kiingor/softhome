@@ -141,6 +141,9 @@ export async function applyFinancials(
       month,
       year,
       is_fixed: true,
+      // is_payable default da coluna é false; o auto-popular do app seta true.
+      // Sem isso, salário vindo da sync ficava inconsistente com o do app.
+      is_payable: true,
     };
     const { data: existed } = await sbAdmin
       .from("payroll_entries")
@@ -232,6 +235,7 @@ export async function applyFinancials(
           month,
           year,
           is_fixed: true,
+          is_payable: true,
         };
         const { data: existed } = await sbAdmin
           .from("payroll_entries")

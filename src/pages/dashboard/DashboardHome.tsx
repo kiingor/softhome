@@ -30,6 +30,7 @@ import { useNavigate } from "react-router-dom";
 
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAllRows } from "@/lib/fetchAllRows";
 import { TableSkeleton } from "@/components/ui/table-skeleton";
 import {
   format,
@@ -194,14 +195,16 @@ const DashboardHome = () => {
     queryKey: ["dashboard-payroll", currentCompany?.id, today.getMonth(), today.getFullYear()],
     queryFn: async () => {
       if (!currentCompany?.id) return [];
-      const { data, error } = await supabase
-        .from("payroll_entries")
-        .select("id, value, type")
-        .eq("company_id", currentCompany.id)
-        .eq("month", today.getMonth() + 1)
-        .eq("year", today.getFullYear());
-      if (error) throw error;
-      return data || [];
+      // Pagina: KPIs do mês quebravam quando passava de 1000 lançamentos.
+      return await fetchAllRows<{ id: string; value: number; type: string }>(
+        () =>
+          supabase
+            .from("payroll_entries")
+            .select("id, value, type")
+            .eq("company_id", currentCompany.id)
+            .eq("month", today.getMonth() + 1)
+            .eq("year", today.getFullYear()),
+      );
     },
     enabled: !!currentCompany?.id,
   });
