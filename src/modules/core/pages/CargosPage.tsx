@@ -34,7 +34,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { toast } from 'sonner';
 import { formatCurrency, formatNumberAsCurrency, parseCurrencyInput } from '@/lib/formatters';
 import { TableSkeleton } from '@/components/ui/table-skeleton';
-import { RISK_GROUPS, RISK_GROUP_PERIODICITY, RISK_GROUP_PERIODICITY_LABELS } from '@/lib/riskGroupDefaults';
+import { RISK_GROUPS, RISK_GROUP_PERIODICITY_LABELS } from '@/lib/riskGroupDefaults';
 
 interface Position {
   id: string;
@@ -60,8 +60,9 @@ interface PositionDocument {
 }
 
 const EMPTY_FORM = {
+  // Periodicidade de exame padrão: 12 meses pra todos os cargos (regra fixa).
   name: '', salary: '', inss_percent: '', fgts_percent: '', irpf_percent: '',
-  risk_group: '', exam_periodicity_months: '', team_id: '', level: '',
+  risk_group: '', exam_periodicity_months: '12', team_id: '', level: '',
 };
 
 export default function CargosPage() {
@@ -143,8 +144,10 @@ export default function CargosPage() {
     return p.name.toLowerCase().includes(q) || (p.teams?.name || '').toLowerCase().includes(q);
   });
 
-  // Mutations vão via edge function core-resource-mutate (PUSH → agenda → local).
-  const positionMutation = useCoreResourceMutation('positions');
+  // Cargo é local-only: a agenda (api.softcom.cloud) responde 404 em escrita de
+  // cargo, e os campos editados aqui (periodicidade de exame, % de encargos,
+  // grupo de risco) não existem no contrato remoto. Grava direto no banco local.
+  const positionMutation = useCoreResourceMutation('positions', { syncToRemote: false });
 
   type PositionData = {
     name: string;
@@ -213,7 +216,7 @@ export default function CargosPage() {
         inss_percent: (position.inss_percent || 0).toString().replace('.', ','),
         fgts_percent: (position.fgts_percent || 0).toString().replace('.', ','),
         irpf_percent: (position.irpf_percent || 0).toString().replace('.', ','),
-        risk_group: position.risk_group || '', exam_periodicity_months: position.exam_periodicity_months?.toString() || '',
+        risk_group: position.risk_group || '', exam_periodicity_months: position.exam_periodicity_months?.toString() || '12',
         team_id: position.team_id || '', level: position.level?.toString() || '',
       });
     } else {
@@ -526,7 +529,7 @@ export default function CargosPage() {
                       <div className="space-y-3">
                         <div className="space-y-2">
                           <Label htmlFor="risk_group">Grupo de Risco</Label>
-                          <Select value={formData.risk_group} onValueChange={(v) => { const periodicity = RISK_GROUP_PERIODICITY[v]; setFormData({ ...formData, risk_group: v, exam_periodicity_months: periodicity?.toString() || '' }); }}>
+                          <Select value={formData.risk_group} onValueChange={(v) => { setFormData({ ...formData, risk_group: v }); }}>
                             <SelectTrigger><SelectValue placeholder="Selecione o grupo de risco" /></SelectTrigger>
                             <SelectContent>{RISK_GROUPS.map((g) => (<SelectItem key={g.value} value={g.value}>{g.label}</SelectItem>))}</SelectContent>
                           </Select>

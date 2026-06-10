@@ -8,6 +8,9 @@ import { EXAM_TYPE_LABELS, EXAM_STATUS_LABELS, EXAM_STATUS_COLORS } from "@/lib/
 import { exportExamsToPDF, exportExamsToExcel } from "@/lib/examExportUtils";
 import { ExamRequestModal } from "@/components/exames/ExamRequestModal";
 import { ExamUploadModal } from "@/components/exames/ExamUploadModal";
+import { ExamEditModal } from "@/components/exames/ExamEditModal";
+import { ExamDateModal } from "@/components/exames/ExamDateModal";
+import { Pencil } from "@phosphor-icons/react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +29,10 @@ export default function ExamesPage() {
 
   const [newExamOpen, setNewExamOpen] = useState(false);
   const [uploadExam, setUploadExam] = useState<OccupationalExam | null>(null);
+  const [editExam, setEditExam] = useState<OccupationalExam | null>(null);
+  const [dateAction, setDateAction] = useState<
+    { exam: OccupationalExam; mode: "realizar" | "agendar" } | null
+  >(null);
 
   // Filters - default 30-day window
   const [searchTerm, setSearchTerm] = useState("");
@@ -283,19 +290,16 @@ export default function ExamesPage() {
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => setEditExam(exam)}>
+                                    <Pencil className="w-4 h-4 mr-2" />Editar
+                                  </DropdownMenuItem>
                                   {exam.status === "pendente" && (
-                                    <DropdownMenuItem onClick={() => {
-                                      const date = prompt("Data agendada (AAAA-MM-DD):");
-                                      if (date) updateExam({ id: exam.id, status: "agendado", scheduled_date: date });
-                                    }}>
+                                    <DropdownMenuItem onClick={() => setDateAction({ exam, mode: "agendar" })}>
                                       <Calendar className="w-4 h-4 mr-2" />Agendar
                                     </DropdownMenuItem>
                                   )}
                                   {["pendente", "agendado"].includes(exam.status) && (
-                                    <DropdownMenuItem onClick={() => {
-                                      const date = prompt("Data de realização (AAAA-MM-DD):", new Date().toISOString().slice(0, 10));
-                                      if (date) updateExam({ id: exam.id, status: "realizado", completed_date: date });
-                                    }}>
+                                    <DropdownMenuItem onClick={() => setDateAction({ exam, mode: "realizar" })}>
                                       <CheckCircle className="w-4 h-4 mr-2" />Marcar Realizado
                                     </DropdownMenuItem>
                                   )}
@@ -388,6 +392,13 @@ export default function ExamesPage() {
 
         <ExamRequestModal open={newExamOpen} onOpenChange={setNewExamOpen} />
         <ExamUploadModal open={!!uploadExam} onOpenChange={(o) => !o && setUploadExam(null)} exam={uploadExam} />
+        <ExamEditModal open={!!editExam} onOpenChange={(o) => !o && setEditExam(null)} exam={editExam} />
+        <ExamDateModal
+          open={!!dateAction}
+          onOpenChange={(o) => !o && setDateAction(null)}
+          exam={dateAction?.exam ?? null}
+          mode={dateAction?.mode ?? "realizar"}
+        />
       </div>
     </PermissionGuard>
   );

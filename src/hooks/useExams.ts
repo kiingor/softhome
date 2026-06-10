@@ -83,11 +83,27 @@ export const useExams = () => {
   });
 
   const updateExamMutation = useMutation({
-    mutationFn: async ({ id, ...data }: { id: string; status?: string; scheduled_date?: string; completed_date?: string; notes?: string }) => {
+    mutationFn: async ({
+      id,
+      ...data
+    }: {
+      id: string;
+      status?: string;
+      exam_type?: string;
+      due_date?: string;
+      scheduled_date?: string | null;
+      completed_date?: string | null;
+      risk_group_at_time?: string | null;
+      notes?: string | null;
+    }) => {
       const { error } = await supabase.from("occupational_exams").update(data).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
+      // O trigger SQL generate_next_periodic_exam cria o próximo exame
+      // periódico automaticamente quando status vira 'realizado' (admissional
+      // ou periódico), usando a periodicidade do cargo. Por isso aqui só
+      // invalidamos — não criamos o próximo no frontend (evita duplicar).
       queryClient.invalidateQueries({ queryKey: ["occupational-exams"] });
       toast.success("Exame atualizado!");
     },
