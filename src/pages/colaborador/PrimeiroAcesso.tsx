@@ -32,6 +32,7 @@ interface OnboardingData {
 const ENTRY_TYPE_LABELS: Record<string, string> = {
   salario: "Salário", vale: "Vale", custo: "Custo", despesa: "Despesa",
   adicional: "Adicional", inss: "INSS", fgts: "FGTS", irpf: "IRPF",
+  carro_agregado: "Carro Agregado",
 };
 
 export default function PrimeiroAcesso() {
@@ -293,7 +294,7 @@ export default function PrimeiroAcesso() {
                   <h3 className="font-medium mb-2">Lançamentos</h3>
                   <div className="space-y-2">
                     {data.financialEntries.map((entry) => {
-                      const isCredit = entry.type === "salario_base" || entry.type === "hora_extra" || entry.type === "beneficio" || entry.type === "bonificacao" || entry.type === "atestado";
+                      const isCredit = entry.type === "salario_base" || entry.type === "hora_extra" || entry.type === "beneficio" || entry.type === "bonificacao" || entry.type === "carro_agregado" || entry.type === "atestado";
                       const sign = isCredit ? "+" : "-";
                       const colorClass = isCredit ? "text-green-600" : "text-red-600";
                       return (

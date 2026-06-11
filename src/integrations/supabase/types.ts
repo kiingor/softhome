@@ -4980,6 +4980,7 @@ export type Database = {
         | "desconto"
         | "gratificacao"
         | "ferias"
+        | "carro_agregado"
       payroll_period_status: "open" | "closed" | "exported"
       plan_tier: "essencial" | "crescer" | "profissional" | "empresa_plus"
     }
@@ -5258,6 +5259,7 @@ export const Constants = {
         "desconto",
         "gratificacao",
         "ferias",
+        "carro_agregado",
       ],
       payroll_period_status: ["open", "closed", "exported"],
       plan_tier: ["essencial", "crescer", "profissional", "empresa_plus"],

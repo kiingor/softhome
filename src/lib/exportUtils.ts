@@ -27,6 +27,7 @@ const typeLabels: Record<string, string> = {
   atestado: "Atestado",
   adiantamento: "Adiantamento",
   bonificacao: "Bonificação",
+  carro_agregado: "Carro Agregado",
   desconto: "Desconto",
   // Legacy (orphan na enum, ainda renderizam se houver linhas antigas)
   custo: "Custo",
@@ -37,7 +38,7 @@ const typeLabels: Record<string, string> = {
 };
 
 const deductionTypes = ["desconto", "falta", "adiantamento", "inss", "irpf", "despesa", "custo"];
-const earningsTypes = ["salario_base", "hora_extra", "beneficio", "bonificacao", "atestado"];
+const earningsTypes = ["salario_base", "hora_extra", "beneficio", "bonificacao", "carro_agregado", "atestado"];
 
 // Helper to load image as base64
 const loadImageAsBase64 = async (url: string): Promise<string | null> => {
