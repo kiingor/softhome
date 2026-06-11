@@ -420,5 +420,51 @@ export async function applyFinancials(
     }
   }
 
+  // ────────────────────────────────────────────────────────────────────────
+  // 5. Vale Transporte (VT) — coparticipação de 6% do salário base.
+  //    Se o colaborador tem algum adicional de categoria 'transport', desconta
+  //    6% do salário base (type='desconto'), idempotente por external_id
+  //    'vt-<collab>-<YYYY-MM>' (mesmo esquema do app, evita desconto dobrado).
+  //    Sem VT ou sem salário válido → apaga eventual desconto VT antigo
+  //    (espelha a limpeza do salário base).
+  //    É DESCONTO: não compõe base de INSS/IRPF/FGTS (CLAUDE.md princípio 2).
+  // ────────────────────────────────────────────────────────────────────────
+  const vtExternalId = `vt-${collaboratorId}-${year}-${String(month).padStart(2, "0")}`;
+  const hasTransportBenefit = benefitsMeta.some(
+    (b) => inferBenefitCategory(b.name) === "transport",
+  );
+  // 6% do salário base, arredondado a centavos (espelho de calcVtDiscount).
+  const vtValue = hasValidSalary
+    ? Math.round((currentSalary as number) * 0.06 * 100) / 100
+    : 0;
+
+  if (hasTransportBenefit && vtValue > 0) {
+    const { error: vtErr } = await sbAdmin.from("payroll_entries").upsert(
+      {
+        company_id: companyId,
+        collaborator_id: collaboratorId,
+        store_id: storeId ?? null,
+        external_id: vtExternalId,
+        type: "desconto",
+        description: "Vale Transporte (6%)",
+        value: vtValue,
+        month,
+        year,
+        is_fixed: true,
+        is_payable: true,
+      },
+      { onConflict: "collaborator_id,external_id", ignoreDuplicates: false },
+    );
+    if (vtErr) {
+      result.errors.push({ external_id: vtExternalId, tipo: "VT_DESCONTO", error: vtErr.message });
+    }
+  } else {
+    await sbAdmin
+      .from("payroll_entries")
+      .delete()
+      .eq("collaborator_id", collaboratorId)
+      .eq("external_id", vtExternalId);
+  }
+
   return result;
 }
