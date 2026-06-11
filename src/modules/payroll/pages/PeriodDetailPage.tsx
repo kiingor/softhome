@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -44,6 +45,8 @@ import {
   Calendar,
   ArrowsClockwise as RefreshCw,
   Trash,
+  MagnifyingGlass,
+  X as XIcon,
 } from "@phosphor-icons/react";
 import {
   HoverCard,
@@ -130,6 +133,11 @@ export default function PeriodDetailPage() {
   // Filtros de empresa (store) e setor (team). 'all' = sem filtro.
   const [storeFilter, setStoreFilter] = useState<string>("all");
   const [teamFilter, setTeamFilter] = useState<string>("all");
+  // Busca por nome do colaborador (igual aba Pagamentos). Normaliza acento
+  // (NFD + remove combining diacritics) pra "joao" achar "João".
+  const [searchTerm, setSearchTerm] = useState("");
+  const normalizeSearch = (s: string) =>
+    s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
   // Carrega lookups da company atual pra popular os dropdowns.
   const { data: stores = [] } = useQuery({
@@ -302,15 +310,32 @@ export default function PeriodDetailPage() {
     );
   }, [lancamentoEntries]);
 
+  // Aplica a busca por nome em cima dos grupos já montados. Mantém os totais
+  // do topo intactos (igual aba Pagamentos: a busca só filtra a lista exibida).
+  const isSearching = searchTerm.trim().length > 0;
+  const visibleGroups = useMemo(() => {
+    const q = normalizeSearch(searchTerm.trim());
+    if (!q) return groupedByCollab;
+    return groupedByCollab.filter((g) => normalizeSearch(g.name).includes(q));
+  }, [groupedByCollab, searchTerm]);
+
+  // Contagem de lançamentos dentro dos grupos visíveis (pro cabeçalho).
+  const visibleCollabIds = new Set(visibleGroups.map((g) => g.id));
+  const visibleLancCount = isSearching
+    ? lancamentoEntries.filter((e) =>
+        visibleCollabIds.has(e.collaborator_id ?? "_orphan"),
+      ).length
+    : lancamentoEntries.length;
+
   const allExpanded =
-    groupedByCollab.length > 0 &&
-    groupedByCollab.every((g) => expandedCollabs.has(g.id));
+    visibleGroups.length > 0 &&
+    visibleGroups.every((g) => expandedCollabs.has(g.id));
 
   const toggleAll = () => {
     if (allExpanded) {
       setExpandedCollabs(new Set());
     } else {
-      setExpandedCollabs(new Set(groupedByCollab.map((g) => g.id)));
+      setExpandedCollabs(new Set(visibleGroups.map((g) => g.id)));
     }
   };
 
@@ -516,13 +541,40 @@ export default function PeriodDetailPage() {
             </SelectContent>
           </Select>
         </div>
-        {isFiltering && (
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-muted-foreground font-medium">
+            Colaborador
+          </label>
+          <div className="relative">
+            <MagnifyingGlass className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              type="text"
+              placeholder="Buscar colaborador..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-[220px] pl-8 pr-8 h-9"
+            />
+            {isSearching && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition focus:outline-none focus:ring-2 focus:ring-primary/40 rounded"
+                aria-label="Limpar busca"
+                title="Limpar busca"
+              >
+                <XIcon className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+        {(isFiltering || isSearching) && (
           <Button
             variant="ghost"
             size="sm"
             onClick={() => {
               setStoreFilter("all");
               setTeamFilter("all");
+              setSearchTerm("");
             }}
             className="h-9 text-xs"
           >
@@ -657,13 +709,18 @@ export default function PeriodDetailPage() {
             <>
               <div className="flex items-center justify-between mb-2 px-1">
                 <p className="text-xs text-muted-foreground">
-                  {groupedByCollab.length} colaborador
-                  {groupedByCollab.length === 1 ? "" : "es"} · {lancamentoEntries.length}{" "}
-                  lançamento{lancamentoEntries.length === 1 ? "" : "s"}
-                  {isFiltering && (
+                  {visibleGroups.length} colaborador
+                  {visibleGroups.length === 1 ? "" : "es"} · {visibleLancCount}{" "}
+                  lançamento{visibleLancCount === 1 ? "" : "s"}
+                  {isSearching ? (
                     <span className="ml-1">
-                      (de {entries.length} no total)
+                      (de {groupedByCollab.length} colaborador
+                      {groupedByCollab.length === 1 ? "" : "es"})
                     </span>
+                  ) : (
+                    isFiltering && (
+                      <span className="ml-1">(de {entries.length} no total)</span>
+                    )
                   )}
                 </p>
                 <Button
@@ -675,6 +732,20 @@ export default function PeriodDetailPage() {
                   {allExpanded ? "Recolher todos" : "Expandir todos"}
                 </Button>
               </div>
+              {visibleGroups.length === 0 ? (
+                <div className="text-center py-10 space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    Nenhum colaborador com esse nome.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSearchTerm("")}
+                  >
+                    Limpar busca
+                  </Button>
+                </div>
+              ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -686,7 +757,7 @@ export default function PeriodDetailPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {groupedByCollab.map((g) => {
+                  {visibleGroups.map((g) => {
                     const isOpen = expandedCollabs.has(g.id);
                     return (
                       <Fragment key={g.id}>
@@ -875,6 +946,7 @@ export default function PeriodDetailPage() {
                   })}
                 </TableBody>
               </Table>
+              )}
             </>
           )}
         </CardContent>
