@@ -1069,8 +1069,13 @@ const CollaboratorModal = ({
         sendWhatsAppNotification(currentCompany!.id, newCollabId, "collaborator_registered");
       } else {
         // Edição: chama collaborator-update por SEÇÃO. A edge function filtra
-        // os campos relevantes de cada seção (mapLocalForSection) e faz PUSH
-        // pra rota correspondente na agenda (POST /v1/colaboradores/{id}/{secao}).
+        // os campos relevantes de cada seção (mapLocalForSection) e grava no
+        // banco local.
+        //
+        // syncToRemote:false — NÃO empurra pra agenda (api.softcom.cloud
+        // responde 404 em escrita de colaborador, igual aconteceu com cargo —
+        // ver fix e3b7402). Sem isso, qualquer save (mesmo sem mudança)
+        // quebrava com 404. Reativar quando a escrita na agenda voltar.
         // Sequencial pra capturar erros por seção. Status é updated separado
         // via handleDeactivate/Reactivate, então não enviamos aqui.
         const payload: Record<string, unknown> = { ...saveData };
@@ -1081,12 +1086,14 @@ const CollaboratorModal = ({
           collaboratorId: collaboratorId!,
           section: "identificacao",
           data: payload,
+          syncToRemote: false,
         });
         // Funcionais (regime, salário, cargo, datas, dados de CTPS/banco)
         await updateCollaborator.mutateAsync({
           collaboratorId: collaboratorId!,
           section: "funcionais",
           data: payload,
+          syncToRemote: false,
         });
         // Comissões (se houver algum campo de comissão preenchido)
         if (
@@ -1100,6 +1107,7 @@ const CollaboratorModal = ({
             collaboratorId: collaboratorId!,
             section: "comissoes",
             data: payload,
+            syncToRemote: false,
           });
         }
         // Flags (is_temp, is_manager_*, is_godfather)
@@ -1107,6 +1115,7 @@ const CollaboratorModal = ({
           collaboratorId: collaboratorId!,
           section: "flags",
           data: payload,
+          syncToRemote: false,
         });
 
         // user_id é local-only (sem write-back) — patch direto se mudou
@@ -1118,8 +1127,8 @@ const CollaboratorModal = ({
         }
 
         const message = userId
-          ? "Colaborador atualizado ✓ (sincronizado com a agenda + acesso ao portal criado)"
-          : "Colaborador atualizado ✓ (sincronizado com a agenda)";
+          ? "Colaborador atualizado ✓ (acesso ao portal criado)"
+          : "Colaborador atualizado ✓";
         toast.success(message);
       }
 
