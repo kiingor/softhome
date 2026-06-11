@@ -57,6 +57,7 @@
    hora_extra: "020",
    beneficio: "030",
    bonificacao: "040",
+   carro_agregado: "045",
    atestado: "050",
    adiantamento: "100",
    desconto: "200",
@@ -77,6 +78,7 @@
    atestado: "Atestado",
    adiantamento: "Adiantamento",
    bonificacao: "Bonificação",
+   carro_agregado: "Carro Agregado",
    desconto: "Desconto",
    inss: "INSS",
    irpf: "IRPF",
@@ -86,7 +88,7 @@
  };
 
  // Types that are earnings (proventos)
-  const earningsTypes = ["salario_base", "hora_extra", "beneficio", "bonificacao", "atestado"];
+  const earningsTypes = ["salario_base", "hora_extra", "beneficio", "bonificacao", "carro_agregado", "atestado"];
 
   // Types that are deductions (descontos)
   const deductionTypes = ["desconto", "falta", "adiantamento", "inss", "irpf", "despesa", "custo"];
