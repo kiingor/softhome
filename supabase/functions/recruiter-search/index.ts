@@ -22,6 +22,7 @@ import {
   callClaude,
   extractTextFromResponse,
 } from "../_shared/claude.ts";
+import { embedText } from "../_shared/embeddings.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -30,8 +31,6 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const EMBED_MODEL = "text-embedding-3-small";
-const EMBED_DIMENSIONS = 1536;
 const MATCH_TOP_K = 10;
 const MATCH_THRESHOLD = 0.3; // cosine similarity mínima
 const RECRUITER_AGENT_KIND = "recruiter";
@@ -222,31 +221,10 @@ serve(async (req) => {
     sessionId = newSession.id;
   }
 
-  // 2. Embed da query
-  const openaiKey = Deno.env.get("OPENAI_API_KEY");
-  if (!openaiKey) {
-    return jsonResponse({ error: "OPENAI_API_KEY missing" }, 500);
-  }
-
+  // 2. Embed da query (iarouter — gemini-embedding-001 @ 1536)
   let queryEmbedding: number[];
   try {
-    const embedResp = await fetch("https://api.openai.com/v1/embeddings", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${openaiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        input: query,
-        model: EMBED_MODEL,
-        dimensions: EMBED_DIMENSIONS,
-      }),
-    });
-    if (!embedResp.ok) {
-      throw new Error(`OpenAI ${embedResp.status}: ${await embedResp.text()}`);
-    }
-    const j = await embedResp.json();
-    queryEmbedding = j.data[0].embedding;
+    queryEmbedding = await embedText(query);
   } catch (err) {
     return jsonResponse(
       { error: "Embed query failed", details: (err as Error).message },
