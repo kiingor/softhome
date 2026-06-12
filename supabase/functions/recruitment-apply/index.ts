@@ -26,6 +26,7 @@ import {
   callClaude,
   extractTextFromResponse,
 } from "../_shared/claude.ts";
+import { embedText, EMBED_MODEL_LABEL } from "../_shared/embeddings.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -35,8 +36,6 @@ const CORS_HEADERS = {
 };
 
 const MAX_CV_BYTES = 5 * 1024 * 1024; // 5MB
-const EMBED_MODEL = "text-embedding-3-small";
-const EMBED_DIMENSIONS = 1536;
 
 const CV_EXTRACTION_PROMPT =
   `Você é um analista de RH especializado em extrair informações estruturadas de currículos brasileiros.
@@ -279,7 +278,7 @@ serve(async (req) => {
   let indexed = false;
   try {
     const summary = await processCv(cvBytes, body.name);
-    const embedding = await embedSummary(summary);
+    const embedding = await embedText(summary);
     await sbAdmin
       .from("candidate_embeddings")
       .upsert(
@@ -288,7 +287,7 @@ serve(async (req) => {
           company_id: job.company_id,
           content: summary,
           embedding: JSON.stringify(embedding),
-          model: EMBED_MODEL,
+          model: EMBED_MODEL_LABEL,
           token_count: summary.length, // estimado
         },
         { onConflict: "candidate_id" },
@@ -355,28 +354,6 @@ async function processCv(
     throw new Error("Resumo Claude vazio");
   }
   return summary;
-}
-
-async function embedSummary(text: string): Promise<number[]> {
-  const openaiKey = Deno.env.get("OPENAI_API_KEY");
-  if (!openaiKey) throw new Error("OPENAI_API_KEY missing");
-  const resp = await fetch("https://api.openai.com/v1/embeddings", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${openaiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      input: text,
-      model: EMBED_MODEL,
-      dimensions: EMBED_DIMENSIONS,
-    }),
-  });
-  if (!resp.ok) {
-    throw new Error(`OpenAI ${resp.status}: ${await resp.text()}`);
-  }
-  const j = await resp.json();
-  return j.data[0].embedding;
 }
 
 function jsonResponse(payload: unknown, status = 200): Response {
