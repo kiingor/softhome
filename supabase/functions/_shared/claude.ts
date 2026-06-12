@@ -7,9 +7,9 @@
  *  - Reads the API key from `Deno.env.get("ANTHROPIC_API_KEY")` (not from
  *    `import.meta.env.VITE_*`).
  *
- * Otherwise the surface and semantics match: same defaults (Sonnet 4.6,
- * 4096 max tokens), same automatic prompt caching on the last system block
- * + last user message, same `extractTextFromResponse` helper.
+ * Otherwise the surface and semantics match: same defaults (`dna-model` via
+ * iarouter, 4096 max tokens), same automatic prompt caching on the last system
+ * block + last user message, same `extractTextFromResponse` helper.
  *
  * Used by:
  *  - admission-document-validate
@@ -23,8 +23,10 @@
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.91.1";
 
 /** Default model used by every SoftHouse agent unless explicitly overridden.
- * Prefixo `cc/` é exigido pelo omnirouter (ANTHROPIC_BASE_URL custom da Softcom). */
-export const DEFAULT_CLAUDE_MODEL = "cc/claude-sonnet-4-6";
+ * `dna-model` é o alias/combo do iarouter (ANTHROPIC_BASE_URL custom da Softcom):
+ * fala o protocolo Anthropic (/v1/messages) mas roteia o request pro backend
+ * que ele escolher (Gemini, GPT, etc.). Sem prefixo. */
+export const DEFAULT_CLAUDE_MODEL = "dna-model";
 
 /** Default max output tokens. Bump per-call for long extractions / reports. */
 export const DEFAULT_MAX_TOKENS = 4096;
@@ -67,9 +69,11 @@ export function getClaudeClient(): Anthropic {
 }
 
 /**
- * Cliente Anthropic direto (api.anthropic.com), sem passar pelo omnirouter.
+ * Cliente Anthropic "direto". Antes batia em api.anthropic.com pra bypassar o
+ * omnirouter; com a migração pro iarouter (que já é o gateway único) ele aponta
+ * pro MESMO router — `dna-model` não existe em api.anthropic.com, então o
+ * "direto" agora só significa um cliente/sessão separado, mesma baseURL.
  * Lê `ANTHROPIC_DIRECT_API_KEY` (ou cai pra `ANTHROPIC_API_KEY` se não houver).
- * Útil pra funções que precisam de baixa latência ou quando o omnirouter cai.
  */
 export function getDirectClaudeClient(): Anthropic {
   if (_directClient) return _directClient;
@@ -82,12 +86,10 @@ export function getDirectClaudeClient(): Anthropic {
     );
   }
 
-  // Força baseURL explícita — o SDK auto-lê ANTHROPIC_BASE_URL do env senão
-  // e cairia no omnirouter, anulando o "direct".
-  _directClient = new Anthropic({
-    apiKey,
-    baseURL: "https://api.anthropic.com",
-  });
+  // Mesmo router do cliente padrão (iarouter). Fallback pra api.anthropic.com
+  // só se ANTHROPIC_BASE_URL não estiver setada.
+  const baseURL = Deno.env.get("ANTHROPIC_BASE_URL") || "https://api.anthropic.com";
+  _directClient = new Anthropic({ apiKey, baseURL });
   return _directClient;
 }
 
@@ -136,8 +138,9 @@ export async function callClaude(
   } = options;
 
   const client = direct ? getDirectClaudeClient() : getClaudeClient();
-  // Modo direto: api.anthropic.com não aceita prefixo `cc/` (do omnirouter).
-  const finalModel = direct ? model.replace(/^cc\//, "") : model;
+  // Compat: remove prefixo legado `cc/` caso algum chamador passe model antigo.
+  // Com `dna-model` (default atual) isso é no-op.
+  const finalModel = model.replace(/^cc\//, "");
 
   const params: Anthropic.MessageCreateParamsNonStreaming = {
     model: finalModel,
