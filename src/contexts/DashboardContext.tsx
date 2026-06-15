@@ -107,6 +107,11 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({ children }
 
   const loadUserData = async (userId: string) => {
     try {
+      // Rastreia se já resolvemos uma company atual nesta carga. Não dá pra
+      // confiar no state `currentCompany` aqui (closure fica preso no valor
+      // inicial null), então usamos uma flag local.
+      let companyResolved = false;
+
       // Load profile
       const { data: profileData } = await supabase
         .from("profiles")
@@ -137,6 +142,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({ children }
         if (companyData && companyData.length > 0) {
           setCompanies(companyData);
           setCurrentCompany(companyData[0]);
+          companyResolved = true;
 
           // Load stores for the company
           const { data: storesData } = await supabase
@@ -171,8 +177,9 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({ children }
           return [...prev, ...newCompanies];
         });
 
-        if (!currentCompany) {
+        if (!companyResolved) {
           setCurrentCompany(ownedCompanies[0]);
+          companyResolved = true;
         }
 
         // If owner, implicitly has admin role even if not in user_roles table yet
@@ -203,6 +210,59 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({ children }
           });
           // Só sobrescreve currentCompany se ainda não tinha um setado
           setCurrentCompany(prev => prev ?? allCompanies[0]);
+          companyResolved = true;
+        }
+      }
+
+      // Fallback pra papéis que NÃO são owner nem admin_gc (gestor_gc,
+      // contador, colaborador) e que não têm profile.company_id setado.
+      // Sem isso, currentCompany fica null e TODOS os hooks de permissão
+      // (useSidebarPermissions, usePermissions, useMultiplePermissions) e
+      // queries de dados ficam desabilitados (enabled: !!currentCompany?.id)
+      // — o usuário loga e não vê nada, mesmo tendo permissões salvas.
+      //
+      // O acesso desses usuários nasce de company_users (vínculo) e/ou
+      // user_permissions, ambos legíveis por RLS (own rows). Derivamos a
+      // company atual dessas fontes. Tentamos ler o nome em companies (a
+      // policy de membro/owner libera); se RLS bloquear (órfão sem profile),
+      // ainda assim setamos a company com o id pra destravar a navegação.
+      if (!companyResolved) {
+        const { data: membership } = await supabase
+          .from("company_users")
+          .select("company_id")
+          .eq("user_id", userId)
+          .eq("is_active", true);
+
+        let candidateIds = (membership ?? [])
+          .map((m) => m.company_id)
+          .filter(Boolean) as string[];
+
+        if (candidateIds.length === 0) {
+          const { data: perms } = await supabase
+            .from("user_permissions")
+            .select("company_id")
+            .eq("user_id", userId);
+          candidateIds = [...new Set((perms ?? []).map((p) => p.company_id).filter(Boolean))] as string[];
+        }
+
+        if (candidateIds.length > 0) {
+          const { data: fallbackCompanies } = await supabase
+            .from("companies")
+            .select("*")
+            .in("id", candidateIds);
+
+          // Usa as companies legíveis; se nenhuma vier (RLS), constrói uma
+          // mínima a partir do id derivado pra não travar a navegação.
+          const resolved = (fallbackCompanies && fallbackCompanies.length > 0)
+            ? fallbackCompanies
+            : candidateIds.map((id) => ({ id, company_name: "" } as Company));
+
+          setCompanies((prev) => {
+            const existingIds = new Set(prev.map((c) => c.id));
+            return [...prev, ...resolved.filter((c) => !existingIds.has(c.id))];
+          });
+          setCurrentCompany((prev) => prev ?? resolved[0]);
+          companyResolved = true;
         }
       }
     } catch (error) {
