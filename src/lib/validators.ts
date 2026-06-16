@@ -30,8 +30,11 @@ export const validateCPF = (cpf: string): boolean => {
   return true;
 };
 
-// Format CPF for display (XXX.XXX.XXX-XX)
-export const formatCPF = (cpf: string): string => {
+// Format CPF for display (XXX.XXX.XXX-XX).
+// Null-safe: CPF é nullable no banco (colaborador/candidato sem CPF) e vários
+// call sites chamam direto no render — sem guard, quebrava a tela toda.
+export const formatCPF = (cpf: string | null | undefined): string => {
+  if (!cpf) return "";
   const cleanCPF = cpf.replace(/\D/g, "");
   if (cleanCPF.length !== 11) return cpf;
   return cleanCPF.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
@@ -51,8 +54,9 @@ export const cleanCPF = (cpf: string): string => {
   return cpf.replace(/\D/g, "");
 };
 
-// Format phone number
-export const formatPhone = (phone: string): string => {
+// Format phone number. Null-safe pelo mesmo motivo do formatCPF.
+export const formatPhone = (phone: string | null | undefined): string => {
+  if (!phone) return "";
   const cleanPhone = phone.replace(/\D/g, "");
   if (cleanPhone.length === 11) {
     return cleanPhone.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
