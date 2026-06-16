@@ -959,7 +959,7 @@ const ColaboradoresPage = () => {
                           )}
                         </TableCell>
                         <TableCell className="font-mono text-xs text-muted-foreground tabular-nums">
-                          {formatCPF(collaborator.cpf)}
+                          {collaborator.cpf ? formatCPF(collaborator.cpf) : "—"}
                         </TableCell>
                         <TableCell className="text-sm max-w-[220px]">
                           <span className="truncate block" title={getPositionName(collaborator)}>
