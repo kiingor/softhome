@@ -2,8 +2,8 @@
 //
 // Processa o PDF do CV de um candidato:
 //   1. Baixa o PDF (do Storage bucket 'candidate-cvs' OU de URL pública externa)
-//   2. Envia pra Claude (Sonnet 4.6) que extrai resumo estruturado em pt-BR
-//   3. Embed do resumo via OpenAI text-embedding-3-small
+//   2. Envia pra IA (iarouter/dna-model) que extrai resumo estruturado em pt-BR
+//   3. Embed do resumo via iarouter (gemini-embedding-001 @ 1536)
 //   4. Upsert em candidate_embeddings + atualiza candidates (cv_url se filePath,
 //      cv_summary, cv_processed_at)
 //
@@ -16,8 +16,8 @@
 // interna entre Edge Functions, ex: api-candidates).
 //
 // Deploy: npx supabase functions deploy cv-process
-// Secrets necessários: ANTHROPIC_API_KEY, ANTHROPIC_BASE_URL (opcional),
-//                      OPENAI_API_KEY, SUPABASE_SERVICE_ROLE_KEY (auto)
+// Secrets necessários: ANTHROPIC_API_KEY, ANTHROPIC_BASE_URL (iarouter),
+//                      SUPABASE_SERVICE_ROLE_KEY (auto)
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.0";
@@ -25,6 +25,7 @@ import {
   callClaude,
   extractTextFromResponse,
 } from "../_shared/claude.ts";
+import { embedText, EMBED_MODEL_LABEL } from "../_shared/embeddings.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -32,9 +33,6 @@ const CORS_HEADERS = {
     "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
-
-const EMBED_MODEL = "text-embedding-3-small";
-const EMBED_DIMENSIONS = 1536;
 
 const CV_EXTRACTION_PROMPT = `Você é um analista de RH especializado em extrair informações estruturadas de currículos brasileiros.
 
@@ -320,49 +318,14 @@ serve(async (req) => {
     );
   }
 
-  // 6. OpenAI embedding
-  const openaiKey = Deno.env.get("OPENAI_API_KEY");
-  if (!openaiKey) {
-    return jsonResponse(
-      { error: "OPENAI_API_KEY não configurada" },
-      500,
-    );
-  }
-
+  // 6. Embedding (iarouter — gemini-embedding-001 @ 1536)
   let embedding: number[];
-  let tokenCount: number;
   try {
-    const embedResp = await fetch("https://api.openai.com/v1/embeddings", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${openaiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        input: summary,
-        model: EMBED_MODEL,
-        dimensions: EMBED_DIMENSIONS,
-      }),
-    });
-
-    if (!embedResp.ok) {
-      const errText = await embedResp.text();
-      throw new Error(`OpenAI ${embedResp.status}: ${errText}`);
-    }
-
-    const embedJson = await embedResp.json();
-    embedding = embedJson.data?.[0]?.embedding;
-    tokenCount = embedJson.usage?.total_tokens ?? 0;
-
-    if (!embedding || embedding.length !== EMBED_DIMENSIONS) {
-      throw new Error(
-        `Embedding com tamanho inesperado: ${embedding?.length ?? "null"}`,
-      );
-    }
+    embedding = await embedText(summary);
   } catch (err) {
     return jsonResponse(
       {
-        error: "Falha no embedding OpenAI",
+        error: "Falha no embedding",
         details: (err as Error).message,
       },
       500,
@@ -378,8 +341,8 @@ serve(async (req) => {
         company_id: candidate.company_id,
         content: summary,
         embedding: JSON.stringify(embedding),
-        model: EMBED_MODEL,
-        token_count: tokenCount,
+        model: EMBED_MODEL_LABEL,
+        token_count: summary.length,
       },
       { onConflict: "candidate_id" },
     );
