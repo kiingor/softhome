@@ -262,11 +262,13 @@ export async function applyCollaboratorDetails(
     };
   }
 
-  // Férias — start/end NOT NULL; usamos gozo > aquisitivo; senão pula
+  // Férias — start_date/end_date = Período de Competência (aquisitivo); usamos
+  // periodoIn/Fn e, se faltar (start/end são NOT NULL), caímos no gozo. O
+  // Período de Gozo e a Data Limite vão pras colunas próprias.
   const feriasRows = feRaw
     .map((f) => {
-      const start = parseDate(f.periodoInGozo) ?? parseDate(f.periodoIn);
-      const end = parseDate(f.periodoFnGozo) ?? parseDate(f.periodoFn);
+      const start = parseDate(f.periodoIn) ?? parseDate(f.periodoInGozo);
+      const end = parseDate(f.periodoFn) ?? parseDate(f.periodoFnGozo);
       if (!start || !end) return null;
       return {
         company_id: companyId,
@@ -274,6 +276,9 @@ export async function applyCollaboratorDetails(
         external_id: String(f.id),
         start_date: start,
         end_date: end,
+        gozo_start_date: parseDate(f.periodoInGozo),
+        gozo_end_date: parseDate(f.periodoFnGozo),
+        data_limite: parseDate(f.dataLimite),
         status: f.pago === "S" ? "paid" : "pending",
       };
     })
