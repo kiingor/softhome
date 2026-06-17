@@ -2238,9 +2238,6 @@ const CollaboratorModal = ({
                         <Wallet className="w-5 h-5 text-primary" />
                         Financeiro
                       </h3>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Competência {currentMonth.toString().padStart(2, "0")}/{currentYear}
-                      </p>
                     </div>
                     <div className="flex items-stretch gap-4">
                       <div className="flex flex-col">
@@ -2968,7 +2965,6 @@ const CollaboratorModal = ({
                   <SelectItem value="beneficio">Benefício</SelectItem>
                   <SelectItem value="bonificacao">Bonificação</SelectItem>
                   <SelectItem value="gratificacao">Gratificação</SelectItem>
-                  <SelectItem value="carro_agregado">Carro Agregado</SelectItem>
                   <SelectItem value="atestado">Atestado</SelectItem>
                   <SelectItem value="adiantamento">Adiantamento</SelectItem>
                   <SelectItem value="desconto">Desconto</SelectItem>
