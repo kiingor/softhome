@@ -13,8 +13,16 @@ export interface VacationPeriod {
   id: string;
   collaborator_id: string;
   company_id: string;
+  /** Período de Competência (aquisitivo) — início. Agenda: periodoIn. */
   start_date: string;
+  /** Período de Competência (aquisitivo) — fim. Agenda: periodoFn. */
   end_date: string;
+  /** Período de Gozo — início. Agenda: periodoInGozo. */
+  gozo_start_date: string | null;
+  /** Período de Gozo — fim. Agenda: periodoFnGozo. */
+  gozo_end_date: string | null;
+  /** Data Limite / vencimento concessivo. Agenda: dataLimite. */
+  data_limite: string | null;
   days_entitled: number;
   days_taken: number;
   days_sold: number;

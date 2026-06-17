@@ -109,10 +109,13 @@ const FeriasPage = () => {
           .reduce((sum, p) => sum + p.days_remaining, 0);
         const activeRequest = requests.find(r => r.collaborator_id === collab.id && (r.status === "approved" || r.status === "in_progress"));
 
-        // Calculate concessivo deadline (12 months after end of acquisitive period)
+        // Vencimento concessivo: usa a Data Limite oficial da agenda quando
+        // disponível; senão aproxima (12 meses após o fim da competência).
         let concessiveDeadline: Date | null = null;
         if (activePeriod) {
-          concessiveDeadline = addDays(parseISO(activePeriod.end_date), 365);
+          concessiveDeadline = activePeriod.data_limite
+            ? parseISO(activePeriod.data_limite)
+            : addDays(parseISO(activePeriod.end_date), 365);
         }
 
         return {
@@ -531,7 +534,9 @@ const FeriasPage = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Colaborador</TableHead>
-                      <TableHead>Período Aquisitivo</TableHead>
+                      <TableHead>Período de Competência</TableHead>
+                      <TableHead>Período de Gozo</TableHead>
+                      <TableHead>Data Limite</TableHead>
                       <TableHead className="text-center">Direito</TableHead>
                       <TableHead className="text-center">Gozados</TableHead>
                       <TableHead className="text-center">Vendidos</TableHead>
@@ -545,6 +550,14 @@ const FeriasPage = () => {
                         <TableCell className="font-medium">{p.collaborator?.name || "—"}</TableCell>
                         <TableCell>
                           {format(parseISO(p.start_date), "dd/MM/yyyy")} - {format(parseISO(p.end_date), "dd/MM/yyyy")}
+                        </TableCell>
+                        <TableCell>
+                          {p.gozo_start_date && p.gozo_end_date
+                            ? `${format(parseISO(p.gozo_start_date), "dd/MM/yyyy")} - ${format(parseISO(p.gozo_end_date), "dd/MM/yyyy")}`
+                            : "—"}
+                        </TableCell>
+                        <TableCell>
+                          {p.data_limite ? format(parseISO(p.data_limite), "dd/MM/yyyy") : "—"}
                         </TableCell>
                         <TableCell className="text-center">{p.days_entitled}</TableCell>
                         <TableCell className="text-center">{p.days_taken}</TableCell>
