@@ -26,6 +26,13 @@ import { calcVacation, type VacationCalcResult } from "@/lib/payroll/vacationCal
 import { getCollabsToSkipNextMonth } from "@/lib/payroll/vacationSkipRules";
 import { postVacationToPayroll } from "@/hooks/useVacations";
 import { fetchAllRows } from "@/lib/fetchAllRows";
+import {
+  calcVtDiscount,
+  vtDiscountExternalId,
+  isTransportCategory,
+  VT_BENEFIT_CATEGORY,
+  VT_DISCOUNT_DESCRIPTION,
+} from "@/lib/payroll/vtDiscount";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Salário do colaborador pra folha.
@@ -43,6 +50,70 @@ function resolvePayrollSalary(c: {
   const personal = Number(c.current_salary ?? 0);
   if (personal > 0) return personal;
   return Number((c.position as { salary?: number } | null)?.salary ?? 0);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Desconto Vale Transporte (VT): colaborador com benefício de categoria
+// 'transport' desconta 6% do salário base. Idempotente por external_id
+// 'vt-<collab>-<YYYY-MM>' (preservado no delete seletivo de período; apagado e
+// recriado no recalc). Reaproveitado por openPeriod e repopulatePeriod.
+// Ver [src/lib/payroll/vtDiscount.ts].
+// ─────────────────────────────────────────────────────────────────────────────
+async function insertVtDiscounts(params: {
+  companyId: string;
+  month: number;
+  year: number;
+  transportCollabIds: Set<string>;
+  salaryByCollab: Map<string, number>;
+  storeByCollab: Map<string, string | null>;
+  skip: Set<string>;
+}): Promise<number> {
+  const { companyId, month, year, transportCollabIds, salaryByCollab, storeByCollab, skip } =
+    params;
+  if (transportCollabIds.size === 0) return 0;
+
+  // Anti-dup: pega os descontos VT já lançados neste mês.
+  const externalIds = Array.from(transportCollabIds).map((id) =>
+    vtDiscountExternalId(id, year, month),
+  );
+  const { data: existing } = await supabase
+    .from("payroll_entries")
+    .select("external_id")
+    .eq("company_id", companyId)
+    .eq("month", month)
+    .eq("year", year)
+    .in("external_id", externalIds);
+  const existingSet = new Set(
+    (existing ?? []).map((e) => (e as { external_id: string }).external_id),
+  );
+
+  const rows: PayrollEntry[] = [];
+  for (const collabId of transportCollabIds) {
+    if (skip.has(collabId)) continue; // recibo de férias cobre o mês → sem VT
+    const value = calcVtDiscount(salaryByCollab.get(collabId) ?? 0);
+    if (value <= 0) continue; // sem salário válido (respeita CHECK value > 0)
+    const externalId = vtDiscountExternalId(collabId, year, month);
+    if (existingSet.has(externalId)) continue;
+    rows.push({
+      company_id: companyId,
+      collaborator_id: collabId,
+      store_id: storeByCollab.get(collabId) ?? null,
+      external_id: externalId,
+      type: "desconto" as const,
+      description: VT_DISCOUNT_DESCRIPTION,
+      value,
+      is_fixed: true,
+      is_payable: true,
+      month,
+      year,
+    } as PayrollEntry);
+  }
+
+  if (rows.length > 0) {
+    const { error } = await supabase.from("payroll_entries").insert(rows);
+    if (error) throw new Error("Falha ao lançar desconto VT: " + error.message);
+  }
+  return rows.length;
 }
 
 const BASE_PAYROLL_TYPES = ["salario_base", "inss", "irpf", "fgts"] as const;
@@ -546,6 +617,39 @@ export function usePayrollPeriods() {
             );
           }
         }
+
+        // 3c. Desconto Vale Transporte (6% do salário base) pra quem tem
+        // benefício de categoria 'transport'.
+        const vtTransportIds = new Set(
+          (assignments ?? [])
+            .filter((a) =>
+              isTransportCategory(
+                (a.benefit as { category: string | null } | null)?.category,
+              ),
+            )
+            .map((a) => a.collaborator_id),
+        );
+        await insertVtDiscounts({
+          companyId,
+          month,
+          year,
+          transportCollabIds: vtTransportIds,
+          salaryByCollab: new Map(
+            (collaborators ?? []).map((c) => [
+              c.id,
+              resolvePayrollSalary(
+                c as {
+                  current_salary?: number | null;
+                  position?: { salary?: number } | null;
+                },
+              ),
+            ]),
+          ),
+          storeByCollab: new Map(
+            (collaborators ?? []).map((c) => [c.id, c.store_id]),
+          ),
+          skip: skipSalaryNext,
+        });
       }
 
       const { month: openMonth, year: openYear } = periodToMonthYear(
@@ -1131,14 +1235,48 @@ export function usePayrollPeriods() {
         }
       }
 
+      // Desconto VT (6% do salário base) pros que ainda não têm — só adiciona
+      // o que falta (insertVtDiscounts deduplica por external_id).
+      const vtTransportIds = new Set(
+        (assignments ?? [])
+          .filter((a) =>
+            isTransportCategory(
+              (a.benefit as { category: string | null } | null)?.category,
+            ),
+          )
+          .map((a) => a.collaborator_id),
+      );
+      const vtAdded = await insertVtDiscounts({
+        companyId,
+        month,
+        year,
+        transportCollabIds: vtTransportIds,
+        salaryByCollab: new Map(
+          (collaborators ?? []).map((c) => [
+            c.id,
+            resolvePayrollSalary(
+              c as {
+                current_salary?: number | null;
+                position?: { salary?: number } | null;
+              },
+            ),
+          ]),
+        ),
+        storeByCollab: new Map(
+          (collaborators ?? []).map((c) => [c.id, c.store_id]),
+        ),
+        skip: skipSalaryNext,
+      });
+
       return {
         salariesAdded: newSalaryEntries.length,
         benefitsAdded: newBenefitEntries.length,
+        vtAdded,
       };
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["payroll-entries"] });
-      const total = result.salariesAdded + result.benefitsAdded;
+      const total = result.salariesAdded + result.benefitsAdded + result.vtAdded;
       if (total === 0) {
         toast.success("Tudo já populado — nenhum lançamento novo necessário.");
       } else {
@@ -1186,6 +1324,19 @@ export function usePayrollPeriods() {
 
       if (deleteTaxesError) throw deleteTaxesError;
 
+      // 1b. Apaga descontos VT do período (derivados do salário, recriados
+      //     abaixo). Escopo estrito pelo prefixo 'vt-' pra NÃO tocar descontos
+      //     manuais (plano de saúde, adiantamento, etc.).
+      const { error: deleteVtError } = await supabase
+        .from("payroll_entries")
+        .delete()
+        .eq("company_id", companyId)
+        .eq("month", month)
+        .eq("year", year)
+        .eq("type", "desconto")
+        .like("external_id", "vt-%");
+      if (deleteVtError) throw deleteVtError;
+
       // 2. Pega salários ativos com dependentes
       const { data: collaborators, error: collaboratorsError } = await supabase
         .from("collaborators")
@@ -1196,6 +1347,20 @@ export function usePayrollPeriods() {
         .eq("status", "ativo");
 
       if (collaboratorsError) throw collaboratorsError;
+
+      // Quem tem benefício de Vale Transporte (categoria 'transport') → recria
+      // o desconto de 6% do salário base junto com os encargos.
+      const { data: vtAssignments } = await supabase
+        .from("benefits_assignments")
+        .select(
+          "collaborator_id, benefit:benefits!inner(category), collaborator:collaborators!inner(company_id, status)",
+        )
+        .eq("benefit.category", VT_BENEFIT_CATEGORY)
+        .eq("collaborator.company_id", companyId)
+        .eq("collaborator.status", "ativo");
+      const vtTransportIds = new Set(
+        (vtAssignments ?? []).map((a) => a.collaborator_id),
+      );
 
       // 3. Reinjeta salario_base faltante + encargos usando calcAllTaxes
       const newBaseEntries: PayrollEntry[] = [];
@@ -1251,6 +1416,18 @@ export function usePayrollPeriods() {
                 : "IRPF (tabela 2026)",
             value: taxes.irpf,
           } as PayrollEntry);
+        }
+        if (vtTransportIds.has(c.id)) {
+          const vt = calcVtDiscount(salary);
+          if (vt > 0) {
+            newBaseEntries.push({
+              ...base,
+              external_id: vtDiscountExternalId(c.id, year, month),
+              type: "desconto" as const,
+              description: VT_DISCOUNT_DESCRIPTION,
+              value: vt,
+            } as PayrollEntry);
+          }
         }
       }
 
