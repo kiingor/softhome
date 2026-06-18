@@ -886,6 +886,60 @@ export type Database = {
           },
         ]
       }
+      collaborator_fixed_entries: {
+        Row: {
+          collaborator_id: string
+          company_id: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_active: boolean
+          type: Database["public"]["Enums"]["payroll_entry_type"]
+          updated_at: string
+          value: number
+        }
+        Insert: {
+          collaborator_id: string
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          type: Database["public"]["Enums"]["payroll_entry_type"]
+          updated_at?: string
+          value: number
+        }
+        Update: {
+          collaborator_id?: string
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          type?: Database["public"]["Enums"]["payroll_entry_type"]
+          updated_at?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collaborator_fixed_entries_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collaborator_fixed_entries_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bonus_entries: {
         Row: {
           adicional_monthly: number
