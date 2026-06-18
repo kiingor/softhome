@@ -116,6 +116,115 @@ async function insertVtDiscounts(params: {
   return rows.length;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Ficha fixa (collaborator_fixed_entries) → materialização na folha.
+//
+// Itens fixos recorrentes (Carro Agregado, descontos fixos, etc.) moram no
+// cadastro do colaborador, não na competência. A folha os materializa em
+// payroll_entries sob demanda (openPeriod/repopulatePeriod), idempotente por
+// external_id 'fixed-<id>-<YYYY-MM>' — mesmo esquema de VT e salário-família.
+//
+// Tipos manuais que a ficha fixa governa (os mesmos migrados pela migration
+// 20260618120000). Exclui salário base, encargos, benefício, férias e legados,
+// que vêm de outras fontes do cadastro.
+// ─────────────────────────────────────────────────────────────────────────────
+const FIXED_MANUAL_TYPES = [
+  "carro_agregado",
+  "desconto",
+  "bonificacao",
+  "gratificacao",
+  "hora_extra",
+  "atestado",
+  "falta",
+  "adiantamento",
+] as const;
+
+function fixedEntryExternalId(fixedId: string, year: number, month: number): string {
+  return `fixed-${fixedId}-${year}-${String(month).padStart(2, "0")}`;
+}
+
+interface FixedEntryRow {
+  id: string;
+  collaborator_id: string;
+  type: string;
+  description: string | null;
+  value: number;
+}
+
+// Materializa a ficha fixa de um mês:
+//   1. Apaga os lançamentos fixos SOLTOS legados desse mês (is_fixed=true,
+//      external_id NULL, tipos manuais) — consolida duplicatas pré-feature e
+//      remove itens cuja ficha foi desativada/excluída.
+//   2. Upsert de 1 payroll_entry por item ATIVO da ficha (external_id próprio),
+//      atualizando valor/descrição se já existir (reflete edição ao repopular).
+// Escopo: só o (month, year) passado — quem chama garante que é período aberto.
+async function materializeFixedEntries(params: {
+  companyId: string;
+  month: number;
+  year: number;
+  activeCollabIds: Set<string>;
+  storeByCollab: Map<string, string | null>;
+}): Promise<number> {
+  const { companyId, month, year, activeCollabIds, storeByCollab } = params;
+  if (activeCollabIds.size === 0) return 0;
+
+  // 1. Limpa lançamentos fixos soltos legados deste mês (consolida duplicatas).
+  //    Não toca avulsos (is_fixed=false), sincronizados (external_id NOT NULL),
+  //    nem salário/encargo/benefício (fora de FIXED_MANUAL_TYPES).
+  const { error: delErr } = await supabase
+    .from("payroll_entries")
+    .delete()
+    .eq("company_id", companyId)
+    .eq("month", month)
+    .eq("year", year)
+    .eq("is_fixed", true)
+    .is("external_id", null)
+    .in("type", FIXED_MANUAL_TYPES as unknown as string[]);
+  if (delErr) throw new Error("Falha ao limpar lançamentos fixos antigos: " + delErr.message);
+
+  // 2. Carrega ficha fixa ativa dos colaboradores ativos.
+  const fixedRows = await fetchAllRows<FixedEntryRow>(() =>
+    supabase
+      .from("collaborator_fixed_entries")
+      .select("id, collaborator_id, type, description, value")
+      .eq("company_id", companyId)
+      .eq("is_active", true),
+  );
+
+  const rows: PayrollEntry[] = [];
+  for (const f of fixedRows ?? []) {
+    if (!activeCollabIds.has(f.collaborator_id)) continue; // inativo/desligado → pula
+    const value = Number(f.value);
+    if (!(value > 0)) continue; // respeita CHECK value > 0
+    rows.push({
+      company_id: companyId,
+      collaborator_id: f.collaborator_id,
+      store_id: storeByCollab.get(f.collaborator_id) ?? null,
+      external_id: fixedEntryExternalId(f.id, year, month),
+      type: f.type as PayrollEntry["type"],
+      description: f.description,
+      value,
+      is_fixed: true,
+      is_payable: true,
+      month,
+      year,
+    } as PayrollEntry);
+  }
+
+  if (rows.length > 0) {
+    // Upsert por (collaborator_id, external_id): atualiza valor/descrição se a
+    // ficha mudou desde o último repopular.
+    const { error: upErr } = await supabase
+      .from("payroll_entries")
+      .upsert(rows, {
+        onConflict: "collaborator_id,external_id",
+        ignoreDuplicates: false,
+      });
+    if (upErr) throw new Error("Falha ao materializar lançamentos fixos: " + upErr.message);
+  }
+  return rows.length;
+}
+
 const BASE_PAYROLL_TYPES = ["salario_base", "inss", "irpf", "fgts"] as const;
 type BasePayrollType = (typeof BASE_PAYROLL_TYPES)[number];
 
@@ -650,6 +759,19 @@ export function usePayrollPeriods() {
           ),
           skip: skipSalaryNext,
         });
+
+        // 3d. Ficha fixa (Carro Agregado, descontos fixos, etc.) — materializa
+        // os itens permanentes do cadastro neste mês. Consolida duplicatas
+        // legadas e reflete edições/remoções feitas no cadastro.
+        await materializeFixedEntries({
+          companyId,
+          month,
+          year,
+          activeCollabIds: new Set((collaborators ?? []).map((c) => c.id)),
+          storeByCollab: new Map(
+            (collaborators ?? []).map((c) => [c.id, c.store_id]),
+          ),
+        });
       }
 
       const { month: openMonth, year: openYear } = periodToMonthYear(
@@ -657,99 +779,13 @@ export function usePayrollPeriods() {
       );
 
       // ─────────────────────────────────────────────────────────────────────
-      // Carry-over de lançamentos recorrentes do mês anterior.
-      // Copia gratificacao, bonificacao e desconto (is_fixed=true) do último
-      // mês disponível. Útil pra grats/bonifs que vêm da agenda mas só foram
-      // sincronizadas uma vez.
-      //
-      // Decisão de produto: recibo de férias cai no mês do gozo junto com o
-      // salário, então a gratificação/bonificação recorrente DEVE continuar
-      // no mês do gozo também (não pula).
-      //
-      // EXCEÇÃO: colabs cujo gozo ENDED no mês anterior → folha deste mês
-      // fica VAZIA pra ele (regra: recibo já cobriu o próximo mês).
+      // Carry-over legado REMOVIDO. A recorrência de lançamentos manuais
+      // (Carro Agregado, gratificação/bonificação/desconto fixos) agora é
+      // governada pela ficha fixa do cadastro (collaborator_fixed_entries),
+      // materializada acima por materializeFixedEntries. Manter o carry-over
+      // duplicaria/conflitaria com a ficha. Ver migration 20260618120000.
       // ─────────────────────────────────────────────────────────────────────
-      const prevMonth = openMonth === 1 ? 12 : openMonth - 1;
-      const prevYear = openMonth === 1 ? openYear - 1 : openYear;
-      const CARRY_OVER_TYPES = ["gratificacao", "bonificacao", "desconto"] as const;
-
-      // Lista colabs cujo recibo de férias foi lançado no mês anterior
-      // (pular carry-over). Filtra por payroll_month/year — mesmo critério
-      // do skip de salário acima, garante consistência com adiantamento.
-      const { data: vacPostedPrevCarry } = await supabase
-        .from("vacation_requests")
-        .select("collaborator_id, payroll_month, payroll_year")
-        .eq("company_id", companyId)
-        .eq("status", "approved")
-        .eq("payroll_month", prevMonth)
-        .eq("payroll_year", prevYear);
-      const skipCarryOverFor = getCollabsToSkipNextMonth(
-        (vacPostedPrevCarry ?? []) as Array<{
-          collaborator_id: string;
-          payroll_month: number | null;
-          payroll_year: number | null;
-        }>,
-        openMonth,
-        openYear,
-      );
-
-      let recurringCopied = 0;
-      if (values.auto_populate) {
-        const { data: prevRecurring } = await supabase
-          .from("payroll_entries")
-          .select("collaborator_id, store_id, type, description, value")
-          .eq("company_id", companyId)
-          .eq("month", prevMonth)
-          .eq("year", prevYear)
-          .eq("is_fixed", true)
-          .in("type", CARRY_OVER_TYPES as unknown as string[]);
-
-        if (prevRecurring && prevRecurring.length > 0) {
-          // Evita duplicar — se já existe entry desse tipo+desc pro colab neste mês, pula.
-          const { data: alreadyHere } = await supabase
-            .from("payroll_entries")
-            .select("collaborator_id, type, description")
-            .eq("company_id", companyId)
-            .eq("month", openMonth)
-            .eq("year", openYear)
-            .in("type", CARRY_OVER_TYPES as unknown as string[]);
-          const seen = new Set(
-            (alreadyHere ?? []).map(
-              (r) =>
-                `${(r as { collaborator_id: string }).collaborator_id}::${(r as { type: string }).type}::${(r as { description: string | null }).description ?? ""}`,
-            ),
-          );
-
-          const carryOverRows = prevRecurring
-            .filter((r) => {
-              const collab = (r as { collaborator_id: string }).collaborator_id;
-              // Skip se colab teve gozo terminando no mês anterior
-              if (skipCarryOverFor.has(collab)) return false;
-              const key = `${collab}::${(r as { type: string }).type}::${(r as { description: string | null }).description ?? ""}`;
-              return !seen.has(key);
-            })
-            .map((r) => ({
-              company_id: companyId,
-              collaborator_id: (r as { collaborator_id: string }).collaborator_id,
-              store_id: (r as { store_id: string | null }).store_id,
-              type: (r as { type: string }).type,
-              description: (r as { description: string | null }).description,
-              value: Number((r as { value: number }).value),
-              is_fixed: true,
-              is_payable: true,
-              month: openMonth,
-              year: openYear,
-            }));
-
-          if (carryOverRows.length > 0) {
-            const { error: coErr } = await supabase
-              .from("payroll_entries")
-              .insert(carryOverRows as unknown as PayrollEntry[]);
-            if (!coErr) recurringCopied = carryOverRows.length;
-            else console.error("Carry-over falhou:", coErr.message);
-          }
-        }
-      }
+      const recurringCopied = 0;
 
       // ─────────────────────────────────────────────────────────────────────
       // Lança férias aprovadas desse mês. Casos cobertos:
@@ -1268,10 +1304,23 @@ export function usePayrollPeriods() {
         skip: skipSalaryNext,
       });
 
+      // Ficha fixa: materializa/atualiza itens permanentes do cadastro neste
+      // mês (consolida duplicatas legadas, reflete edições e remoções).
+      const fixedCount = await materializeFixedEntries({
+        companyId,
+        month,
+        year,
+        activeCollabIds: new Set((collaborators ?? []).map((c) => c.id)),
+        storeByCollab: new Map(
+          (collaborators ?? []).map((c) => [c.id, c.store_id]),
+        ),
+      });
+
       return {
         salariesAdded: newSalaryEntries.length,
         benefitsAdded: newBenefitEntries.length,
         vtAdded,
+        fixedCount,
       };
     },
     onSuccess: (result) => {

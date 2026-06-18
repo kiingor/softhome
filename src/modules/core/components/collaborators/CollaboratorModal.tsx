@@ -294,6 +294,13 @@ const CollaboratorModal = ({
 
   const canManage = hasAnyRole(["admin", "admin_gc", "gestor_gc"]);
 
+  // Tipos manuais que viram ficha fixa (espelha FIXED_MANUAL_TYPES do
+  // use-payroll). Lançamento no cadastro = permanente: só esses tipos.
+  const FIXED_MANUAL_TYPES = [
+    "carro_agregado", "desconto", "bonificacao", "gratificacao",
+    "hora_extra", "atestado", "falta", "adiantamento",
+  ];
+
   // Prefetch das queries das abas quando o modal abre — assim ao trocar pra
   // aba Histórico/Dependentes/etc os dados já estão cacheados.
   useEffect(() => {
@@ -399,6 +406,26 @@ const CollaboratorModal = ({
     enabled: !!collaboratorId && open,
   });
 
+  // Ficha fixa: lançamentos recorrentes PERMANENTES do colaborador (Carro
+  // Agregado, descontos fixos, etc.). Moram no cadastro, não na competência —
+  // aparecem sempre, independente do mês, até serem excluídos. A folha os
+  // materializa por mês ao Abrir/Repopular. Ver collaborator_fixed_entries.
+  const { data: fixedEntries = [], refetch: refetchFixedEntries } = useQuery({
+    queryKey: ["collaborator-fixed-entries", collaboratorId],
+    queryFn: async () => {
+      if (!collaboratorId) return [];
+      const { data, error } = await supabase
+        .from("collaborator_fixed_entries")
+        .select("*")
+        .eq("collaborator_id", collaboratorId)
+        .eq("is_active", true)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!collaboratorId && open,
+  });
+
   // ──────────────────────────────────────────────────────────────────────
   // Salário "do cadastro" (display-only)
   //
@@ -416,52 +443,73 @@ const CollaboratorModal = ({
   const displayEntries = useMemo(() => {
     if (isNew) return pendingEntries as any[];
     const real = (payrollEntries ?? []) as any[];
-    const hasRealSalary = real.some(
+
+    // Salário + encargos: usa o que já foi lançado na folha do mês (real); se a
+    // competência ainda não tem salário, sintetiza do current_salary (só
+    // exibição). Lançamentos manuais NÃO vêm mais daqui — vêm da ficha fixa.
+    const SALARY_TAX_TYPES = ["salario_base", "inss", "irpf", "fgts"];
+    const realSalaryTax = real.filter((e) => SALARY_TAX_TYPES.includes(e.type));
+    const hasRealSalary = realSalaryTax.some(
       (e) => e.type === "salario_base" && Number(e.value) > 0,
     );
     const baseSalary = Number((collaborator as any)?.current_salary ?? 0);
-    if (hasRealSalary || !(baseSalary > 0)) return real;
 
-    const synthetic: any[] = [
-      {
-        id: "synthetic-salario-base",
-        external_id: "salario-base",
-        type: "salario_base",
-        description: "Salário Base",
-        value: baseSalary,
-        is_fixed: true,
-        _synthetic: true,
-      },
-    ];
-    if (formData.regime === "clt") {
-      const deps = formData.dependents_count ?? 0;
-      const taxes = calcAllTaxes({ grossSalary: baseSalary, dependents: deps });
-      if (taxes.inss > 0) {
-        synthetic.push({
-          id: "synthetic-inss", external_id: "inss-base", type: "inss",
-          description: "INSS (tabela 2026)", value: taxes.inss,
-          is_fixed: true, _synthetic: true,
-        });
+    let salaryPart = realSalaryTax;
+    if (!hasRealSalary && baseSalary > 0) {
+      const synthetic: any[] = [
+        {
+          id: "synthetic-salario-base",
+          external_id: "salario-base",
+          type: "salario_base",
+          description: "Salário Base",
+          value: baseSalary,
+          is_fixed: true,
+          _synthetic: true,
+        },
+      ];
+      if (formData.regime === "clt") {
+        const deps = formData.dependents_count ?? 0;
+        const taxes = calcAllTaxes({ grossSalary: baseSalary, dependents: deps });
+        if (taxes.inss > 0) {
+          synthetic.push({
+            id: "synthetic-inss", external_id: "inss-base", type: "inss",
+            description: "INSS (tabela 2026)", value: taxes.inss,
+            is_fixed: true, _synthetic: true,
+          });
+        }
+        if (taxes.irpf > 0) {
+          synthetic.push({
+            id: "synthetic-irpf", external_id: "irpf-base", type: "irpf",
+            description: deps > 0
+              ? `IRPF (tabela 2026, ${deps} dep.)`
+              : "IRPF (tabela 2026)",
+            value: taxes.irpf, is_fixed: true, _synthetic: true,
+          });
+        }
+        if (taxes.fgts > 0) {
+          synthetic.push({
+            id: "synthetic-fgts", external_id: "fgts-base", type: "fgts",
+            description: "FGTS (8%)", value: taxes.fgts,
+            is_fixed: true, _synthetic: true,
+          });
+        }
       }
-      if (taxes.irpf > 0) {
-        synthetic.push({
-          id: "synthetic-irpf", external_id: "irpf-base", type: "irpf",
-          description: deps > 0
-            ? `IRPF (tabela 2026, ${deps} dep.)`
-            : "IRPF (tabela 2026)",
-          value: taxes.irpf, is_fixed: true, _synthetic: true,
-        });
-      }
-      if (taxes.fgts > 0) {
-        synthetic.push({
-          id: "synthetic-fgts", external_id: "fgts-base", type: "fgts",
-          description: "FGTS (8%)", value: taxes.fgts,
-          is_fixed: true, _synthetic: true,
-        });
-      }
+      salaryPart = synthetic;
     }
-    return [...synthetic, ...real];
-  }, [isNew, pendingEntries, payrollEntries, collaborator, formData.regime, formData.dependents_count]);
+
+    // Ficha fixa (Carro Agregado, descontos fixos, ...) — sempre visível,
+    // independente de competência. Some só quando o RH exclui no cadastro.
+    const fichaPart = (fixedEntries ?? []).map((f) => ({
+      id: f.id,
+      type: f.type,
+      description: f.description,
+      value: Number(f.value),
+      is_fixed: true,
+      _fixed: true,
+    }));
+
+    return [...salaryPart, ...fichaPart];
+  }, [isNew, pendingEntries, payrollEntries, fixedEntries, collaborator, formData.regime, formData.dependents_count]);
 
   // Fetch benefit assignments for existing collaborator
   const { data: benefitAssignments = [], refetch: refetchAssignments } = useQuery({
@@ -1040,17 +1088,42 @@ const CollaboratorModal = ({
         savedCollabId = newCollabId;
 
         if (pendingEntries.length > 0) {
-          const entriesToCreate = pendingEntries.map((e) => ({
-            collaborator_id: newCollabId,
-            company_id: currentCompany!.id,
-            type: e.type,
-            value: e.value,
-            description: e.description,
-            month: currentMonth,
-            year: currentYear,
-            is_fixed: e.is_fixed,
-          }));
-          await supabase.from("payroll_entries").insert(entriesToCreate);
+          // Itens fixos manuais (Carro Agregado, etc.) vão pra ficha fixa
+          // (permanente). O resto (salário auto, avulsos) entra na folha do mês.
+          const fichaPending = pendingEntries.filter(
+            (e) => e.is_fixed && FIXED_MANUAL_TYPES.includes(e.type as string),
+          );
+          const payrollPending = pendingEntries.filter(
+            (e) => !(e.is_fixed && FIXED_MANUAL_TYPES.includes(e.type as string)),
+          );
+          if (payrollPending.length > 0) {
+            await supabase.from("payroll_entries").insert(
+              payrollPending.map((e) => ({
+                collaborator_id: newCollabId,
+                company_id: currentCompany!.id,
+                type: e.type,
+                value: e.value,
+                description: e.description,
+                month: currentMonth,
+                year: currentYear,
+                is_fixed: e.is_fixed,
+              })),
+            );
+          }
+          if (fichaPending.length > 0) {
+            const { data: userData } = await supabase.auth.getUser();
+            await supabase.from("collaborator_fixed_entries").insert(
+              fichaPending.map((e) => ({
+                company_id: currentCompany!.id,
+                collaborator_id: newCollabId,
+                type: e.type,
+                description: e.description || null,
+                value: e.value,
+                is_active: true,
+                created_by: userData?.user?.id ?? null,
+              })),
+            );
+          }
         }
 
         if (pendingBenefits.length > 0) {
@@ -1261,65 +1334,44 @@ const CollaboratorModal = ({
     toast.success("Lançamento adicionado!");
   };
 
-  // Add payroll entry (for existing collaborators)
+  // Add fixed entry to the ficha (for existing collaborators).
+  // Lançamento no cadastro = PERMANENTE: grava em collaborator_fixed_entries,
+  // não na folha do mês. Reflete na folha aberta/futura ao Repopular.
   const handleAddEntry = async () => {
     if (!entryForm.value) {
       toast.error("Valor é obrigatório");
       return;
     }
-
+    const numericValue = parseCurrencyInput(entryForm.value);
+    if (!(numericValue > 0)) {
+      toast.error("Valor precisa ser maior que zero.");
+      return;
+    }
     try {
-      const numericValue = parseCurrencyInput(entryForm.value);
-
-      if (entryForm.is_installment && entryForm.installment_count > 1) {
-        const valuePerInstallment = numericValue / entryForm.installment_count;
-        const groupId = crypto.randomUUID();
-        const entriesToCreate = [];
-
-        for (let i = 0; i < entryForm.installment_count; i++) {
-          const entryMonth = ((entryForm.month + i - 1) % 12) + 1;
-          const entryYear = entryForm.year + Math.floor((entryForm.month + i - 1) / 12);
-          const desc = `${entryForm.description || ""} (${i + 1}/${entryForm.installment_count})`;
-          
-          entriesToCreate.push({
-            collaborator_id: collaboratorId,
-            company_id: currentCompany!.id,
-            type: entryForm.type,
-            value: valuePerInstallment,
-            description: desc.trim(),
-            month: entryMonth,
-            year: entryYear,
-            is_fixed: false,
-            installment_group_id: groupId,
-            installment_number: i + 1,
-            installment_total: entryForm.installment_count,
-          });
+      const { data: userData } = await supabase.auth.getUser();
+      const { error } = await supabase
+        .from("collaborator_fixed_entries")
+        .insert({
+          company_id: currentCompany!.id,
+          collaborator_id: collaboratorId,
+          type: entryForm.type,
+          description: entryForm.description || null,
+          value: numericValue,
+          is_active: true,
+          created_by: userData?.user?.id ?? null,
+        });
+      if (error) {
+        if (error.code === "23505") {
+          toast.error("Já existe um lançamento fixo desse tipo e descrição.");
+          return;
         }
-
-        const { error: instErr } = await supabase
-          .from("payroll_entries")
-          .insert(entriesToCreate);
-        if (instErr) throw instErr;
-      } else {
-        const { error: insErr } = await supabase
-          .from("payroll_entries")
-          .insert({
-            collaborator_id: collaboratorId,
-            company_id: currentCompany!.id,
-            type: entryForm.type,
-            value: numericValue,
-            description: entryForm.description || null,
-            month: entryForm.month,
-            year: entryForm.year,
-            is_fixed: entryForm.is_fixed,
-          });
-        if (insErr) throw insErr;
+        throw error;
       }
 
-      refetchEntries();
+      await refetchFixedEntries();
       setAddEntryOpen(false);
       setEntryForm({ type: "hora_extra", description: "", value: "", is_fixed: false, month: currentMonth, year: currentYear, is_installment: false, installment_count: 2 });
-      toast.success("Lançamento adicionado!");
+      toast.success("Lançamento fixo adicionado ✓ — aparece na folha ao Repopular.");
     } catch (error) {
       const msg =
         error instanceof Error
@@ -1332,20 +1384,37 @@ const CollaboratorModal = ({
   // Delete payroll entry
   const handleDeleteEntry = async () => {
     if (!deletingEntry) return;
-    
+
     if (isNew) {
       setPendingEntries((prev) => prev.filter((e) => e.id !== deletingEntry.id));
       setDeletingEntry(null);
       toast.success("Lançamento removido!");
-    } else {
-      try {
+      return;
+    }
+
+    // Sintéticos (salário/encargo) não são linhas reais — vêm do cadastro.
+    if (deletingEntry._synthetic) {
+      toast.error("Salário/encargo vem do cadastro — ajuste o salário do colaborador.");
+      setDeletingEntry(null);
+      return;
+    }
+
+    try {
+      if (deletingEntry._fixed) {
+        // Ficha fixa: remove de vez. Some da folha aberta/futura ao Repopular.
+        await supabase
+          .from("collaborator_fixed_entries")
+          .delete()
+          .eq("id", deletingEntry.id);
+        await refetchFixedEntries();
+      } else {
         await supabase.from("payroll_entries").delete().eq("id", deletingEntry.id);
         refetchEntries();
-        setDeletingEntry(null);
-        toast.success("Lançamento removido!");
-      } catch (error) {
-        toast.error("Erro ao remover lançamento");
       }
+      setDeletingEntry(null);
+      toast.success("Lançamento removido!");
+    } catch (error) {
+      toast.error("Erro ao remover lançamento");
     }
   };
 
@@ -2307,7 +2376,7 @@ const CollaboratorModal = ({
                         if (visibleEntries.length === 0) {
                           return (
                             <div className="text-sm text-muted-foreground text-center py-6 bg-background rounded-lg border border-dashed">
-                              {isNew ? "Selecione um cargo para adicionar o salário" : "Nenhum lançamento no mês atual"}
+                              {isNew ? "Selecione um cargo para adicionar o salário" : "Nenhum lançamento fixo cadastrado"}
                             </div>
                           );
                         }
@@ -2912,6 +2981,7 @@ const CollaboratorModal = ({
             <DialogTitle>Novo Lançamento</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {isNew && (
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Mês</Label>
@@ -2950,6 +3020,14 @@ const CollaboratorModal = ({
                 </Select>
               </div>
             </div>
+            )}
+            {!isNew && (
+              <p className="text-xs text-muted-foreground">
+                Lançamento <strong>fixo</strong> do cadastro — vale todo mês até
+                ser excluído. Aparece na folha aberta/futura quando você clicar
+                em <strong>Repopular</strong>.
+              </p>
+            )}
             <div className="space-y-2">
               <Label>Tipo</Label>
               <Select
@@ -2960,11 +3038,10 @@ const CollaboratorModal = ({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="salario_base">Salário base</SelectItem>
-                  <SelectItem value="hora_extra">Hora extra</SelectItem>
-                  <SelectItem value="beneficio">Benefício</SelectItem>
+                  <SelectItem value="carro_agregado">Carro Agregado</SelectItem>
                   <SelectItem value="bonificacao">Bonificação</SelectItem>
                   <SelectItem value="gratificacao">Gratificação</SelectItem>
+                  <SelectItem value="hora_extra">Hora extra</SelectItem>
                   <SelectItem value="atestado">Atestado</SelectItem>
                   <SelectItem value="adiantamento">Adiantamento</SelectItem>
                   <SelectItem value="desconto">Desconto</SelectItem>
@@ -2989,7 +3066,9 @@ const CollaboratorModal = ({
               />
             </div>
             
-            {/* Fixed vs Installment */}
+            {/* Fixed vs Installment — só no cadastro de colaborador NOVO.
+                Pra existentes, o lançamento já é fixo permanente (ficha). */}
+            {isNew && (
             <div className="space-y-3">
               <div className="flex items-center space-x-2">
                 <Switch
@@ -3025,6 +3104,7 @@ const CollaboratorModal = ({
                 </div>
               )}
             </div>
+            )}
 
             <div className="flex justify-end gap-2 pt-4">
               <Button variant="outline" onClick={() => setAddEntryOpen(false)}>
