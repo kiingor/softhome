@@ -371,7 +371,7 @@ const FeriasPage = () => {
                                     }}
                                   >
                                     <Pencil className="w-4 h-4 mr-2" />
-                                    Ajustar saldo
+                                    Editar período
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
@@ -542,6 +542,7 @@ const FeriasPage = () => {
                       <TableHead className="text-center">Vendidos</TableHead>
                       <TableHead className="text-center">Saldo</TableHead>
                       <TableHead>Status</TableHead>
+                      {canManage && <TableHead className="text-right">Ações</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody className="stagger-animation">
@@ -568,6 +569,19 @@ const FeriasPage = () => {
                             {vacationPeriodStatusLabels[p.status] || p.status}
                           </Badge>
                         </TableCell>
+                        {canManage && (
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              title="Editar período aquisitivo"
+                              onClick={() => setAdjustingPeriod(p)}
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>

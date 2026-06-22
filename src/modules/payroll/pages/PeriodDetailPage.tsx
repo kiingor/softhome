@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -47,7 +47,22 @@ import {
   Trash,
   MagnifyingGlass,
   X as XIcon,
+  ChatCircleText,
+  Warning as AlertTriangle,
 } from "@phosphor-icons/react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   HoverCard,
   HoverCardContent,
@@ -73,6 +88,10 @@ import {
   usePayrollPeriods,
   isManualAvulso,
 } from "../hooks/use-payroll";
+import {
+  usePayrollReviews,
+  useUpsertPayrollReview,
+} from "../hooks/use-payroll-reviews";
 import { NewEntryDialog } from "../components/NewEntryDialog";
 import {
   PERIOD_STATUS_LABELS,
@@ -123,6 +142,7 @@ export default function PeriodDetailPage() {
 
   const [isNewEntryOpen, setIsNewEntryOpen] = useState(false);
   const [vacationAdvanceOpen, setVacationAdvanceOpen] = useState(false);
+  const [alertsOpen, setAlertsOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<"close" | "reopen" | null>(
     null
   );
@@ -138,6 +158,21 @@ export default function PeriodDetailPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const normalizeSearch = (s: string) =>
     s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
+  // Conferência de lançamentos por colaborador (igual ao "Pago" de Pagamentos).
+  const [reviewFilter, setReviewFilter] = useState<"all" | "reviewed" | "pending">("all");
+  const [obsFilter, setObsFilter] = useState<"all" | "with" | "without">("all");
+  const { data: reviews = [] } = usePayrollReviews(id);
+  const upsertReview = useUpsertPayrollReview(id ?? "");
+  const reviewByCollab = useMemo(() => {
+    const map = new Map<string, (typeof reviews)[number]>();
+    for (const r of reviews) map.set(r.collaborator_id, r);
+    return map;
+  }, [reviews]);
+  const hasObs = (collabId: string) =>
+    !!reviewByCollab.get(collabId)?.observation?.trim();
+  const isReviewed = (collabId: string) =>
+    !!reviewByCollab.get(collabId)?.is_reviewed;
 
   // Carrega lookups da company atual pra popular os dropdowns.
   const { data: stores = [] } = useQuery({
@@ -313,15 +348,23 @@ export default function PeriodDetailPage() {
   // Aplica a busca por nome em cima dos grupos já montados. Mantém os totais
   // do topo intactos (igual aba Pagamentos: a busca só filtra a lista exibida).
   const isSearching = searchTerm.trim().length > 0;
+  const hasReviewFilters = reviewFilter !== "all" || obsFilter !== "all";
   const visibleGroups = useMemo(() => {
     const q = normalizeSearch(searchTerm.trim());
-    if (!q) return groupedByCollab;
-    return groupedByCollab.filter((g) => normalizeSearch(g.name).includes(q));
-  }, [groupedByCollab, searchTerm]);
+    return groupedByCollab.filter((g) => {
+      if (q && !normalizeSearch(g.name).includes(q)) return false;
+      const r = reviewByCollab.get(g.id);
+      if (reviewFilter === "reviewed" && !r?.is_reviewed) return false;
+      if (reviewFilter === "pending" && r?.is_reviewed) return false;
+      if (obsFilter === "with" && !r?.observation?.trim()) return false;
+      if (obsFilter === "without" && r?.observation?.trim()) return false;
+      return true;
+    });
+  }, [groupedByCollab, searchTerm, reviewFilter, obsFilter, reviewByCollab]);
 
   // Contagem de lançamentos dentro dos grupos visíveis (pro cabeçalho).
   const visibleCollabIds = new Set(visibleGroups.map((g) => g.id));
-  const visibleLancCount = isSearching
+  const visibleLancCount = isSearching || hasReviewFilters
     ? lancamentoEntries.filter((e) =>
         visibleCollabIds.has(e.collaborator_id ?? "_orphan"),
       ).length
@@ -443,6 +486,19 @@ export default function PeriodDetailPage() {
             </div>
           </div>
           <div className="flex gap-2">
+            {alerts.length > 0 && (
+              <Button
+                variant="outline"
+                onClick={() => setAlertsOpen(true)}
+                className="border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800 dark:border-amber-800 dark:text-amber-400"
+              >
+                <AlertTriangle className="w-4 h-4 mr-2" weight="fill" />
+                Alertas
+                <span className="ml-2 inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold dark:bg-amber-900/50 dark:text-amber-300">
+                  {alerts.length}
+                </span>
+              </Button>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline">
@@ -541,40 +597,13 @@ export default function PeriodDetailPage() {
             </SelectContent>
           </Select>
         </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted-foreground font-medium">
-            Colaborador
-          </label>
-          <div className="relative">
-            <MagnifyingGlass className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-            <Input
-              type="text"
-              placeholder="Buscar colaborador..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-[220px] pl-8 pr-8 h-9"
-            />
-            {isSearching && (
-              <button
-                type="button"
-                onClick={() => setSearchTerm("")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition focus:outline-none focus:ring-2 focus:ring-primary/40 rounded"
-                aria-label="Limpar busca"
-                title="Limpar busca"
-              >
-                <XIcon className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-        </div>
-        {(isFiltering || isSearching) && (
+        {isFiltering && (
           <Button
             variant="ghost"
             size="sm"
             onClick={() => {
               setStoreFilter("all");
               setTeamFilter("all");
-              setSearchTerm("");
             }}
             className="h-9 text-xs"
           >
@@ -599,44 +628,8 @@ export default function PeriodDetailPage() {
         />
       </div>
 
-      {/* Alerts pendentes */}
-      {alerts.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">
-              Alertas pendentes ({alerts.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-2">
-              {alerts.map((a) => (
-                <li
-                  key={a.id}
-                  className="flex items-center gap-3 py-2 text-sm"
-                >
-                  <Badge
-                    variant="outline"
-                    className={`font-normal border-0 ${ALERT_SEVERITY_COLORS[a.severity]}`}
-                  >
-                    {ALERT_SEVERITY_LABELS[a.severity] ?? a.severity}
-                  </Badge>
-                  <span className="text-muted-foreground">
-                    {ALERT_KIND_LABELS[a.kind]}
-                  </span>
-                  <span className="flex-1">
-                    {a.collaborator?.name && (
-                      <strong className="text-foreground">
-                        {a.collaborator.name}
-                      </strong>
-                    )}{" "}
-                    — {a.message}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
+      {/* Alertas pendentes viram um botão no topo (abre dialog) pra dar mais
+          espaço vertical à tela. Ver <Dialog> no fim do componente. */}
 
       {/* Tabs: Lançamentos (RH) / Pagamentos (Financeiro) */}
       <Tabs defaultValue="lancamentos" className="space-y-4">
@@ -670,49 +663,113 @@ export default function PeriodDetailPage() {
         )}
 
         <TabsContent value="lancamentos">
+          {/* Lançamentos */}
+          <Card>
+            <CardHeader className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <CardTitle>Lançamentos</CardTitle>
+                {visibleGroups.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={toggleAll}
+                    className="text-xs h-7"
+                  >
+                    {allExpanded ? "Recolher todos" : "Expandir todos"}
+                  </Button>
+                )}
+              </div>
 
-      {/* Lançamentos */}
-      <Card>
-        <CardHeader className="flex-row items-center justify-between">
-          <CardTitle>Lançamentos</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {entries.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-sm text-muted-foreground mb-2">
-                Mês ainda zerado.
-              </p>
-              {canManage && isOpen && (
-                <Button onClick={() => setIsNewEntryOpen(true)}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Lançar primeiro
-                </Button>
+              {/* Filtros da aba (igual Pagamentos tem sua busca): colaborador +
+                  conferência + observação. Empresa/Setor ficam no topo da tela. */}
+              {entries.length > 0 && (
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-muted-foreground font-medium">
+                      Colaborador
+                    </label>
+                    <div className="relative">
+                      <MagnifyingGlass className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                      <Input
+                        type="text"
+                        placeholder="Buscar colaborador..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-[220px] pl-8 pr-8 h-9"
+                      />
+                      {isSearching && (
+                        <button
+                          type="button"
+                          onClick={() => setSearchTerm("")}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition focus:outline-none focus:ring-2 focus:ring-primary/40 rounded"
+                          aria-label="Limpar busca"
+                          title="Limpar busca"
+                        >
+                          <XIcon className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-muted-foreground font-medium">
+                      Conferência
+                    </label>
+                    <Select
+                      value={reviewFilter}
+                      onValueChange={(v) => setReviewFilter(v as typeof reviewFilter)}
+                    >
+                      <SelectTrigger className="w-[170px] h-9">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos</SelectItem>
+                        <SelectItem value="reviewed">Conferidos</SelectItem>
+                        <SelectItem value="pending">Não conferidos</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-muted-foreground font-medium">
+                      Observação
+                    </label>
+                    <Select
+                      value={obsFilter}
+                      onValueChange={(v) => setObsFilter(v as typeof obsFilter)}
+                    >
+                      <SelectTrigger className="w-[170px] h-9">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos</SelectItem>
+                        <SelectItem value="with">Com observação</SelectItem>
+                        <SelectItem value="without">Sem observação</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {(isSearching || hasReviewFilters) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setSearchTerm("");
+                        setReviewFilter("all");
+                        setObsFilter("all");
+                      }}
+                      className="h-9 text-xs"
+                    >
+                      Limpar
+                    </Button>
+                  )}
+                </div>
               )}
-            </div>
-          ) : lancamentoEntries.length === 0 ? (
-            <div className="text-center py-12 space-y-2">
-              <p className="text-sm text-muted-foreground">
-                Nenhum lançamento com esses filtros.
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setStoreFilter("all");
-                  setTeamFilter("all");
-                }}
-              >
-                Limpar filtros
-              </Button>
-            </div>
-          ) : (
-            <>
-              <div className="flex items-center justify-between mb-2 px-1">
+
+              {/* Contagem */}
+              {lancamentoEntries.length > 0 && (
                 <p className="text-xs text-muted-foreground">
                   {visibleGroups.length} colaborador
                   {visibleGroups.length === 1 ? "" : "es"} · {visibleLancCount}{" "}
                   lançamento{visibleLancCount === 1 ? "" : "s"}
-                  {isSearching ? (
+                  {isSearching || hasReviewFilters ? (
                     <span className="ml-1">
                       (de {groupedByCollab.length} colaborador
                       {groupedByCollab.length === 1 ? "" : "es"})
@@ -723,26 +780,52 @@ export default function PeriodDetailPage() {
                     )
                   )}
                 </p>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={toggleAll}
-                  className="text-xs h-7"
-                >
-                  {allExpanded ? "Recolher todos" : "Expandir todos"}
-                </Button>
-              </div>
-              {visibleGroups.length === 0 ? (
-                <div className="text-center py-10 space-y-2">
+              )}
+            </CardHeader>
+            <CardContent className="p-0">
+              {entries.length === 0 ? (
+                <div className="text-center py-12">
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Mês ainda zerado.
+                  </p>
+                  {canManage && isOpen && (
+                    <Button onClick={() => setIsNewEntryOpen(true)}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Lançar primeiro
+                    </Button>
+                  )}
+                </div>
+              ) : lancamentoEntries.length === 0 ? (
+                <div className="text-center py-12 space-y-2">
                   <p className="text-sm text-muted-foreground">
-                    Nenhum colaborador com esse nome.
+                    Nenhum lançamento com esses filtros.
                   </p>
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setSearchTerm("")}
+                    onClick={() => {
+                      setStoreFilter("all");
+                      setTeamFilter("all");
+                    }}
                   >
-                    Limpar busca
+                    Limpar filtros
+                  </Button>
+                </div>
+              ) : visibleGroups.length === 0 ? (
+                <div className="text-center py-10 space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    Nenhum colaborador com esses filtros.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSearchTerm("");
+                      setReviewFilter("all");
+                      setObsFilter("all");
+                    }}
+                  >
+                    Limpar filtros
                   </Button>
                 </div>
               ) : (
@@ -762,11 +845,28 @@ export default function PeriodDetailPage() {
                     return (
                       <Fragment key={g.id}>
                         <TableRow
-                          className="hover:bg-muted/50 cursor-pointer bg-muted/20"
+                          className={`hover:bg-muted/50 cursor-pointer ${
+                            isReviewed(g.id)
+                              ? "bg-emerald-50 dark:bg-emerald-950/20"
+                              : "bg-muted/20"
+                          }`}
                           onClick={() => toggleCollab(g.id)}
                         >
                           <TableCell>
                             <div className="flex items-center gap-2 font-medium">
+                              <Checkbox
+                                checked={isReviewed(g.id)}
+                                disabled={!canManage || upsertReview.isPending}
+                                onClick={(e) => e.stopPropagation()}
+                                onCheckedChange={(checked) =>
+                                  upsertReview.mutate({
+                                    collaboratorId: g.id,
+                                    patch: { is_reviewed: !!checked },
+                                  })
+                                }
+                                aria-label={`Marcar ${g.name} como conferido`}
+                                title="Conferido"
+                              />
                               {isOpen ? (
                                 <CaretDown className="w-4 h-4 text-muted-foreground" />
                               ) : (
@@ -792,7 +892,19 @@ export default function PeriodDetailPage() {
                             {g.net >= 0 ? "+ " : "- "}
                             {formatCurrency(Math.abs(g.net))}
                           </TableCell>
-                          <TableCell className="p-0" />
+                          <TableCell className="p-0 pr-1 align-middle">
+                            <ReviewObsButton
+                              hasObs={hasObs(g.id)}
+                              observation={reviewByCollab.get(g.id)?.observation ?? ""}
+                              disabled={!canManage}
+                              onSave={(text) =>
+                                upsertReview.mutate({
+                                  collaboratorId: g.id,
+                                  patch: { observation: text.trim() || null },
+                                })
+                              }
+                            />
+                          </TableCell>
                         </TableRow>
                         {isOpen &&
                           g.entries.map((e) => {
@@ -947,12 +1059,48 @@ export default function PeriodDetailPage() {
                 </TableBody>
               </Table>
               )}
-            </>
-          )}
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Alertas pendentes (popup) */}
+      <Dialog open={alertsOpen} onOpenChange={setAlertsOpen}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-600" weight="fill" />
+              Alertas pendentes ({alerts.length})
+            </DialogTitle>
+          </DialogHeader>
+          <ul className="space-y-2">
+            {alerts.map((a) => (
+              <li
+                key={a.id}
+                className="flex items-start gap-3 py-2 text-sm border-b border-border last:border-0"
+              >
+                <Badge
+                  variant="outline"
+                  className={`font-normal border-0 shrink-0 ${ALERT_SEVERITY_COLORS[a.severity]}`}
+                >
+                  {ALERT_SEVERITY_LABELS[a.severity] ?? a.severity}
+                </Badge>
+                <span className="flex-1">
+                  <span className="text-muted-foreground">
+                    {ALERT_KIND_LABELS[a.kind]}
+                  </span>{" "}
+                  {a.collaborator?.name && (
+                    <strong className="text-foreground">
+                      {a.collaborator.name}
+                    </strong>
+                  )}{" "}
+                  — {a.message}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </DialogContent>
+      </Dialog>
 
       <NewEntryDialog
         open={isNewEntryOpen}
@@ -1113,6 +1261,84 @@ export default function PeriodDetailPage() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+/**
+ * Botão de observação da conferência (por colaborador). Abre um popover com
+ * textarea pra anotar divergências. Ícone fica âmbar quando já tem observação.
+ */
+function ReviewObsButton({
+  hasObs,
+  observation,
+  disabled,
+  onSave,
+}: {
+  hasObs: boolean;
+  observation: string;
+  disabled: boolean;
+  onSave: (text: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState(observation);
+
+  // Re-sincroniza ao (re)abrir, pra refletir o que está salvo.
+  useEffect(() => {
+    if (open) setText(observation);
+  }, [open, observation]);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className={`h-7 w-7 ${hasObs ? "text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30" : "text-muted-foreground/40 hover:text-foreground"}`}
+          title={hasObs ? `Observação: ${observation}` : "Adicionar observação"}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <ChatCircleText className="w-4 h-4" weight={hasObs ? "fill" : "regular"} />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        className="w-72 space-y-2"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <p className="text-xs font-medium text-muted-foreground">
+          Observação / divergência
+        </p>
+        <Textarea
+          rows={3}
+          placeholder="Ex: salário divergente, falta lançar VT…"
+          value={text}
+          disabled={disabled}
+          onChange={(e) => setText(e.target.value)}
+        />
+        <div className="flex justify-end gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setOpen(false)}
+          >
+            Cancelar
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            disabled={disabled || text === observation}
+            onClick={() => {
+              onSave(text);
+              setOpen(false);
+            }}
+          >
+            Salvar
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
