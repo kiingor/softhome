@@ -3667,6 +3667,57 @@ export type Database = {
           },
         ]
       }
+      payroll_collaborator_reviews: {
+        Row: {
+          collaborator_id: string
+          created_at: string
+          id: string
+          is_reviewed: boolean
+          observation: string | null
+          period_id: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          collaborator_id: string
+          created_at?: string
+          id?: string
+          is_reviewed?: boolean
+          observation?: string | null
+          period_id: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          collaborator_id?: string
+          created_at?: string
+          id?: string
+          is_reviewed?: boolean
+          observation?: string | null
+          period_id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payroll_collaborator_reviews_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_collaborator_reviews_period_id_fkey"
+            columns: ["period_id"]
+            isOneToOne: false
+            referencedRelation: "payroll_periods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payroll_payments: {
         Row: {
           amount: number
@@ -4338,12 +4389,15 @@ export type Database = {
           collaborator_id: string
           company_id: string
           created_at: string
+          data_limite: string | null
           days_entitled: number
           days_remaining: number
           days_sold: number
           days_taken: number
           end_date: string
           external_id: string | null
+          gozo_end_date: string | null
+          gozo_start_date: string | null
           id: string
           manual_adjustment_at: string | null
           manual_adjustment_by: string | null
@@ -4355,12 +4409,15 @@ export type Database = {
           collaborator_id: string
           company_id: string
           created_at?: string
+          data_limite?: string | null
           days_entitled?: number
           days_remaining?: number
           days_sold?: number
           days_taken?: number
           end_date: string
           external_id?: string | null
+          gozo_end_date?: string | null
+          gozo_start_date?: string | null
           id?: string
           manual_adjustment_at?: string | null
           manual_adjustment_by?: string | null
@@ -4372,12 +4429,15 @@ export type Database = {
           collaborator_id?: string
           company_id?: string
           created_at?: string
+          data_limite?: string | null
           days_entitled?: number
           days_remaining?: number
           days_sold?: number
           days_taken?: number
           end_date?: string
           external_id?: string | null
+          gozo_end_date?: string | null
+          gozo_start_date?: string | null
           id?: string
           manual_adjustment_at?: string | null
           manual_adjustment_by?: string | null
@@ -4776,6 +4836,47 @@ export type Database = {
           days_taken: number
           end_date: string
           external_id: string | null
+          id: string
+          manual_adjustment_at: string | null
+          manual_adjustment_by: string | null
+          manual_adjustment_notes: string | null
+          start_date: string
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "vacation_periods"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      edit_vacation_period_manual: {
+        Args: {
+          _period_id: string
+          _start_date: string
+          _end_date: string
+          _days_entitled: number
+          _days_taken: number
+          _days_sold: number
+          _status: string
+          _gozo_start_date?: string | null
+          _gozo_end_date?: string | null
+          _data_limite?: string | null
+          _notes?: string | null
+        }
+        Returns: {
+          collaborator_id: string
+          company_id: string
+          created_at: string
+          data_limite: string | null
+          days_entitled: number
+          days_remaining: number
+          days_sold: number
+          days_taken: number
+          end_date: string
+          external_id: string | null
+          gozo_end_date: string | null
+          gozo_start_date: string | null
           id: string
           manual_adjustment_at: string | null
           manual_adjustment_by: string | null
