@@ -26,6 +26,7 @@ import { calcVacation, type VacationCalcResult } from "@/lib/payroll/vacationCal
 import { getCollabsToSkipNextMonth } from "@/lib/payroll/vacationSkipRules";
 import { postVacationToPayroll } from "@/hooks/useVacations";
 import { fetchAllRows } from "@/lib/fetchAllRows";
+import { AGENDA_SYNC_DISABLED } from "@/lib/agenda-sync";
 import {
   calcVtDiscount,
   vtDiscountExternalId,
@@ -1573,7 +1574,11 @@ export function usePayrollEntries(periodId: string | undefined) {
       // recorrente e precisa virar adicional na agenda (pra que apareça em
       // outras folhas e fique consistente com o sistema legado). Lançamento
       // pontual (is_fixed=false) fica só no DNA Softcom.
+      // Com a agenda desligada (AGENDA_SYNC_DISABLED), NÃO espelha o adicional:
+      // grava só o payroll_entries local. Sem isso, o push offline quebraria o
+      // insert local (o payload vai em formato remoto e a row local falha).
       const shouldPushAsAdicional =
+        !AGENDA_SYNC_DISABLED &&
         values.is_fixed === true &&
         (values.type === "gratificacao" || values.type === "bonificacao");
 
