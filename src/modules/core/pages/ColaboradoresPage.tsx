@@ -58,6 +58,7 @@ import {
 } from "@/lib/sync-job-storage";
 import { useToast } from "@/hooks/use-toast";
 import { formatCPF } from "@/lib/validators";
+import { AGENDA_SYNC_DISABLED } from "@/lib/agenda-sync";
 import CollaboratorModal from "@/modules/core/components/collaborators/CollaboratorModal";
 import { TableSkeleton } from "@/components/ui/table-skeleton";
 
@@ -146,7 +147,8 @@ const ColaboradoresPage = () => {
   //                salário-base lançado (não toca em exames/planos/detalhes)
   const [syncMode, setSyncMode] = useState<"full" | "onlySalary">("full");
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
-  const canSync = canCreate || isAdmin;
+  // Sincronização com a agenda desligada por enquanto (ver @/lib/agenda-sync).
+  const canSync = (canCreate || isAdmin) && !AGENDA_SYNC_DISABLED;
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);

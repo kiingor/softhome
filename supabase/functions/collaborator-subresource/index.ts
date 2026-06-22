@@ -24,6 +24,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.0";
 import {
   createSubResource,
   deleteSubResource,
+  isAgendaSyncDisabled,
   SoftcomCloudError,
   type SubResourceKind,
   updateSubResource,
@@ -375,9 +376,35 @@ serve(async (req) => {
   if (!allowed) return jsonResponse({ error: "Sem permissão" }, 403);
 
   const cfg = ENTITY_MAP[kind];
+  // Kill-switch global da agenda: quando desligado, todo CRUD de sub-recurso
+  // (inclui FÉRIAS da aba do cadastro) vira LOCAL-ONLY. O `data` já vem em
+  // formato local (snake_case), então grava direto; external_id fica null.
+  const syncOff = isAgendaSyncDisabled();
 
   // ─────────────────────────────────────────────────────────────────────────
   if (action === "create") {
+    if (syncOff) {
+      const dataFiltered: Record<string, unknown> = { ...data };
+      for (const f of cfg.localOnlyFields ?? []) {
+        delete dataFiltered[f];
+      }
+      const merged = {
+        ...dataFiltered,
+        company_id: collab.company_id,
+        collaborator_id: collab.id,
+        external_id: null,
+      };
+      const { data: inserted, error: insErr } = await sbAdmin
+        .from(cfg.table)
+        .insert(merged)
+        .select("id")
+        .single();
+      if (insErr) {
+        return jsonResponse({ error: "Insert local falhou", details: insErr.message }, 500);
+      }
+      return jsonResponse({ success: true, localId: inserted?.id, disabled: true });
+    }
+
     if (!collab.external_id) {
       return jsonResponse(
         { error: "Colaborador sem external_id (não vinculado à agenda). Sincronize antes." },
@@ -413,6 +440,12 @@ serve(async (req) => {
 
   // ─────────────────────────────────────────────────────────────────────────
   if (action === "update") {
+    if (syncOff) {
+      const { error: updErr } = await sbAdmin.from(cfg.table).update(data).eq("id", localId!);
+      if (updErr) return jsonResponse({ error: "Update local falhou", details: updErr.message }, 500);
+      return jsonResponse({ success: true, disabled: true });
+    }
+
     // Buscar external_id do item local
     const { data: item, error: itErr } = await sbAdmin
       .from(cfg.table)
@@ -440,7 +473,8 @@ serve(async (req) => {
       .select("external_id")
       .eq("id", localId!)
       .single();
-    if (item?.external_id) {
+    // Só chama a agenda se ligado E o item tiver vínculo remoto. O delete local roda sempre.
+    if (!syncOff && item?.external_id) {
       try {
         await deleteSubResource(kind, collab.external_id!, item.external_id as string);
       } catch (err) {

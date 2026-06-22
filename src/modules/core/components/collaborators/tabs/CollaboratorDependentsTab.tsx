@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { AGENDA_SYNC_DISABLED } from "@/lib/agenda-sync";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -152,7 +153,11 @@ export function CollaboratorDependentsTab({
         is_health_plan_dependent: false,
         is_invalid: false,
       });
-      toast.success("Dependente adicionado ✓ (sincronizado com a agenda)");
+      toast.success(
+        AGENDA_SYNC_DISABLED
+          ? "Dependente adicionado ✓"
+          : "Dependente adicionado ✓ (sincronizado com a agenda)",
+      );
     },
     onError: (err: Error) => toast.error("Não rolou. " + err.message),
   });
@@ -181,7 +186,9 @@ export function CollaboratorDependentsTab({
         queryKey: ["collaborator-dependents", collaboratorId],
       });
       queryClient.invalidateQueries({ queryKey: ["collaborator", collaboratorId] });
-      toast.success("Removido ✓ (sincronizado com a agenda)");
+      toast.success(
+        AGENDA_SYNC_DISABLED ? "Removido ✓" : "Removido ✓ (sincronizado com a agenda)",
+      );
     },
     onError: (err: Error) => toast.error("Não rolou. " + err.message),
   });

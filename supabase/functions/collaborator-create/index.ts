@@ -14,7 +14,7 @@
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.0";
-import { createColaborador, listAdicionais, SoftcomCloudError } from "../_shared/softcom-cloud.ts";
+import { createColaborador, isAgendaSyncDisabled, listAdicionais, SoftcomCloudError } from "../_shared/softcom-cloud.ts";
 import { applyFinancials } from "../_shared/apply-financials.ts";
 
 const CORS_HEADERS = {
@@ -57,6 +57,10 @@ serve(async (req) => {
       400,
     );
   }
+
+  // Kill-switch global da agenda: cria local-only (external_id null), sem POST
+  // remoto. applyFinancials cai no caminho só-salário-base (adicionais=[]).
+  if (isAgendaSyncDisabled()) syncToRemote = false;
 
   const allowed = await checkPermission(sbUser, user.id, companyId, "colaboradores");
   if (!allowed) return jsonResponse({ error: "Sem permissão" }, 403);

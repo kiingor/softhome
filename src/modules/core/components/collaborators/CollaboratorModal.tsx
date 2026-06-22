@@ -43,6 +43,7 @@ import { SubResourceTab, type FieldDef } from "./tabs/SubResourceTab";
 import { toast } from "sonner";
 import { formatCPFInput, cleanCPF, validateCPF, formatPhoneInput, formatCEPInput, cleanCEP, BRAZIL_STATES } from "@/lib/validators";
 import { sendWhatsAppNotification } from "@/lib/whatsappNotifications";
+import { AGENDA_SYNC_DISABLED } from "@/lib/agenda-sync";
 import { formatCurrency, formatCurrencyForInput, parseCurrencyInput, getCurrentCompetencia, formatDateBR, toTitleCase } from "@/lib/formatters";
 import { calculateMonthlyBenefitValue, getBenefitCalculationDescription, DayAbbrev } from "@/lib/workingDays";
 import { calcAllTaxes } from "@/lib/payroll/cltCalc";
@@ -1135,8 +1136,8 @@ const CollaboratorModal = ({
         }
 
         const message = userId
-          ? `${formData.name} cadastrado ✓ (sincronizado com a agenda + acesso ao Portal)`
-          : `${formData.name} cadastrado ✓ (sincronizado com a agenda)`;
+          ? `${formData.name} cadastrado ✓ ${AGENDA_SYNC_DISABLED ? "(acesso ao Portal)" : "(sincronizado com a agenda + acesso ao Portal)"}`
+          : `${formData.name} cadastrado ✓${AGENDA_SYNC_DISABLED ? "" : " (sincronizado com a agenda)"}`;
         toast.success(message);
 
         sendWhatsAppNotification(currentCompany!.id, newCollabId, "collaborator_registered");
@@ -1230,7 +1231,11 @@ const CollaboratorModal = ({
           termination_date: new Date().toISOString().slice(0, 10),
         },
       });
-      toast.success("Colaborador desativado ✓ (sincronizado com a agenda)");
+      toast.success(
+        AGENDA_SYNC_DISABLED
+          ? "Colaborador desativado ✓"
+          : "Colaborador desativado ✓ (sincronizado com a agenda)",
+      );
       queryClient.invalidateQueries({ queryKey: ["collaborator-timeline", collaboratorId] });
       onSuccess?.();
       setConfirmDeactivate(false);
@@ -1253,7 +1258,11 @@ const CollaboratorModal = ({
         section: "status",
         data: { status: "ativo", termination_date: null },
       });
-      toast.success("Colaborador reativado ✓ (sincronizado com a agenda)");
+      toast.success(
+        AGENDA_SYNC_DISABLED
+          ? "Colaborador reativado ✓"
+          : "Colaborador reativado ✓ (sincronizado com a agenda)",
+      );
       queryClient.invalidateQueries({ queryKey: ["collaborator-timeline", collaboratorId] });
       setFormData((prev) => ({ ...prev, status: "ativo" }));
       onSuccess?.();

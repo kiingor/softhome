@@ -13,7 +13,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.0";
 import { applyCollaboratorDetails } from "../_shared/apply-collaborator-details.ts";
 import { applyFinancials } from "../_shared/apply-financials.ts";
-import { listAdicionais, SoftcomCloudError } from "../_shared/softcom-cloud.ts";
+import { isAgendaSyncDisabled, listAdicionais, SoftcomCloudError } from "../_shared/softcom-cloud.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -72,6 +72,16 @@ serve(async (req) => {
 
   const allowed = await checkPermission(sbUser, user.id, collab.company_id, "colaboradores");
   if (!allowed) return jsonResponse({ error: "Sem permissão" }, 403);
+
+  // Kill-switch global da agenda: não puxa detalhes. O colaborador já
+  // persistido não é tocado; a UI segue lendo dados locais.
+  if (isAgendaSyncDisabled()) {
+    return jsonResponse({
+      success: true,
+      disabled: true,
+      message: "Sincronização com a agenda desativada.",
+    });
+  }
 
   let results;
   let financials;

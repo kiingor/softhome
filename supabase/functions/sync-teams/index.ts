@@ -17,7 +17,7 @@
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.0";
-import { listSetores, SoftcomCloudError } from "../_shared/softcom-cloud.ts";
+import { isAgendaSyncDisabled, listSetores, SoftcomCloudError } from "../_shared/softcom-cloud.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -64,6 +64,19 @@ serve(async (req) => {
 
   const allowed = await checkPermission(sbUser, user.id, companyId, "setores");
   if (!allowed) return jsonResponse({ error: "Sem permissão" }, 403);
+
+  // Kill-switch global da agenda: não puxa nada (mesmo shape pra UI não quebrar).
+  if (isAgendaSyncDisabled()) {
+    return jsonResponse({
+      success: true,
+      disabled: true,
+      message: "Sincronização com a agenda desativada.",
+      fetched: 0,
+      inserted: 0,
+      updated: 0,
+      deactivated: 0,
+    });
+  }
 
   let remote;
   try {
