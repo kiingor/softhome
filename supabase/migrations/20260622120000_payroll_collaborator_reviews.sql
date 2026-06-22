@@ -29,6 +29,13 @@ CREATE INDEX IF NOT EXISTS idx_payroll_reviews_collaborator
 
 ALTER TABLE public.payroll_collaborator_reviews ENABLE ROW LEVEL SECURITY;
 
+-- Idempotência: Postgres não tem CREATE POLICY IF NOT EXISTS, então dropamos
+-- antes de recriar pra migration poder rodar de novo sem erro 42710.
+DROP POLICY IF EXISTS "admin_gc reads all reviews" ON public.payroll_collaborator_reviews;
+DROP POLICY IF EXISTS "gestor_gc reads own reviews" ON public.payroll_collaborator_reviews;
+DROP POLICY IF EXISTS "admin_gc writes reviews" ON public.payroll_collaborator_reviews;
+DROP POLICY IF EXISTS "gestor_gc writes own reviews" ON public.payroll_collaborator_reviews;
+
 -- Mesmo padrão de RLS de payroll_payments: admin_gc lê tudo,
 -- gestor_gc/rh/contador leem da própria company; admin_gc/gestor_gc/rh escrevem.
 CREATE POLICY "admin_gc reads all reviews" ON public.payroll_collaborator_reviews
