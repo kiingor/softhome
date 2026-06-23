@@ -206,6 +206,32 @@ export default function PeriodDetailPage() {
     enabled: !!currentCompany?.id,
   });
 
+  // Estagiários — identificados pelo CARGO (cargo chamado "estagiário"; pode
+  // haver mais de um cargo com esse nome). Servem pra TIRAR os estagiários dos
+  // totais principais e exibir KPIs próprios deles.
+  const { data: internIdList = [] } = useQuery({
+    queryKey: ["folha-intern-collab-ids", currentCompany?.id],
+    queryFn: async () => {
+      if (!currentCompany?.id) return [] as string[];
+      const { data: positions, error: pErr } = await supabase
+        .from("positions")
+        .select("id")
+        .eq("company_id", currentCompany.id)
+        .ilike("name", "%estagi%");
+      if (pErr) throw pErr;
+      const posIds = (positions ?? []).map((p) => p.id as string);
+      if (posIds.length === 0) return [] as string[];
+      const { data: collabs, error: cErr } = await supabase
+        .from("collaborators")
+        .select("id")
+        .in("position_id", posIds);
+      if (cErr) throw cErr;
+      return (collabs ?? []).map((c) => c.id as string);
+    },
+    enabled: !!currentCompany?.id,
+  });
+  const internIds = useMemo(() => new Set(internIdList), [internIdList]);
+
   // Aplica filtros — usa entry.store_id (preferência) ou colab.store_id como fallback;
   // team_id vem só do collaborator.
   const filteredEntries = useMemo(() => {
@@ -386,24 +412,31 @@ export default function PeriodDetailPage() {
   // KPIs da aba LANÇAMENTOS — calculados sobre os lançamentos exibidos nesta aba
   // (exclui bonificação/custo-setor). FGTS é custo do empregador, então fica fora
   // do líquido (igual ao que a tabela mostra). Pagamentos tem KPIs próprios.
+  //
+  // Os ESTAGIÁRIOS (por cargo) saem dos totais principais e ganham KPIs à parte.
   const lancamentoStats = useMemo(() => {
-    let earnings = 0;
-    let deductions = 0;
-    const byCollab = new Set<string>();
+    const mkBucket = () => ({
+      earnings: 0,
+      deductions: 0,
+      byCollab: new Set<string>(),
+    });
+    const main = mkBucket();
+    const intern = mkBucket();
     for (const e of lancamentoEntries) {
+      const bucket = internIds.has(e.collaborator_id) ? intern : main;
       const v = Number(e.value);
-      byCollab.add(e.collaborator_id);
-      if (isEarning(e.type)) earnings += v;
-      else if (isDeduction(e.type) && e.type !== "fgts") deductions += v;
+      bucket.byCollab.add(e.collaborator_id);
+      if (isEarning(e.type)) bucket.earnings += v;
+      else if (isDeduction(e.type) && e.type !== "fgts") bucket.deductions += v;
     }
-    return {
-      count: lancamentoEntries.length,
-      collaborators: byCollab.size,
-      earnings,
-      deductions,
-      net: earnings - deductions,
-    };
-  }, [lancamentoEntries]);
+    const finalize = (b: ReturnType<typeof mkBucket>) => ({
+      collaborators: b.byCollab.size,
+      earnings: b.earnings,
+      deductions: b.deductions,
+      net: b.earnings - b.deductions,
+    });
+    return { main: finalize(main), intern: finalize(intern) };
+  }, [lancamentoEntries, internIds]);
 
   if (isLoading || !period) {
     return (
@@ -653,24 +686,58 @@ export default function PeriodDetailPage() {
         )}
 
         <TabsContent value="lancamentos">
-          {/* KPIs desta aba — totais dos lançamentos (exclui bonificação/custo-setor) */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-            <StatBlock label="Pessoas" value={String(lancamentoStats.collaborators)} />
-            <StatBlock
-              label="Proventos"
-              value={formatCurrency(lancamentoStats.earnings)}
-              accent="emerald"
-            />
-            <StatBlock
-              label="Descontos"
-              value={formatCurrency(lancamentoStats.deductions)}
-              accent="rose"
-            />
-            <StatBlock
-              label="Líquido"
-              value={formatCurrency(lancamentoStats.net)}
-              accent={lancamentoStats.net >= 0 ? "emerald" : "rose"}
-            />
+          {/* KPIs desta aba — totais dos lançamentos (exclui bonificação/custo-setor).
+              Estagiários (por cargo) saem dos totais principais e ganham bloco à parte. */}
+          <div className="flex flex-col xl:flex-row gap-4 mb-4">
+            <div className="flex-1 space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">
+                {lancamentoStats.intern.collaborators > 0 ? "Folha — sem estagiários" : "Folha"}
+              </p>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <StatBlock label="Pessoas" value={String(lancamentoStats.main.collaborators)} />
+                <StatBlock
+                  label="Proventos"
+                  value={formatCurrency(lancamentoStats.main.earnings)}
+                  accent="emerald"
+                />
+                <StatBlock
+                  label="Descontos"
+                  value={formatCurrency(lancamentoStats.main.deductions)}
+                  accent="rose"
+                />
+                <StatBlock
+                  label="Líquido"
+                  value={formatCurrency(lancamentoStats.main.net)}
+                  accent={lancamentoStats.main.net >= 0 ? "emerald" : "rose"}
+                />
+              </div>
+            </div>
+
+            {lancamentoStats.intern.collaborators > 0 && (
+              <div className="space-y-1.5 xl:border-l xl:border-border xl:pl-4">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">
+                  Estagiários
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <StatBlock label="Pessoas" value={String(lancamentoStats.intern.collaborators)} />
+                  <StatBlock
+                    label="Proventos"
+                    value={formatCurrency(lancamentoStats.intern.earnings)}
+                    accent="emerald"
+                  />
+                  <StatBlock
+                    label="Descontos"
+                    value={formatCurrency(lancamentoStats.intern.deductions)}
+                    accent="rose"
+                  />
+                  <StatBlock
+                    label="Líquido"
+                    value={formatCurrency(lancamentoStats.intern.net)}
+                    accent={lancamentoStats.intern.net >= 0 ? "emerald" : "rose"}
+                  />
+                </div>
+              </div>
+            )}
           </div>
           {/* Lançamentos */}
           <Card>
