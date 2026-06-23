@@ -688,8 +688,8 @@ export default function PeriodDetailPage() {
         <TabsContent value="lancamentos">
           {/* KPIs desta aba — totais dos lançamentos (exclui bonificação/custo-setor).
               Estagiários (por cargo) saem dos totais principais e ganham bloco à parte. */}
-          <div className="flex flex-col xl:flex-row gap-4 mb-4">
-            <div className="flex-1 space-y-1.5">
+          <div className="flex flex-col lg:flex-row gap-4 mb-4">
+            <div className="lg:flex-[3] min-w-0 space-y-1.5">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">
                 {lancamentoStats.intern.collaborators > 0 ? "Folha — sem estagiários" : "Folha"}
               </p>
@@ -714,11 +714,11 @@ export default function PeriodDetailPage() {
             </div>
 
             {lancamentoStats.intern.collaborators > 0 && (
-              <div className="space-y-1.5 xl:border-l xl:border-border xl:pl-4">
+              <div className="lg:flex-[2] min-w-0 space-y-1.5 lg:border-l lg:border-border lg:pl-4">
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">
                   Estagiários
                 </p>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                   <StatBlock label="Pessoas" value={String(lancamentoStats.intern.collaborators)} />
                   <StatBlock
                     label="Proventos"
