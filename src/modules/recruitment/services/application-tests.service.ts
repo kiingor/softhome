@@ -100,26 +100,30 @@ export async function getApplicationTestByToken(
   return (row ?? null) as PublicApplicationTest | null;
 }
 
+// Escritas do candidato (anônimo) vão por RPCs SECURITY DEFINER — a RLS de
+// application_tests só libera RH/admin, então UPDATE direto pelo client anônimo
+// casava 0 linhas SEM erro e nada persistia. As RPCs recebem o token como
+// credencial e tocam só na linha daquele token. Retornam { ok, error }.
+type RpcResult = { ok?: boolean; error?: string } | null;
+
 export async function startPublicApplicationTest(token: string): Promise<void> {
-  const { error } = await supabase
-    .from("application_tests")
-    .update({
-      status: "in_progress",
-      started_at: new Date().toISOString(),
-    })
-    .eq("access_token", token)
-    .in("status", ["not_started"]);
+  const { data, error } = await supabase.rpc("start_application_test_by_token", {
+    p_token: token,
+  });
   if (error) throw error;
+  const res = data as RpcResult;
+  if (res && res.ok === false) throw new Error(res.error ?? "Não foi possível iniciar o teste.");
 }
 
 export async function savePublicApplicationTestProgress(
   token: string,
   answers: Record<string, unknown>,
 ): Promise<void> {
-  const { error } = await supabase
-    .from("application_tests")
-    .update({ answers })
-    .eq("access_token", token);
+  // Autosave — best effort. Falha é silenciada por quem chama.
+  const { error } = await supabase.rpc("save_application_test_progress_by_token", {
+    p_token: token,
+    p_answers: answers as never,
+  });
   if (error) throw error;
 }
 
@@ -129,17 +133,17 @@ export async function completePublicApplicationTest(
   autoScore: number | null,
   resultSummary: Record<string, unknown> | null,
 ): Promise<void> {
-  const { error } = await supabase
-    .from("application_tests")
-    .update({
-      status: "completed",
-      answers: finalAnswers,
-      auto_score: autoScore,
-      result_summary: resultSummary,
-      completed_at: new Date().toISOString(),
-    })
-    .eq("access_token", token);
+  const { data, error } = await supabase.rpc("complete_application_test_by_token", {
+    p_token: token,
+    p_answers: finalAnswers as never,
+    p_auto_score: autoScore,
+    p_result_summary: resultSummary as never,
+  });
   if (error) throw error;
+  const res = data as RpcResult;
+  if (res && res.ok === false) {
+    throw new Error(res.error ?? "Não foi possível registrar suas respostas. Tente novamente.");
+  }
 }
 
 export function buildApplicationTestUrl(token: string): string {
