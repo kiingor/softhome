@@ -163,6 +163,17 @@ export default function PeriodDetailPage() {
   // Conferência de lançamentos por colaborador (igual ao "Pago" de Pagamentos).
   const [reviewFilter, setReviewFilter] = useState<"all" | "reviewed" | "pending">("all");
   const [obsFilter, setObsFilter] = useState<"all" | "with" | "without">("all");
+  // Filtro de cargo (multi-seleção) — guarda os NOMES de cargo selecionados.
+  // São ~177 cargos, então o popover tem busca (cargoSearch) pra filtrar a lista.
+  const [positionFilter, setPositionFilter] = useState<Set<string>>(new Set());
+  const [cargoSearch, setCargoSearch] = useState("");
+  const togglePosition = (name: string, on: boolean) =>
+    setPositionFilter((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(name);
+      else next.delete(name);
+      return next;
+    });
   const { data: reviews = [] } = usePayrollReviews(id);
   const upsertReview = useUpsertPayrollReview(id ?? "");
   const reviewByCollab = useMemo(() => {
@@ -206,31 +217,62 @@ export default function PeriodDetailPage() {
     enabled: !!currentCompany?.id,
   });
 
-  // Estagiários — identificados pelo CARGO (cargo chamado "estagiário"; pode
-  // haver mais de um cargo com esse nome). Servem pra TIRAR os estagiários dos
-  // totais principais e exibir KPIs próprios deles.
-  const { data: internIdList = [] } = useQuery({
-    queryKey: ["folha-intern-collab-ids", currentCompany?.id],
+  // Cargo (position) de cada colaborador da empresa — uma fonte só que alimenta
+  // o FILTRO de Cargo (multi-seleção) E o split de ESTAGIÁRIOS (cargo "estagiário").
+  const { data: positionsList = [] } = useQuery({
+    queryKey: ["folha-positions-lookup", currentCompany?.id],
     queryFn: async () => {
-      if (!currentCompany?.id) return [] as string[];
-      const { data: positions, error: pErr } = await supabase
+      if (!currentCompany?.id) return [] as { id: string; name: string }[];
+      const { data, error } = await supabase
         .from("positions")
-        .select("id")
-        .eq("company_id", currentCompany.id)
-        .ilike("name", "%estagi%");
-      if (pErr) throw pErr;
-      const posIds = (positions ?? []).map((p) => p.id as string);
-      if (posIds.length === 0) return [] as string[];
-      const { data: collabs, error: cErr } = await supabase
-        .from("collaborators")
-        .select("id")
-        .in("position_id", posIds);
-      if (cErr) throw cErr;
-      return (collabs ?? []).map((c) => c.id as string);
+        .select("id, name")
+        .eq("company_id", currentCompany.id);
+      if (error) throw error;
+      return (data ?? []) as { id: string; name: string }[];
     },
     enabled: !!currentCompany?.id,
   });
-  const internIds = useMemo(() => new Set(internIdList), [internIdList]);
+  const { data: collabPosList = [] } = useQuery({
+    queryKey: ["folha-collab-position-ids", currentCompany?.id],
+    queryFn: async () => {
+      if (!currentCompany?.id) return [] as { id: string; position_id: string | null }[];
+      const { data, error } = await supabase
+        .from("collaborators")
+        .select("id, position_id")
+        .eq("company_id", currentCompany.id);
+      if (error) throw error;
+      return (data ?? []) as { id: string; position_id: string | null }[];
+    },
+    enabled: !!currentCompany?.id,
+  });
+  const positionNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const p of positionsList) m.set(p.id, p.name);
+    return m;
+  }, [positionsList]);
+  // collaborator_id → nome do cargo (ou null).
+  const collabPosition = useMemo(() => {
+    const m = new Map<string, string | null>();
+    for (const c of collabPosList) {
+      m.set(c.id, c.position_id ? positionNameById.get(c.position_id) ?? null : null);
+    }
+    return m;
+  }, [collabPosList, positionNameById]);
+  // Cargos distintos (ordenados) pro filtro multi-seleção. Cargos com o mesmo
+  // nome (ex.: 2× "Estagiario") viram UMA opção e filtram os dois.
+  const positionNames = useMemo(() => {
+    const s = new Set<string>();
+    for (const p of positionsList) if (p.name) s.add(p.name);
+    return [...s].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [positionsList]);
+  // Estagiários: colaboradores cujo cargo contém "estagi" (pega os 2+ cargos).
+  const internIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const [cid, name] of collabPosition) {
+      if (name && /estagi/i.test(name)) s.add(cid);
+    }
+    return s;
+  }, [collabPosition]);
 
   // Aplica filtros — usa entry.store_id (preferência) ou colab.store_id como fallback;
   // team_id vem só do collaborator.
@@ -254,8 +296,18 @@ export default function PeriodDetailPage() {
   // folha do colaborador. Some da listagem, do contador e do net mostrado
   // aqui. A aba Pagamentos, os totais do topo e a exportação seguem intactos.
   const lancamentoEntries = useMemo(
-    () => filteredEntries.filter((e) => e.type !== "bonificacao"),
-    [filteredEntries],
+    () =>
+      filteredEntries.filter((e) => {
+        if (e.type === "bonificacao") return false;
+        // Filtro de cargo (multi-seleção): mantém só os colaboradores cujo
+        // cargo está entre os selecionados. Afeta KPIs e lista desta aba.
+        if (positionFilter.size > 0) {
+          const pos = collabPosition.get(e.collaborator_id) ?? null;
+          if (!pos || !positionFilter.has(pos)) return false;
+        }
+        return true;
+      }),
+    [filteredEntries, positionFilter, collabPosition],
   );
 
   const isFiltering = storeFilter !== "all" || teamFilter !== "all";
@@ -822,7 +874,87 @@ export default function PeriodDetailPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  {(isSearching || hasReviewFilters) && (
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-muted-foreground font-medium">
+                      Cargo
+                    </label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="w-[190px] h-9 justify-between font-normal"
+                        >
+                          <span className="truncate">
+                            {positionFilter.size === 0
+                              ? "Todos os cargos"
+                              : `${positionFilter.size} cargo${positionFilter.size > 1 ? "s" : ""}`}
+                          </span>
+                          <CaretDown className="w-3.5 h-3.5 ml-2 opacity-60 shrink-0" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent align="start" className="w-[260px] p-0">
+                        <div className="p-2 border-b border-border">
+                          <div className="relative">
+                            <MagnifyingGlass className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                            <Input
+                              type="text"
+                              placeholder="Buscar cargo..."
+                              value={cargoSearch}
+                              onChange={(e) => setCargoSearch(e.target.value)}
+                              className="h-8 pl-8 text-sm"
+                            />
+                          </div>
+                        </div>
+                        <div className="max-h-[260px] overflow-y-auto p-1">
+                          {(() => {
+                            const q = normalizeSearch(cargoSearch.trim());
+                            const shown = q
+                              ? positionNames.filter((n) => normalizeSearch(n).includes(q))
+                              : positionNames;
+                            if (positionNames.length === 0) {
+                              return (
+                                <p className="px-2 py-3 text-xs text-muted-foreground text-center">
+                                  Sem cargos cadastrados.
+                                </p>
+                              );
+                            }
+                            if (shown.length === 0) {
+                              return (
+                                <p className="px-2 py-3 text-xs text-muted-foreground text-center">
+                                  Nenhum cargo com esse nome.
+                                </p>
+                              );
+                            }
+                            return shown.map((name) => (
+                              <label
+                                key={name}
+                                className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer text-sm"
+                              >
+                                <Checkbox
+                                  checked={positionFilter.has(name)}
+                                  onCheckedChange={(c) => togglePosition(name, !!c)}
+                                />
+                                <span className="truncate">{name}</span>
+                              </label>
+                            ));
+                          })()}
+                        </div>
+                        {positionFilter.size > 0 && (
+                          <div className="border-t border-border p-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="w-full h-7 text-xs"
+                              onClick={() => setPositionFilter(new Set())}
+                            >
+                              Limpar cargos ({positionFilter.size})
+                            </Button>
+                          </div>
+                        )}
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  {(isSearching || hasReviewFilters || positionFilter.size > 0) && (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -830,6 +962,7 @@ export default function PeriodDetailPage() {
                         setSearchTerm("");
                         setReviewFilter("all");
                         setObsFilter("all");
+                        setPositionFilter(new Set());
                       }}
                       className="h-9 text-xs"
                     >
@@ -882,6 +1015,7 @@ export default function PeriodDetailPage() {
                     onClick={() => {
                       setStoreFilter("all");
                       setTeamFilter("all");
+                      setPositionFilter(new Set());
                     }}
                   >
                     Limpar filtros
@@ -899,6 +1033,7 @@ export default function PeriodDetailPage() {
                       setSearchTerm("");
                       setReviewFilter("all");
                       setObsFilter("all");
+                      setPositionFilter(new Set());
                     }}
                   >
                     Limpar filtros
