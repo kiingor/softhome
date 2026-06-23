@@ -78,6 +78,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PaymentsTab } from "../components/PaymentsTab";
+import { StatBlock } from "../components/StatBlock";
 import { VacationAdvanceDialog } from "../components/VacationAdvanceDialog";
 import { toast } from "sonner";
 import { useDashboard } from "@/contexts/DashboardContext";
@@ -162,6 +163,17 @@ export default function PeriodDetailPage() {
   // Conferência de lançamentos por colaborador (igual ao "Pago" de Pagamentos).
   const [reviewFilter, setReviewFilter] = useState<"all" | "reviewed" | "pending">("all");
   const [obsFilter, setObsFilter] = useState<"all" | "with" | "without">("all");
+  // Filtro de cargo (multi-seleção) — guarda os NOMES de cargo selecionados.
+  // São ~177 cargos, então o popover tem busca (cargoSearch) pra filtrar a lista.
+  const [positionFilter, setPositionFilter] = useState<Set<string>>(new Set());
+  const [cargoSearch, setCargoSearch] = useState("");
+  const togglePosition = (name: string, on: boolean) =>
+    setPositionFilter((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(name);
+      else next.delete(name);
+      return next;
+    });
   const { data: reviews = [] } = usePayrollReviews(id);
   const upsertReview = useUpsertPayrollReview(id ?? "");
   const reviewByCollab = useMemo(() => {
@@ -205,6 +217,63 @@ export default function PeriodDetailPage() {
     enabled: !!currentCompany?.id,
   });
 
+  // Cargo (position) de cada colaborador da empresa — uma fonte só que alimenta
+  // o FILTRO de Cargo (multi-seleção) E o split de ESTAGIÁRIOS (cargo "estagiário").
+  const { data: positionsList = [] } = useQuery({
+    queryKey: ["folha-positions-lookup", currentCompany?.id],
+    queryFn: async () => {
+      if (!currentCompany?.id) return [] as { id: string; name: string }[];
+      const { data, error } = await supabase
+        .from("positions")
+        .select("id, name")
+        .eq("company_id", currentCompany.id);
+      if (error) throw error;
+      return (data ?? []) as { id: string; name: string }[];
+    },
+    enabled: !!currentCompany?.id,
+  });
+  const { data: collabPosList = [] } = useQuery({
+    queryKey: ["folha-collab-position-ids", currentCompany?.id],
+    queryFn: async () => {
+      if (!currentCompany?.id) return [] as { id: string; position_id: string | null }[];
+      const { data, error } = await supabase
+        .from("collaborators")
+        .select("id, position_id")
+        .eq("company_id", currentCompany.id);
+      if (error) throw error;
+      return (data ?? []) as { id: string; position_id: string | null }[];
+    },
+    enabled: !!currentCompany?.id,
+  });
+  const positionNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const p of positionsList) m.set(p.id, p.name);
+    return m;
+  }, [positionsList]);
+  // collaborator_id → nome do cargo (ou null).
+  const collabPosition = useMemo(() => {
+    const m = new Map<string, string | null>();
+    for (const c of collabPosList) {
+      m.set(c.id, c.position_id ? positionNameById.get(c.position_id) ?? null : null);
+    }
+    return m;
+  }, [collabPosList, positionNameById]);
+  // Cargos distintos (ordenados) pro filtro multi-seleção. Cargos com o mesmo
+  // nome (ex.: 2× "Estagiario") viram UMA opção e filtram os dois.
+  const positionNames = useMemo(() => {
+    const s = new Set<string>();
+    for (const p of positionsList) if (p.name) s.add(p.name);
+    return [...s].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [positionsList]);
+  // Estagiários: colaboradores cujo cargo contém "estagi" (pega os 2+ cargos).
+  const internIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const [cid, name] of collabPosition) {
+      if (name && /estagi/i.test(name)) s.add(cid);
+    }
+    return s;
+  }, [collabPosition]);
+
   // Aplica filtros — usa entry.store_id (preferência) ou colab.store_id como fallback;
   // team_id vem só do collaborator.
   const filteredEntries = useMemo(() => {
@@ -227,8 +296,18 @@ export default function PeriodDetailPage() {
   // folha do colaborador. Some da listagem, do contador e do net mostrado
   // aqui. A aba Pagamentos, os totais do topo e a exportação seguem intactos.
   const lancamentoEntries = useMemo(
-    () => filteredEntries.filter((e) => e.type !== "bonificacao"),
-    [filteredEntries],
+    () =>
+      filteredEntries.filter((e) => {
+        if (e.type === "bonificacao") return false;
+        // Filtro de cargo (multi-seleção): mantém só os colaboradores cujo
+        // cargo está entre os selecionados. Afeta KPIs e lista desta aba.
+        if (positionFilter.size > 0) {
+          const pos = collabPosition.get(e.collaborator_id) ?? null;
+          if (!pos || !positionFilter.has(pos)) return false;
+        }
+        return true;
+      }),
+    [filteredEntries, positionFilter, collabPosition],
   );
 
   const isFiltering = storeFilter !== "all" || teamFilter !== "all";
@@ -242,10 +321,11 @@ export default function PeriodDetailPage() {
     });
   };
 
-  // Tipos de imposto que são absorvidos pelo "Salário base" no display
-  // (INSS/IRPF/FGTS aparecem na exportação pro contador, mas na UI ficam
-  // somados dentro da linha de salário pra ficar menos confuso).
-  const TAX_TYPES = new Set(["inss", "irpf", "fgts"]);
+  // FGTS é custo do empregador — aparece só como info na linha do salário, sem
+  // reduzir o líquido. INSS e IRPF agora são LINHAS PRÓPRIAS (igual ao holerite
+  // do contador): antes eram absorvidos/distribuídos, o que escondia que o IRPF
+  // incide sobre salário + gratificação (a base cheia).
+  const TAX_TYPES = new Set(["fgts"]);
 
   const groupedByCollab = useMemo(() => {
     type DisplayEntry = (typeof filteredEntries)[number] & {
@@ -282,62 +362,16 @@ export default function PeriodDetailPage() {
         g.net += isEarning(e.type) ? v : -v;
       }
     }
-    // Ajusta valores exibidos:
-    // - Salário base absorve INSS sempre e a parte do IRPF que cabe a ele.
-    //   FGTS NÃO entra no líquido (é custo do empregador), só aparece como info.
-    // - Gratificação absorve só a parte do IRPF que cabe a ela (regra do user:
-    //   gratificação só desconta IRPF).
-    // - IRPF é distribuído proporcionalmente entre salário base + gratificações
-    //   pelo valor bruto de cada um.
+    // FGTS é custo do empregador: mostra como info na linha do salário base, sem
+    // reduzir o líquido. INSS e IRPF NÃO são mais absorvidos — viram linhas
+    // próprias (ver TAX_TYPES). Assim o IRPF aparece com o valor cheio (sobre
+    // salário + gratificação), igual ao holerite do contador.
     for (const g of map.values()) {
-      const { inss, irpf, fgts } = g.taxBreakdown;
+      const { fgts } = g.taxBreakdown;
       const salaryEntry = g.entries.find((e) => e.type === "salario_base");
-      const gratEntries = g.entries.filter((e) => e.type === "gratificacao");
-
-      const irpfBase =
-        (salaryEntry ? Number(salaryEntry.value) : 0) +
-        gratEntries.reduce((s, e) => s + Number(e.value), 0);
-
-      // Aloca IRPF proporcionalmente; resto vai pra última entrada pra fechar contas.
-      const targets: Array<{ entry: DisplayEntry; gross: number }> = [];
-      if (salaryEntry)
-        targets.push({ entry: salaryEntry, gross: Number(salaryEntry.value) });
-      for (const e of gratEntries)
-        targets.push({ entry: e, gross: Number(e.value) });
-
-      const irpfShares = new Map<string, number>();
-      if (irpf > 0 && irpfBase > 0) {
-        let allocated = 0;
-        targets.forEach((t, i) => {
-          const share =
-            i === targets.length - 1
-              ? irpf - allocated
-              : Math.round(((irpf * t.gross) / irpfBase) * 100) / 100;
-          allocated += share;
-          irpfShares.set(t.entry.id, share);
-        });
-      }
-
-      // Aplica deduções
-      if (salaryEntry) {
-        const irpfPart = irpfShares.get(salaryEntry.id) ?? 0;
-        // FGTS fica de fora do líquido — entra só como info de custo do empregador.
-        const total = inss + irpfPart;
-        if (total > 0 || fgts > 0) {
-          salaryEntry._adjustedValue = Number(salaryEntry.value) - total;
-          salaryEntry._taxesApplied = {
-            inss: inss || undefined,
-            irpf: irpfPart || undefined,
-            fgts: fgts || undefined,
-          };
-        }
-      }
-      for (const e of gratEntries) {
-        const irpfPart = irpfShares.get(e.id) ?? 0;
-        if (irpfPart > 0) {
-          e._adjustedValue = Number(e.value) - irpfPart;
-          e._taxesApplied = { irpf: irpfPart };
-        }
+      if (salaryEntry && fgts > 0) {
+        salaryEntry._adjustedValue = Number(salaryEntry.value);
+        salaryEntry._taxesApplied = { fgts };
       }
     }
     return [...map.values()].sort((a, b) =>
@@ -382,24 +416,34 @@ export default function PeriodDetailPage() {
     }
   };
 
-  const stats = useMemo(() => {
-    let earnings = 0;
-    let deductions = 0;
-    const byCollab = new Set<string>();
-    for (const e of filteredEntries) {
+  // KPIs da aba LANÇAMENTOS — calculados sobre os lançamentos exibidos nesta aba
+  // (exclui bonificação/custo-setor). FGTS é custo do empregador, então fica fora
+  // do líquido (igual ao que a tabela mostra). Pagamentos tem KPIs próprios.
+  //
+  // Os ESTAGIÁRIOS (por cargo) saem dos totais principais e ganham KPIs à parte.
+  const lancamentoStats = useMemo(() => {
+    const mkBucket = () => ({
+      earnings: 0,
+      deductions: 0,
+      byCollab: new Set<string>(),
+    });
+    const main = mkBucket();
+    const intern = mkBucket();
+    for (const e of lancamentoEntries) {
+      const bucket = internIds.has(e.collaborator_id) ? intern : main;
       const v = Number(e.value);
-      if (isEarning(e.type)) earnings += v;
-      else if (isDeduction(e.type)) deductions += v;
-      byCollab.add(e.collaborator_id);
+      bucket.byCollab.add(e.collaborator_id);
+      if (isEarning(e.type)) bucket.earnings += v;
+      else if (isDeduction(e.type) && e.type !== "fgts") bucket.deductions += v;
     }
-    return {
-      total: filteredEntries.length,
-      earnings,
-      deductions,
-      net: earnings - deductions,
-      collaborators: byCollab.size,
-    };
-  }, [filteredEntries]);
+    const finalize = (b: ReturnType<typeof mkBucket>) => ({
+      collaborators: b.byCollab.size,
+      earnings: b.earnings,
+      deductions: b.deductions,
+      net: b.earnings - b.deductions,
+    });
+    return { main: finalize(main), intern: finalize(intern) };
+  }, [lancamentoEntries, internIds]);
 
   if (isLoading || !period) {
     return (
@@ -612,24 +656,10 @@ export default function PeriodDetailPage() {
         )}
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatBlock label="Lançamentos" value={String(stats.total)} />
-        <StatBlock label="Pessoas" value={String(stats.collaborators)} />
-        <StatBlock
-          label="Proventos"
-          value={formatCurrency(stats.earnings)}
-          accent="emerald"
-        />
-        <StatBlock
-          label="Líquido"
-          value={formatCurrency(stats.net)}
-          accent={stats.net >= 0 ? "emerald" : "rose"}
-        />
-      </div>
-
       {/* Alertas pendentes viram um botão no topo (abre dialog) pra dar mais
-          espaço vertical à tela. Ver <Dialog> no fim do componente. */}
+          espaço vertical à tela. Ver <Dialog> no fim do componente.
+          Os KPIs saíram daqui — agora ficam DENTRO de cada aba, com os totais
+          próprios (lançamentos ≠ pagamentos). */}
 
       {/* Tabs: Lançamentos (RH) / Pagamentos (Financeiro) */}
       <Tabs defaultValue="lancamentos" className="space-y-4">
@@ -663,6 +693,59 @@ export default function PeriodDetailPage() {
         )}
 
         <TabsContent value="lancamentos">
+          {/* KPIs desta aba — totais dos lançamentos (exclui bonificação/custo-setor).
+              Estagiários (por cargo) saem dos totais principais e ganham bloco à parte. */}
+          <div className="flex flex-col lg:flex-row gap-4 mb-4">
+            <div className="lg:flex-[3] min-w-0 space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">
+                {lancamentoStats.intern.collaborators > 0 ? "Folha — sem estagiários" : "Folha"}
+              </p>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <StatBlock label="Pessoas" value={String(lancamentoStats.main.collaborators)} />
+                <StatBlock
+                  label="Proventos"
+                  value={formatCurrency(lancamentoStats.main.earnings)}
+                  accent="emerald"
+                />
+                <StatBlock
+                  label="Descontos"
+                  value={formatCurrency(lancamentoStats.main.deductions)}
+                  accent="rose"
+                />
+                <StatBlock
+                  label="Líquido"
+                  value={formatCurrency(lancamentoStats.main.net)}
+                  accent={lancamentoStats.main.net >= 0 ? "emerald" : "rose"}
+                />
+              </div>
+            </div>
+
+            {lancamentoStats.intern.collaborators > 0 && (
+              <div className="lg:flex-[2] min-w-0 space-y-1.5 lg:border-l lg:border-border lg:pl-4">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">
+                  Estagiários
+                </p>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <StatBlock label="Pessoas" value={String(lancamentoStats.intern.collaborators)} />
+                  <StatBlock
+                    label="Proventos"
+                    value={formatCurrency(lancamentoStats.intern.earnings)}
+                    accent="emerald"
+                  />
+                  <StatBlock
+                    label="Descontos"
+                    value={formatCurrency(lancamentoStats.intern.deductions)}
+                    accent="rose"
+                  />
+                  <StatBlock
+                    label="Líquido"
+                    value={formatCurrency(lancamentoStats.intern.net)}
+                    accent={lancamentoStats.intern.net >= 0 ? "emerald" : "rose"}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
           {/* Lançamentos */}
           <Card>
             <CardHeader className="space-y-3">
@@ -746,7 +829,87 @@ export default function PeriodDetailPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  {(isSearching || hasReviewFilters) && (
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-muted-foreground font-medium">
+                      Cargo
+                    </label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="w-[190px] h-9 justify-between font-normal"
+                        >
+                          <span className="truncate">
+                            {positionFilter.size === 0
+                              ? "Todos os cargos"
+                              : `${positionFilter.size} cargo${positionFilter.size > 1 ? "s" : ""}`}
+                          </span>
+                          <CaretDown className="w-3.5 h-3.5 ml-2 opacity-60 shrink-0" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent align="start" className="w-[260px] p-0">
+                        <div className="p-2 border-b border-border">
+                          <div className="relative">
+                            <MagnifyingGlass className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                            <Input
+                              type="text"
+                              placeholder="Buscar cargo..."
+                              value={cargoSearch}
+                              onChange={(e) => setCargoSearch(e.target.value)}
+                              className="h-8 pl-8 text-sm"
+                            />
+                          </div>
+                        </div>
+                        <div className="max-h-[260px] overflow-y-auto p-1">
+                          {(() => {
+                            const q = normalizeSearch(cargoSearch.trim());
+                            const shown = q
+                              ? positionNames.filter((n) => normalizeSearch(n).includes(q))
+                              : positionNames;
+                            if (positionNames.length === 0) {
+                              return (
+                                <p className="px-2 py-3 text-xs text-muted-foreground text-center">
+                                  Sem cargos cadastrados.
+                                </p>
+                              );
+                            }
+                            if (shown.length === 0) {
+                              return (
+                                <p className="px-2 py-3 text-xs text-muted-foreground text-center">
+                                  Nenhum cargo com esse nome.
+                                </p>
+                              );
+                            }
+                            return shown.map((name) => (
+                              <label
+                                key={name}
+                                className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer text-sm"
+                              >
+                                <Checkbox
+                                  checked={positionFilter.has(name)}
+                                  onCheckedChange={(c) => togglePosition(name, !!c)}
+                                />
+                                <span className="truncate">{name}</span>
+                              </label>
+                            ));
+                          })()}
+                        </div>
+                        {positionFilter.size > 0 && (
+                          <div className="border-t border-border p-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="w-full h-7 text-xs"
+                              onClick={() => setPositionFilter(new Set())}
+                            >
+                              Limpar cargos ({positionFilter.size})
+                            </Button>
+                          </div>
+                        )}
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  {(isSearching || hasReviewFilters || positionFilter.size > 0) && (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -754,6 +917,7 @@ export default function PeriodDetailPage() {
                         setSearchTerm("");
                         setReviewFilter("all");
                         setObsFilter("all");
+                        setPositionFilter(new Set());
                       }}
                       className="h-9 text-xs"
                     >
@@ -806,6 +970,7 @@ export default function PeriodDetailPage() {
                     onClick={() => {
                       setStoreFilter("all");
                       setTeamFilter("all");
+                      setPositionFilter(new Set());
                     }}
                   >
                     Limpar filtros
@@ -823,6 +988,7 @@ export default function PeriodDetailPage() {
                       setSearchTerm("");
                       setReviewFilter("all");
                       setObsFilter("all");
+                      setPositionFilter(new Set());
                     }}
                   >
                     Limpar filtros
@@ -1342,33 +1508,3 @@ function ReviewObsButton({
   );
 }
 
-function StatBlock({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: string;
-  accent?: "emerald" | "rose";
-}) {
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <p className="text-xs text-muted-foreground uppercase tracking-wide">
-          {label}
-        </p>
-        <p
-          className={`text-xl font-light mt-1 ${
-            accent === "emerald"
-              ? "text-orange-700 dark:text-orange-400"
-              : accent === "rose"
-              ? "text-rose-700 dark:text-rose-400"
-              : "text-foreground"
-          }`}
-        >
-          {value}
-        </p>
-      </CardContent>
-    </Card>
-  );
-}

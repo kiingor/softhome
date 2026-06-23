@@ -18,6 +18,7 @@ import {
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/formatters";
+import { StatBlock } from "./StatBlock";
 import {
   isEarning,
   ENTRY_TYPE_LABELS,
@@ -359,6 +360,18 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
 
   return (
     <div className="space-y-4">
+      {/* KPIs desta aba — totais LÍQUIDOS a pagar (sem FGTS, benefícios, estornos) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatBlock label="Pagos" value={`${paidCount}/${total}`} />
+        <StatBlock label="Total a pagar" value={formatCurrency(totalAmount)} accent="emerald" />
+        <StatBlock label="Pago" value={formatCurrency(paidAmount)} accent="emerald" />
+        <StatBlock
+          label="Pendente"
+          value={formatCurrency(totalAmount - paidAmount)}
+          accent={totalAmount - paidAmount > 0 ? "rose" : "emerald"}
+        />
+      </div>
+
       {/* Progresso */}
       <div className="space-y-2 px-1">
         <div className="flex items-center justify-between text-sm">
