@@ -40,6 +40,7 @@ export const ACTIVE_ENTRY_TYPES = [
   "bonificacao",
   "gratificacao",
   "carro_agregado",
+  "periculosidade",
   "desconto",
 ] as const;
 
@@ -59,6 +60,7 @@ export const MANUAL_CREDIT_TYPES = [
   "bonificacao",
   "gratificacao",
   "carro_agregado",
+  "periculosidade",
   "atestado",
 ] as const;
 
@@ -93,6 +95,8 @@ export const ENTRY_TYPE_COLORS: Record<string, string> = {
     "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-900/60",
   carro_agregado:
     "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-900/60",
+  periculosidade:
+    "bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200 dark:bg-fuchsia-950/40 dark:text-fuchsia-300 dark:border-fuchsia-900/60",
   atestado:
     "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-900/60 dark:text-slate-300 dark:border-slate-700",
   adiantamento:
@@ -120,6 +124,7 @@ export const ENTRY_TYPE_LABELS: Record<string, string> = {
   bonificacao: "Bonificação",
   gratificacao: "Gratificação",
   carro_agregado: "Carro Agregado",
+  periculosidade: "Periculosidade",
   desconto: "Desconto",
   ferias: "Férias",
   salario_familia: "Salário-Família",
@@ -139,6 +144,7 @@ export const EARNINGS_TYPES = [
   "bonificacao",
   "gratificacao",
   "carro_agregado",
+  "periculosidade",
   "atestado",
   "ferias",
   "salario_familia",
