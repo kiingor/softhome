@@ -20,12 +20,23 @@ import type {
   DiscWordQuestion,
   LikertQuestion,
 } from "../lib/tests/types";
-import type { JourneyTest } from "../hooks/use-admission-tests";
+
+// Forma mínima que o visualizador precisa — desacoplado do tipo JourneyTest
+// (admissão) pra que o recrutamento (ApplicationTest) também reaproveite este
+// dialog. Qualquer registro com esses campos serve.
+export interface TestResultData {
+  test_slug: string;
+  answers: Record<string, unknown> | null;
+  result_summary: Record<string, unknown> | null;
+  auto_score: number | null;
+  completed_at: string | null;
+  test?: { name?: string } | null;
+}
 
 interface TestResultDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  journeyTest: (JourneyTest & { test?: { name?: string } }) | null;
+  journeyTest: TestResultData | null;
 }
 
 const LIKERT_LABELS: Record<number, string> = {
