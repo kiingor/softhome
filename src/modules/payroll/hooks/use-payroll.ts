@@ -9,7 +9,7 @@ import type {
   PayrollAlertWithCollaborator,
   PayrollPeriodWithStats,
 } from "../types";
-import { periodToMonthYear, formatPeriodLabel } from "../types";
+import { periodToMonthYear, formatPeriodLabel, IRPF_TAXABLE_EARNING_TYPES } from "../types";
 import type {
   OpenPeriodValues,
   NewEntryValues,
@@ -18,6 +18,9 @@ import type {
 import { calculateMonthlyBenefitValue, type DayAbbrev } from "@/lib/workingDays";
 import {
   calcAllTaxes,
+  calcINSS,
+  calcIRPF,
+  calcFGTS,
   calcSalarioFamilia,
   eligibleChildrenForSalarioFamilia,
   SALARIO_FAMILIA_LIMITE_2026,
@@ -1398,6 +1401,25 @@ export function usePayrollPeriods() {
 
       if (collaboratorsError) throw collaboratorsError;
 
+      // 2b. Proventos TRIBUTÁVEIS do mês (gratificação, hora extra, etc.) por
+      //     colaborador — entram na base do IRPF (junto com o salário). INSS/FGTS
+      //     ficam só no salário. Exclui proventos do recibo de férias (IRRF próprio).
+      const { data: taxableProvs } = await supabase
+        .from("payroll_entries")
+        .select("collaborator_id, value, external_id")
+        .eq("company_id", companyId)
+        .eq("month", month)
+        .eq("year", year)
+        .in("type", [...IRPF_TAXABLE_EARNING_TYPES]);
+      const irpfExtraByCollab = new Map<string, number>();
+      for (const e of taxableProvs ?? []) {
+        if (typeof e.external_id === "string" && e.external_id.startsWith("ferias-")) continue;
+        irpfExtraByCollab.set(
+          e.collaborator_id,
+          (irpfExtraByCollab.get(e.collaborator_id) ?? 0) + Number(e.value),
+        );
+      }
+
       // Quem tem benefício de Vale Transporte (categoria 'transport') → recria
       // o desconto de 6% do salário base junto com os encargos.
       const { data: vtAssignments } = await supabase
@@ -1421,7 +1443,13 @@ export function usePayrollPeriods() {
         if (salary <= 0) continue;
         if (skipSalaryNext.has(c.id)) continue;
         const deps = (c as { dependents_count?: number }).dependents_count ?? 0;
-        const taxes = calcAllTaxes({ grossSalary: salary, dependents: deps });
+        // INSS/FGTS só sobre o salário base; IRPF sobre salário + proventos
+        // tributáveis do mês (gratificação etc.), menos INSS e dependentes.
+        const inss = calcINSS(salary);
+        const fgts = calcFGTS(salary);
+        const irpfGross = salary + (irpfExtraByCollab.get(c.id) ?? 0);
+        const irpf = calcIRPF({ grossSalary: irpfGross, inss, dependents: deps });
+        const taxes = { inss, irpf, fgts };
         const covered = existingBaseCoverage.get(c.id) ?? new Set<BasePayrollType>();
         const base = {
           company_id: companyId,

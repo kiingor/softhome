@@ -165,6 +165,25 @@ export const DEDUCTION_TYPES = [
 // é depositado pela empresa — nunca sai do salário de quem recebe.
 export const EMPLOYER_COST_TYPES = ["fgts"] as const;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// IRPF — base de cálculo
+//
+// O IRPF incide sobre TODOS os rendimentos tributáveis do mês (salário base +
+// estes proventos), menos INSS e dedução por dependente. Diferente do INSS/FGTS,
+// que ficam só no salário base (gratificação espontânea é liberalidade: tributa
+// IR, mas NÃO integra INSS/FGTS).
+//
+// Ferias têm IRRF próprio no recibo (external_id 'ferias-%') e são excluídas.
+// Isentos de IRPF: salário-família, benefícios, bonificação (custo de setor).
+// ─────────────────────────────────────────────────────────────────────────────
+export const IRPF_TAXABLE_EARNING_TYPES = [
+  "gratificacao",
+  "hora_extra",
+  "carro_agregado",
+  "periculosidade",
+  "atestado",
+] as const;
+
 export function isEarning(type: string): boolean {
   return (EARNINGS_TYPES as readonly string[]).includes(type);
 }
