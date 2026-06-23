@@ -70,15 +70,15 @@ export function ApplicationTestRunner({
   const pct = ((index + (currentAnswered ? 1 : 0)) / total) * 100;
 
   const setAnswer = (a: Answer) => {
-    setAnswers((prev) => {
-      const next = { ...prev, [current.id]: a };
-      savePublicApplicationTestProgress(
-        token,
-        next as unknown as Record<string, unknown>,
-      ).catch(() => {
-        /* autosave falha silencia */
-      });
-      return next;
+    const next = { ...answers, [current.id]: a };
+    setAnswers(next);
+    // Autosave fora do updater (updater de estado deve ser puro) — best effort,
+    // falha silencia. O complete reenvia o conjunto completo de respostas.
+    savePublicApplicationTestProgress(
+      token,
+      next as unknown as Record<string, unknown>,
+    ).catch(() => {
+      /* autosave falha silencia */
     });
   };
 

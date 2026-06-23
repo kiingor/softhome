@@ -4899,6 +4899,15 @@ export type Database = {
         Args: { _company_id: string; _module: string; _user_id: string }
         Returns: boolean
       }
+      complete_application_test_by_token: {
+        Args: {
+          p_answers: Json
+          p_auto_score: number
+          p_result_summary: Json
+          p_token: string
+        }
+        Returns: Json
+      }
       complete_application_test_in_session: {
         Args: {
           p_answers: Json
@@ -4984,8 +4993,16 @@ export type Database = {
           similarity: number
         }[]
       }
+      save_application_test_progress_by_token: {
+        Args: { p_answers: Json; p_token: string }
+        Returns: Json
+      }
       save_application_test_progress_in_session: {
         Args: { p_answers: Json; p_test_id: string; p_token: string }
+        Returns: Json
+      }
+      start_application_test_by_token: {
+        Args: { p_token: string }
         Returns: Json
       }
       start_application_test_in_session: {
