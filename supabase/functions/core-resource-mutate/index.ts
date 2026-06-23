@@ -26,6 +26,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.0";
 import {
+  isAgendaSyncDisabled,
   SoftcomCloudError,
   createEmpresaPdv,
   updateEmpresaPdv,
@@ -107,6 +108,10 @@ serve(async (req) => {
   } catch (e) {
     return jsonResponse({ error: "Body inválido: " + (e as Error).message }, 400);
   }
+
+  // Kill-switch global da agenda: pula o PUSH remoto. Create grava
+  // external_id=null (fallback abaixo); update/delete locais independem do remoto.
+  if (isAgendaSyncDisabled()) body.syncToRemote = false;
 
   // Permissão por módulo + ação
   const module = MODULE_BY_RESOURCE[body.resource];

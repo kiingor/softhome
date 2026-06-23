@@ -53,6 +53,27 @@ interface FetchOptions {
   timeoutMs?: number;
 }
 
+/**
+ * Kill-switch da integração com a agenda (api.softcom.cloud).
+ *
+ * Lido por request (Deno.env), então reverter NÃO exige redeploy: basta
+ * `supabase secrets unset AGENDA_SYNC_DISABLED` (ou setar 'false') que as
+ * functions voltam a sincronizar na próxima invocação.
+ *
+ * Default = HABILITADO (só desliga quando o secret for truthy). NÃO usar a
+ * ausência de SOFTCOM_CLOUD_API_KEY como switch — isso quebraria o Guardião da
+ * Cultura (feedbacks/objetivos), que é pass-through ao vivo sem espelho local e
+ * deve continuar funcionando.
+ *
+ * Escopo do desligamento: sync de entrada (sync-*) e write-back de
+ * colaborador/cadastro/sub-recursos (inclui férias da aba do cadastro). NÃO
+ * afeta o Guardião nem o holidays-sync (BrasilAPI).
+ */
+export function isAgendaSyncDisabled(): boolean {
+  const raw = (Deno.env.get("AGENDA_SYNC_DISABLED") ?? "").trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
+}
+
 function getConfig(): { baseUrl: string; apiKey: string } {
   const apiKey = Deno.env.get("SOFTCOM_CLOUD_API_KEY");
   if (!apiKey) {

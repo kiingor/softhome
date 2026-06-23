@@ -9,6 +9,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useDashboard } from "@/contexts/DashboardContext";
+import { AGENDA_SYNC_DISABLED } from "@/lib/agenda-sync";
 import { toast } from "sonner";
 
 type Resource = "stores" | "teams" | "positions";
@@ -83,7 +84,10 @@ export function useCoreResourceMutation(
           : vars.action === "update"
           ? "atualizada"
           : "removida";
-      const suffix = (options?.syncToRemote ?? true) ? " (sincronizado com a agenda)" : "";
+      const suffix =
+        !AGENDA_SYNC_DISABLED && (options?.syncToRemote ?? true)
+          ? " (sincronizado com a agenda)"
+          : "";
       toast.success(`${meta.singular} ${verb} ✓${suffix}`);
     },
     onError: (err: Error) => {

@@ -15,6 +15,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.0";
 import {
+  isAgendaSyncDisabled,
   SoftcomCloudError,
   updateColaboradorSection,
   type UpdateSection,
@@ -70,6 +71,10 @@ serve(async (req) => {
   } catch (e) {
     return jsonResponse({ error: "Body inválido: " + (e as Error).message }, 400);
   }
+
+  // Kill-switch global da agenda: força write local-only (o update local roda
+  // sempre; só pulamos o PUT remoto).
+  if (isAgendaSyncDisabled()) syncToRemote = false;
 
   const sbAdmin = createClient(supabaseUrl, serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false },

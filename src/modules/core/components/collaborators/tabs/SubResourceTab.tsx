@@ -8,6 +8,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash, ArrowsClockwise } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { AGENDA_SYNC_DISABLED } from "@/lib/agenda-sync";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -234,7 +235,9 @@ export function SubResourceTab<TRow extends { id: string; external_id?: string |
               {editing ? `Editar ${titleSingular.toLowerCase()}` : `Novo ${titleSingular.toLowerCase()}`}
             </DialogTitle>
             <DialogDescription>
-              Será sincronizado com a agenda (api.softcom.cloud).
+              {AGENDA_SYNC_DISABLED
+                ? "Salvo aqui no DNA Softcom."
+                : "Será sincronizado com a agenda (api.softcom.cloud)."}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-3">
@@ -263,7 +266,9 @@ export function SubResourceTab<TRow extends { id: string; external_id?: string |
           <AlertDialogHeader>
             <AlertDialogTitle>Remover {titleSingular.toLowerCase()}?</AlertDialogTitle>
             <AlertDialogDescription>
-              Vai remover aqui no DNA Softcom e também na agenda. Não dá pra desfazer.
+              {AGENDA_SYNC_DISABLED
+                ? "Vai remover aqui no DNA Softcom. Não dá pra desfazer."
+                : "Vai remover aqui no DNA Softcom e também na agenda. Não dá pra desfazer."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

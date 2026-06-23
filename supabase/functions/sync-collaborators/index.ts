@@ -21,6 +21,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.0";
 import {
   getColaborador,
+  isAgendaSyncDisabled,
   listAdicionais,
   listColaboradores,
   SoftcomCloudError,
@@ -277,6 +278,19 @@ serve(async (req) => {
 
   const allowed = await checkPermission(sbUser, user.id, companyId, "colaboradores");
   if (!allowed) return jsonResponse({ error: "Sem permissão" }, 403);
+
+  // Kill-switch global da agenda: não inicia novos jobs de sync. (Jobs já em
+  // andamento via resumeJobId continuam até terminar — não há orfãos.) Retorna
+  // jobId:null pra UI mostrar a mensagem sem abrir o polling.
+  if (isAgendaSyncDisabled()) {
+    return jsonResponse({
+      success: true,
+      disabled: true,
+      jobId: null,
+      status: "disabled",
+      message: "Sincronização com a agenda desativada.",
+    });
+  }
 
   const options: JobOptions = { companyId, incluirDesativados, includeFinancials, includeDetails, onlyMissingFinancials, onlyMissingDetails };
   const cursor = newCursor(options);

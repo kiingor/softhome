@@ -6,6 +6,7 @@ import { useDashboard } from '@/contexts/DashboardContext';
 import PermissionGuard from '@/components/dashboard/PermissionGuard';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useCoreResourceMutation } from '@/hooks/useCoreResourceMutation';
+import { AGENDA_SYNC_DISABLED } from '@/lib/agenda-sync';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -70,7 +71,7 @@ export default function CargosPage() {
   const selectedCompanyId = currentCompany?.id;
   const queryClient = useQueryClient();
   const { canCreate, canEdit, canDelete, isAdmin } = usePermissions("cargos");
-  const canSync = canCreate || isAdmin;
+  const canSync = (canCreate || isAdmin) && !AGENDA_SYNC_DISABLED;
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPosition, setEditingPosition] = useState<Position | null>(null);
   const [dialogTab, setDialogTab] = useState('dados');
