@@ -78,6 +78,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PaymentsTab } from "../components/PaymentsTab";
+import { StatBlock } from "../components/StatBlock";
 import { VacationAdvanceDialog } from "../components/VacationAdvanceDialog";
 import { toast } from "sonner";
 import { useDashboard } from "@/contexts/DashboardContext";
@@ -382,24 +383,27 @@ export default function PeriodDetailPage() {
     }
   };
 
-  const stats = useMemo(() => {
+  // KPIs da aba LANÇAMENTOS — calculados sobre os lançamentos exibidos nesta aba
+  // (exclui bonificação/custo-setor). FGTS é custo do empregador, então fica fora
+  // do líquido (igual ao que a tabela mostra). Pagamentos tem KPIs próprios.
+  const lancamentoStats = useMemo(() => {
     let earnings = 0;
     let deductions = 0;
     const byCollab = new Set<string>();
-    for (const e of filteredEntries) {
+    for (const e of lancamentoEntries) {
       const v = Number(e.value);
-      if (isEarning(e.type)) earnings += v;
-      else if (isDeduction(e.type)) deductions += v;
       byCollab.add(e.collaborator_id);
+      if (isEarning(e.type)) earnings += v;
+      else if (isDeduction(e.type) && e.type !== "fgts") deductions += v;
     }
     return {
-      total: filteredEntries.length,
+      count: lancamentoEntries.length,
+      collaborators: byCollab.size,
       earnings,
       deductions,
       net: earnings - deductions,
-      collaborators: byCollab.size,
     };
-  }, [filteredEntries]);
+  }, [lancamentoEntries]);
 
   if (isLoading || !period) {
     return (
@@ -612,24 +616,10 @@ export default function PeriodDetailPage() {
         )}
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatBlock label="Lançamentos" value={String(stats.total)} />
-        <StatBlock label="Pessoas" value={String(stats.collaborators)} />
-        <StatBlock
-          label="Proventos"
-          value={formatCurrency(stats.earnings)}
-          accent="emerald"
-        />
-        <StatBlock
-          label="Líquido"
-          value={formatCurrency(stats.net)}
-          accent={stats.net >= 0 ? "emerald" : "rose"}
-        />
-      </div>
-
       {/* Alertas pendentes viram um botão no topo (abre dialog) pra dar mais
-          espaço vertical à tela. Ver <Dialog> no fim do componente. */}
+          espaço vertical à tela. Ver <Dialog> no fim do componente.
+          Os KPIs saíram daqui — agora ficam DENTRO de cada aba, com os totais
+          próprios (lançamentos ≠ pagamentos). */}
 
       {/* Tabs: Lançamentos (RH) / Pagamentos (Financeiro) */}
       <Tabs defaultValue="lancamentos" className="space-y-4">
@@ -663,6 +653,25 @@ export default function PeriodDetailPage() {
         )}
 
         <TabsContent value="lancamentos">
+          {/* KPIs desta aba — totais dos lançamentos (exclui bonificação/custo-setor) */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+            <StatBlock label="Pessoas" value={String(lancamentoStats.collaborators)} />
+            <StatBlock
+              label="Proventos"
+              value={formatCurrency(lancamentoStats.earnings)}
+              accent="emerald"
+            />
+            <StatBlock
+              label="Descontos"
+              value={formatCurrency(lancamentoStats.deductions)}
+              accent="rose"
+            />
+            <StatBlock
+              label="Líquido"
+              value={formatCurrency(lancamentoStats.net)}
+              accent={lancamentoStats.net >= 0 ? "emerald" : "rose"}
+            />
+          </div>
           {/* Lançamentos */}
           <Card>
             <CardHeader className="space-y-3">
@@ -1342,33 +1351,3 @@ function ReviewObsButton({
   );
 }
 
-function StatBlock({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: string;
-  accent?: "emerald" | "rose";
-}) {
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <p className="text-xs text-muted-foreground uppercase tracking-wide">
-          {label}
-        </p>
-        <p
-          className={`text-xl font-light mt-1 ${
-            accent === "emerald"
-              ? "text-orange-700 dark:text-orange-400"
-              : accent === "rose"
-              ? "text-rose-700 dark:text-rose-400"
-              : "text-foreground"
-          }`}
-        >
-          {value}
-        </p>
-      </CardContent>
-    </Card>
-  );
-}
