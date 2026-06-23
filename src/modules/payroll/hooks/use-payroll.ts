@@ -1051,6 +1051,26 @@ export function usePayrollPeriods() {
 
       if (collaboratorsError) throw collaboratorsError;
 
+      // Proventos TRIBUTÁVEIS do mês (gratificação etc.) por colaborador — entram
+      // na base do IRPF (junto com o salário). INSS/FGTS ficam só no salário.
+      // Ferias (recibo próprio) ficam de fora. (Obs.: o "Recalcular encargos" é o
+      // recálculo autoritativo — roda depois de TODOS os proventos populados.)
+      const { data: taxableProvsRep } = await supabase
+        .from("payroll_entries")
+        .select("collaborator_id, value, external_id")
+        .eq("company_id", companyId)
+        .eq("month", month)
+        .eq("year", year)
+        .in("type", [...IRPF_TAXABLE_EARNING_TYPES]);
+      const irpfExtraByCollab = new Map<string, number>();
+      for (const e of taxableProvsRep ?? []) {
+        if (typeof e.external_id === "string" && e.external_id.startsWith("ferias-")) continue;
+        irpfExtraByCollab.set(
+          e.collaborator_id,
+          (irpfExtraByCollab.get(e.collaborator_id) ?? 0) + Number(e.value),
+        );
+      }
+
       const skipSalaryNext = await loadVacationSalarySkip(
         companyId,
         month,
@@ -1073,7 +1093,13 @@ export function usePayrollPeriods() {
           continue;
         }
         const deps = (c as { dependents_count?: number }).dependents_count ?? 0;
-        const taxes = calcAllTaxes({ grossSalary: salary, dependents: deps });
+        // INSS/FGTS só no salário base; IRPF sobre salário + proventos
+        // tributáveis do mês (gratificação etc.), menos INSS e dependentes.
+        const inss = calcINSS(salary);
+        const fgts = calcFGTS(salary);
+        const irpfGross = salary + (irpfExtraByCollab.get(c.id) ?? 0);
+        const irpf = calcIRPF({ grossSalary: irpfGross, inss, dependents: deps });
+        const taxes = { inss, irpf, fgts };
         const baseEntry = {
           company_id: companyId,
           collaborator_id: c.id,

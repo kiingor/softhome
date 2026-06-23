@@ -321,10 +321,11 @@ export default function PeriodDetailPage() {
     });
   };
 
-  // Tipos de imposto que são absorvidos pelo "Salário base" no display
-  // (INSS/IRPF/FGTS aparecem na exportação pro contador, mas na UI ficam
-  // somados dentro da linha de salário pra ficar menos confuso).
-  const TAX_TYPES = new Set(["inss", "irpf", "fgts"]);
+  // FGTS é custo do empregador — aparece só como info na linha do salário, sem
+  // reduzir o líquido. INSS e IRPF agora são LINHAS PRÓPRIAS (igual ao holerite
+  // do contador): antes eram absorvidos/distribuídos, o que escondia que o IRPF
+  // incide sobre salário + gratificação (a base cheia).
+  const TAX_TYPES = new Set(["fgts"]);
 
   const groupedByCollab = useMemo(() => {
     type DisplayEntry = (typeof filteredEntries)[number] & {
@@ -361,62 +362,16 @@ export default function PeriodDetailPage() {
         g.net += isEarning(e.type) ? v : -v;
       }
     }
-    // Ajusta valores exibidos:
-    // - Salário base absorve INSS sempre e a parte do IRPF que cabe a ele.
-    //   FGTS NÃO entra no líquido (é custo do empregador), só aparece como info.
-    // - Gratificação absorve só a parte do IRPF que cabe a ela (regra do user:
-    //   gratificação só desconta IRPF).
-    // - IRPF é distribuído proporcionalmente entre salário base + gratificações
-    //   pelo valor bruto de cada um.
+    // FGTS é custo do empregador: mostra como info na linha do salário base, sem
+    // reduzir o líquido. INSS e IRPF NÃO são mais absorvidos — viram linhas
+    // próprias (ver TAX_TYPES). Assim o IRPF aparece com o valor cheio (sobre
+    // salário + gratificação), igual ao holerite do contador.
     for (const g of map.values()) {
-      const { inss, irpf, fgts } = g.taxBreakdown;
+      const { fgts } = g.taxBreakdown;
       const salaryEntry = g.entries.find((e) => e.type === "salario_base");
-      const gratEntries = g.entries.filter((e) => e.type === "gratificacao");
-
-      const irpfBase =
-        (salaryEntry ? Number(salaryEntry.value) : 0) +
-        gratEntries.reduce((s, e) => s + Number(e.value), 0);
-
-      // Aloca IRPF proporcionalmente; resto vai pra última entrada pra fechar contas.
-      const targets: Array<{ entry: DisplayEntry; gross: number }> = [];
-      if (salaryEntry)
-        targets.push({ entry: salaryEntry, gross: Number(salaryEntry.value) });
-      for (const e of gratEntries)
-        targets.push({ entry: e, gross: Number(e.value) });
-
-      const irpfShares = new Map<string, number>();
-      if (irpf > 0 && irpfBase > 0) {
-        let allocated = 0;
-        targets.forEach((t, i) => {
-          const share =
-            i === targets.length - 1
-              ? irpf - allocated
-              : Math.round(((irpf * t.gross) / irpfBase) * 100) / 100;
-          allocated += share;
-          irpfShares.set(t.entry.id, share);
-        });
-      }
-
-      // Aplica deduções
-      if (salaryEntry) {
-        const irpfPart = irpfShares.get(salaryEntry.id) ?? 0;
-        // FGTS fica de fora do líquido — entra só como info de custo do empregador.
-        const total = inss + irpfPart;
-        if (total > 0 || fgts > 0) {
-          salaryEntry._adjustedValue = Number(salaryEntry.value) - total;
-          salaryEntry._taxesApplied = {
-            inss: inss || undefined,
-            irpf: irpfPart || undefined,
-            fgts: fgts || undefined,
-          };
-        }
-      }
-      for (const e of gratEntries) {
-        const irpfPart = irpfShares.get(e.id) ?? 0;
-        if (irpfPart > 0) {
-          e._adjustedValue = Number(e.value) - irpfPart;
-          e._taxesApplied = { irpf: irpfPart };
-        }
+      if (salaryEntry && fgts > 0) {
+        salaryEntry._adjustedValue = Number(salaryEntry.value);
+        salaryEntry._taxesApplied = { fgts };
       }
     }
     return [...map.values()].sort((a, b) =>
