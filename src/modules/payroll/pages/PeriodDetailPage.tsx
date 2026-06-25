@@ -52,6 +52,7 @@ import {
 } from "@phosphor-icons/react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import {
   Popover,
   PopoverContent,
@@ -87,7 +88,6 @@ import {
   usePayrollEntries,
   usePayrollAlerts,
   usePayrollPeriods,
-  isManualAvulso,
 } from "../hooks/use-payroll";
 import {
   usePayrollReviews,
@@ -131,13 +131,15 @@ export default function PeriodDetailPage() {
   } = usePayrollEntries(id);
   const { recalculateTaxes } = usePayrollPeriods();
   const [confirmRecalc, setConfirmRecalc] = useState(false);
-  /** Lançamento avulso selecionado pra confirmação de delete. */
+  /** Lançamento selecionado pra confirmação de exclusão (com motivo). */
   const [confirmDeleteEntry, setConfirmDeleteEntry] = useState<{
     id: string;
     description: string;
     type: string;
     value: number;
   } | null>(null);
+  /** Motivo da exclusão (obrigatório, registrado na auditoria). */
+  const [deleteReason, setDeleteReason] = useState("");
 
   const { data: alerts = [] } = usePayrollAlerts(id);
 
@@ -335,6 +337,7 @@ export default function PeriodDetailPage() {
     type Group = {
       id: string;
       name: string;
+      surname: string | null;
       entries: DisplayEntry[];
       taxBreakdown: { inss: number; irpf: number; fgts: number };
       net: number;
@@ -346,6 +349,7 @@ export default function PeriodDetailPage() {
         map.set(collabId, {
           id: collabId,
           name: e.collaborator?.name ?? "(sem nome)",
+          surname: e.collaborator?.softcom_surname ?? null,
           entries: [],
           taxBreakdown: { inss: 0, irpf: 0, fgts: 0 },
           net: 0,
@@ -386,7 +390,12 @@ export default function PeriodDetailPage() {
   const visibleGroups = useMemo(() => {
     const q = normalizeSearch(searchTerm.trim());
     return groupedByCollab.filter((g) => {
-      if (q && !normalizeSearch(g.name).includes(q)) return false;
+      if (
+        q &&
+        !normalizeSearch(g.name).includes(q) &&
+        !normalizeSearch(g.surname ?? "").includes(q)
+      )
+        return false;
       const r = reviewByCollab.get(g.id);
       if (reviewFilter === "reviewed" && !r?.is_reviewed) return false;
       if (reviewFilter === "pending" && r?.is_reviewed) return false;
@@ -476,23 +485,36 @@ export default function PeriodDetailPage() {
   };
 
   const handleExport = () => {
-    if (filteredEntries.length === 0) {
+    // Exporta EXATAMENTE os colaboradores visíveis (respeita Empresa/Setor/Cargo
+    // + busca + filtros de conferência/observação). Inclui todos os tipos de
+    // lançamento do colaborador (incl. bonificação/encargos) pro contador.
+    const exportEntries = filteredEntries.filter((e) =>
+      visibleCollabIds.has(e.collaborator_id ?? "_orphan"),
+    );
+    if (exportEntries.length === 0) {
       toast.error(
-        isFiltering
+        isFiltering || isSearching || hasReviewFilters || positionFilter.size > 0
           ? "Nada pra exportar com esses filtros. Limpa os filtros pra exportar o período inteiro."
           : "Nada pra exportar — período sem lançamentos.",
       );
       return;
     }
     try {
-      const filesCount = exportPayrollExcel({
+      // Observações da conferência por colaborador → coluna no Excel.
+      const observationByCollab = new Map<string, string>();
+      for (const [cid, r] of reviewByCollab.entries()) {
+        const obs = r.observation?.trim();
+        if (obs) observationByCollab.set(cid, obs);
+      }
+      const collabsCount = exportPayrollExcel({
         period,
-        entries: filteredEntries,
+        entries: exportEntries,
         companyName: currentCompany?.company_name ?? "Empresa",
         cnpj: null, // TODO: companies.cnpj quando disponível no context
+        observationByCollab,
       });
       toast.success(
-        `Pronto ✓ ${filesCount} arquivo${filesCount === 1 ? "" : "s"} baixado${filesCount === 1 ? "" : "s"}.`
+        `Pronto ✓ ${collabsCount} colaborador${collabsCount === 1 ? "" : "es"} exportado${collabsCount === 1 ? "" : "s"} (1 arquivo, 1 aba por regime).`,
       );
     } catch (err) {
       toast.error("Não rolou exportar. Tenta de novo?");
@@ -1038,7 +1060,16 @@ export default function PeriodDetailPage() {
                               ) : (
                                 <CaretRight className="w-4 h-4 text-muted-foreground" />
                               )}
-                              <span>{g.name}</span>
+                              {g.surname && g.surname.trim() && g.surname.trim() !== g.name ? (
+                                <span className="flex flex-col leading-tight min-w-0">
+                                  <span className="font-medium truncate">{g.surname}</span>
+                                  <span className="text-[11px] text-muted-foreground font-normal truncate">
+                                    {g.name}
+                                  </span>
+                                </span>
+                              ) : (
+                                <span className="truncate">{g.name}</span>
+                              )}
                             </div>
                           </TableCell>
                           <TableCell
@@ -1195,15 +1226,16 @@ export default function PeriodDetailPage() {
                                   {formatCurrency(Math.abs(value))}
                                 </TableCell>
                                 <TableCell className="w-[44px] p-0 pr-1 align-middle">
-                                  {canManage && !isClosed && isManualAvulso(e) ? (
+                                  {canManage && !isClosed ? (
                                     <Button
                                       type="button"
                                       size="icon"
                                       variant="ghost"
                                       className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                      title="Excluir lançamento avulso"
+                                      title="Excluir lançamento"
                                       onClick={(ev) => {
                                         ev.stopPropagation();
+                                        setDeleteReason("");
                                         setConfirmDeleteEntry({
                                           id: e.id,
                                           description: e.description ?? ENTRY_TYPE_LABELS[e.type] ?? e.type,
@@ -1275,7 +1307,7 @@ export default function PeriodDetailPage() {
         isSubmitting={createEntry.isPending}
       />
 
-      {/* Confirmação de exclusão de lançamento avulso */}
+      {/* Confirmação de exclusão de lançamento (com motivo obrigatório) */}
       <AlertDialog
         open={!!confirmDeleteEntry}
         onOpenChange={(o) => !deleteEntry.isPending && !o && setConfirmDeleteEntry(null)}
@@ -1283,27 +1315,47 @@ export default function PeriodDetailPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir lançamento?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {confirmDeleteEntry && (
-                <>
-                  Vai apagar <strong>{confirmDeleteEntry.description}</strong>{" "}
-                  ({confirmDeleteEntry.type}) — {formatCurrency(confirmDeleteEntry.value)}.
-                  <br />
-                  Essa ação é permanente. Pra reverter, lance manualmente de novo.
-                </>
-              )}
+            <AlertDialogDescription asChild>
+              <div>
+                {confirmDeleteEntry && (
+                  <>
+                    Vai apagar <strong>{confirmDeleteEntry.description}</strong>{" "}
+                    ({confirmDeleteEntry.type}) — {formatCurrency(confirmDeleteEntry.value)}.
+                    <br />
+                    Essa ação é permanente e fica registrada na auditoria com o motivo abaixo.
+                  </>
+                )}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="delete-reason" className="text-sm font-medium">
+              Motivo da exclusão <span className="text-destructive">*</span>
+            </Label>
+            <Textarea
+              id="delete-reason"
+              value={deleteReason}
+              onChange={(ev) => setDeleteReason(ev.target.value)}
+              placeholder="Ex: lançamento duplicado / plano cancelado / valor incorreto…"
+              rows={3}
+              autoFocus
+              disabled={deleteEntry.isPending}
+            />
+            <p className="text-xs text-muted-foreground">
+              Obrigatório (mínimo 3 caracteres). Vai aparecer no log de auditoria.
+            </p>
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleteEntry.isPending}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              disabled={deleteEntry.isPending}
+              disabled={deleteEntry.isPending || deleteReason.trim().length < 3}
               onClick={(ev) => {
                 ev.preventDefault();
                 if (!confirmDeleteEntry) return;
-                deleteEntry.mutate(confirmDeleteEntry.id, {
-                  onSuccess: () => setConfirmDeleteEntry(null),
-                });
+                deleteEntry.mutate(
+                  { entryId: confirmDeleteEntry.id, reason: deleteReason },
+                  { onSuccess: () => setConfirmDeleteEntry(null) },
+                );
               }}
               className="bg-destructive hover:bg-destructive/90"
             >
@@ -1334,9 +1386,10 @@ export default function PeriodDetailPage() {
             <AlertDialogTitle>Recalcular encargos do período?</AlertDialogTitle>
             <AlertDialogDescription>
               Apaga os lançamentos de INSS, IRPF e FGTS desse mês e recria
-              usando a tabela oficial 2026 (com base nos dependentes
-              cadastrados em cada colaborador). Salário base, gratificações,
-              benefícios e descontos manuais ficam intactos.
+              usando a tabela oficial 2026. A base do INSS/FGTS considera salário
+              + hora extra + periculosidade menos faltas; o IRPF inclui também
+              gratificação/carro agregado/atestado e os dependentes. Salário
+              base, proventos, benefícios e descontos manuais ficam intactos.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

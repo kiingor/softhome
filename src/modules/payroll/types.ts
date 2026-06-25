@@ -42,6 +42,7 @@ export const ACTIVE_ENTRY_TYPES = [
   "carro_agregado",
   "periculosidade",
   "desconto",
+  "emprestimo",
 ] as const;
 
 export type ActiveEntryType = (typeof ACTIVE_ENTRY_TYPES)[number];
@@ -69,6 +70,7 @@ export const MANUAL_DEBIT_TYPES = [
   "falta",
   "adiantamento",
   "desconto",
+  "emprestimo",
 ] as const;
 
 export type ManualEntryNature = "credit" | "debit";
@@ -105,6 +107,8 @@ export const ENTRY_TYPE_COLORS: Record<string, string> = {
     "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900/60",
   desconto:
     "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900/60",
+  emprestimo:
+    "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900/60",
   ferias:
     "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-900/60",
   salario_familia:
@@ -126,6 +130,7 @@ export const ENTRY_TYPE_LABELS: Record<string, string> = {
   carro_agregado: "Carro Agregado",
   periculosidade: "Periculosidade",
   desconto: "Desconto",
+  emprestimo: "Empréstimo",
   ferias: "Férias",
   salario_familia: "Salário-Família",
   // Legacy (orphans)
@@ -154,6 +159,7 @@ export const DEDUCTION_TYPES = [
   "falta",
   "adiantamento",
   "desconto",
+  "emprestimo",
   "inss",
   "irpf",
   "custo",
@@ -169,12 +175,16 @@ export const EMPLOYER_COST_TYPES = ["fgts"] as const;
 // IRPF — base de cálculo
 //
 // O IRPF incide sobre TODOS os rendimentos tributáveis do mês (salário base +
-// estes proventos), menos INSS e dedução por dependente. Diferente do INSS/FGTS,
-// que ficam só no salário base (gratificação espontânea é liberalidade: tributa
-// IR, mas NÃO integra INSS/FGTS).
+// estes proventos), menos INSS e dedução por dependente.
+//
+// INSS/FGTS: incidem sobre o salário base + os proventos HABITUAIS que integram
+// a remuneração (hora extra e periculosidade — ver INSS_TAXABLE_EARNING_TYPES).
+// gratificação (espontânea = liberalidade), carro agregado e atestado entram SÓ
+// no IRPF, não no INSS/FGTS — confere com a folha da contabilidade. Falta REDUZ
+// as três bases.
 //
 // Ferias têm IRRF próprio no recibo (external_id 'ferias-%') e são excluídas.
-// Isentos de IRPF: salário-família, benefícios, bonificação (custo de setor).
+// Isentos de tudo: salário-família, benefícios, bonificação (custo de setor).
 // ─────────────────────────────────────────────────────────────────────────────
 export const IRPF_TAXABLE_EARNING_TYPES = [
   "gratificacao",
@@ -183,6 +193,21 @@ export const IRPF_TAXABLE_EARNING_TYPES = [
   "periculosidade",
   "atestado",
 ] as const;
+
+// Proventos HABITUAIS que integram a base do INSS e do FGTS (além do salário
+// base). SUBCONJUNTO de IRPF_TAXABLE_EARNING_TYPES — os demais (gratificação
+// espontânea, carro agregado, atestado) são tributáveis no IRPF mas NÃO
+// integram INSS/FGTS. Bate com a folha da contabilidade (gratificação
+// espontânea = liberalidade, isenta de INSS/FGTS pela CLT).
+export const INSS_TAXABLE_EARNING_TYPES = [
+  "hora_extra",
+  "periculosidade",
+] as const;
+
+// Único débito que REDUZ a base de INSS/FGTS/IRPF (falta = menos salário de
+// contribuição). adiantamento, desconto e emprestimo NÃO mexem na base — só no
+// líquido.
+export const FALTA_BASE_DEBIT_TYPES = ["falta"] as const;
 
 export function isEarning(type: string): boolean {
   return (EARNINGS_TYPES as readonly string[]).includes(type);

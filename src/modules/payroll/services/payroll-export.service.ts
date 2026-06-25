@@ -1,6 +1,10 @@
 // Export Excel da folha mensal pra o contador.
-// Decisão Q4 confirmada: 1 arquivo .xlsx por (CNPJ × regime).
-// Cada arquivo: 1 linha por colaborador, colunas = tipos de lançamento + total.
+// 1 arquivo .xlsx com 1 ABA por regime (CLT, PJ, Estagiário...). Cada aba:
+// 1 linha por colaborador, colunas = tipos de lançamento + totais + observação.
+//
+// IMPORTANTE: antes gerava 1 arquivo por regime num loop de XLSX.writeFile, mas
+// o navegador só entrega UM download por gesto do usuário — então só o último
+// regime baixava (o RH via "só estagiário"). Agora é um único workbook com abas.
 
 import * as XLSX from "xlsx";
 import { ENTRY_TYPE_LABELS, isEarning, isDeduction } from "../types";
@@ -11,6 +15,7 @@ import type {
 import { formatPeriodLabel } from "../types";
 
 interface CollaboratorRow {
+  id: string;
   nome: string;
   cpf: string;
   regime: string;
@@ -18,6 +23,7 @@ interface CollaboratorRow {
   totalProventos: number;
   totalDescontos: number;
   liquido: number;
+  observacao: string;
 }
 
 function safeFilename(s: string): string {
@@ -33,12 +39,15 @@ interface ExportPayrollExcelOptions {
   entries: PayrollEntryWithCollaborator[];
   companyName: string;
   cnpj?: string | null;
+  /** Observações da conferência por colaborador (collaborator_id → texto). */
+  observationByCollab?: Map<string, string>;
 }
 
-// Gera 1 arquivo Excel POR REGIME usado nos entries.
-// Retorna número de arquivos baixados.
+// Gera UM arquivo Excel com 1 aba por regime. Recebe os entries JÁ filtrados
+// (de acordo com o filtro selecionado na tela). Retorna o nº de colaboradores
+// exportados (0 = nada a exportar).
 export function exportPayrollExcel(options: ExportPayrollExcelOptions): number {
-  const { period, entries, companyName, cnpj } = options;
+  const { period, entries, companyName, cnpj, observationByCollab } = options;
 
   // Agrupa entries por regime (do colaborador)
   const byRegime = new Map<string, PayrollEntryWithCollaborator[]>();
@@ -53,16 +62,25 @@ export function exportPayrollExcel(options: ExportPayrollExcelOptions): number {
   const periodKey = period.reference_month.substring(0, 7); // YYYY-MM
   const baseName = safeFilename(companyName);
 
-  let filesGenerated = 0;
+  const wb = XLSX.utils.book_new();
+  const usedSheetNames = new Set<string>();
+  let totalCollabs = 0;
 
-  for (const [regime, regimeEntries] of byRegime.entries()) {
+  // Regimes em ordem estável (abas determinísticas).
+  const regimes = Array.from(byRegime.keys()).sort((a, b) =>
+    a.localeCompare(b, "pt-BR"),
+  );
+
+  for (const regime of regimes) {
+    const regimeEntries = byRegime.get(regime) ?? [];
+
     // Agrupa por colaborador
     const byCollab = new Map<string, CollaboratorRow>();
-
     for (const e of regimeEntries) {
       if (!e.collaborator) continue;
       const key = e.collaborator.id;
       const row = byCollab.get(key) ?? {
+        id: key,
         nome: e.collaborator.name,
         cpf: e.collaborator.cpf,
         regime: e.collaborator.regime ?? "—",
@@ -70,28 +88,30 @@ export function exportPayrollExcel(options: ExportPayrollExcelOptions): number {
         totalProventos: 0,
         totalDescontos: 0,
         liquido: 0,
+        observacao: observationByCollab?.get(key) ?? "",
       };
       const value = Number(e.value);
       row.totals[e.type] = (row.totals[e.type] ?? 0) + value;
       if (isEarning(e.type)) row.totalProventos += value;
       else if (isDeduction(e.type)) row.totalDescontos += value;
-      // Lançamentos com valor negativo (estornos) já vão somar com sinal correto
+      // Estornos (valor negativo) já somam com o sinal correto.
       byCollab.set(key, row);
     }
+
+    if (byCollab.size === 0) continue;
 
     // Calcula líquido
     for (const row of byCollab.values()) {
       row.liquido = row.totalProventos - row.totalDescontos;
     }
 
-    // Coluna de cada tipo de lançamento que apareceu
+    // Coluna de cada tipo de lançamento que apareceu neste regime
     const typesFound = new Set<string>();
     for (const row of byCollab.values()) {
       Object.keys(row.totals).forEach((t) => typesFound.add(t));
     }
     const typesArr = Array.from(typesFound).sort();
 
-    // Headers da sheet
     const headers = [
       "Nome",
       "CPF",
@@ -100,9 +120,9 @@ export function exportPayrollExcel(options: ExportPayrollExcelOptions): number {
       "Total Proventos",
       "Total Descontos",
       "Líquido",
+      "Observação",
     ];
 
-    // Body
     const body = Array.from(byCollab.values())
       .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
       .map((row) => [
@@ -113,9 +133,9 @@ export function exportPayrollExcel(options: ExportPayrollExcelOptions): number {
         row.totalProventos,
         row.totalDescontos,
         row.liquido,
+        row.observacao,
       ]);
 
-    // Cabeçalho com info do período (linhas extras antes)
     const aoa: (string | number)[][] = [
       [`Folha ${periodLabel}`],
       [`Empresa: ${companyName}${cnpj ? ` (CNPJ ${cnpj})` : ""}`],
@@ -128,17 +148,26 @@ export function exportPayrollExcel(options: ExportPayrollExcelOptions): number {
 
     const ws = XLSX.utils.aoa_to_sheet(aoa);
 
-    // Largura mínima das colunas
+    // Largura das colunas; Observação mais larga.
     const colWidths = headers.map((h) => ({ wch: Math.max(h.length + 2, 12) }));
+    if (colWidths.length > 0) colWidths[colWidths.length - 1] = { wch: 45 };
     ws["!cols"] = colWidths;
 
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, regime.toUpperCase().substring(0, 31));
+    // Nome de aba: regime, único e ≤ 31 chars (limite do Excel).
+    let sheetName = (regime.toUpperCase().substring(0, 31) || "OUTRO");
+    let suffix = 2;
+    while (usedSheetNames.has(sheetName)) {
+      sheetName = `${regime.toUpperCase().substring(0, 28)}_${suffix++}`;
+    }
+    usedSheetNames.add(sheetName);
 
-    const filename = `${baseName}_${regime.toUpperCase()}_${periodKey}.xlsx`;
-    XLSX.writeFile(wb, filename);
-    filesGenerated++;
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    totalCollabs += byCollab.size;
   }
 
-  return filesGenerated;
+  if (totalCollabs === 0) return 0;
+
+  const filename = `${baseName}_folha_${periodKey}.xlsx`;
+  XLSX.writeFile(wb, filename);
+  return totalCollabs;
 }

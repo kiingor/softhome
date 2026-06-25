@@ -5,6 +5,7 @@ import {
   calcFGTS,
   calcAllTaxes,
   calcSalarioFamilia,
+  computeCollaboratorTaxes,
   eligibleChildrenForSalarioFamilia,
   ageInYears,
   INSS_CEILING_2026,
@@ -202,8 +203,8 @@ describe("constantes auditáveis", () => {
     expect(SALARIO_FAMILIA_LIMITE_2026).toBe(1906.04);
   });
 
-  it("valor por filho do salário-família 2026 é R$ 65,00", () => {
-    expect(SALARIO_FAMILIA_VALOR_2026).toBe(65);
+  it("valor por filho do salário-família 2026 é R$ 67,54", () => {
+    expect(SALARIO_FAMILIA_VALOR_2026).toBe(67.54);
   });
 });
 
@@ -287,15 +288,15 @@ describe("eligibleChildrenForSalarioFamilia", () => {
 });
 
 describe("calcSalarioFamilia", () => {
-  it("salário R$ 1.500 + 2 filhos elegíveis → R$ 130", () => {
+  it("salário R$ 1.500 + 2 filhos elegíveis → R$ 135,08", () => {
     const r = calcSalarioFamilia({ grossSalary: 1500, eligibleChildrenCount: 2 });
-    expect(r.value).toBe(130);
+    expect(r.value).toBe(135.08);
     expect(r.eligible).toBe(true);
   });
 
-  it("salário no limite exato (R$ 1.906,04) + 1 filho → R$ 65", () => {
+  it("salário no limite exato (R$ 1.906,04) + 1 filho → R$ 67,54", () => {
     const r = calcSalarioFamilia({ grossSalary: 1906.04, eligibleChildrenCount: 1 });
-    expect(r.value).toBe(65);
+    expect(r.value).toBe(67.54);
     expect(r.eligible).toBe(true);
   });
 
@@ -325,12 +326,85 @@ describe("calcSalarioFamilia", () => {
 
   it("perChild e limit retornados pra UI", () => {
     const r = calcSalarioFamilia({ grossSalary: 1500, eligibleChildrenCount: 1 });
-    expect(r.perChild).toBe(65);
+    expect(r.perChild).toBe(67.54);
     expect(r.limit).toBe(1906.04);
   });
 
   it("contagem fracionada/negativa → tratada como inteiro >= 0", () => {
     expect(calcSalarioFamilia({ grossSalary: 1500, eligibleChildrenCount: -2 }).value).toBe(0);
-    expect(calcSalarioFamilia({ grossSalary: 1500, eligibleChildrenCount: 2.7 }).value).toBe(130);
+    expect(calcSalarioFamilia({ grossSalary: 1500, eligibleChildrenCount: 2.7 }).value).toBe(135.08);
+  });
+});
+
+describe("computeCollaboratorTaxes — encargos com proventos avulsos", () => {
+  it("sem proventos/falta = calcAllTaxes (regressão da base salário)", () => {
+    const got = computeCollaboratorTaxes({
+      salary: 3000,
+      inssProventos: 0,
+      irpfProventos: 0,
+      faltaTotal: 0,
+      dependents: 0,
+    });
+    expect(got).toEqual(calcAllTaxes({ grossSalary: 3000, dependents: 0 }));
+  });
+
+  it("hora extra (INSS+IRPF) sobe a base de INSS, FGTS e IRPF", () => {
+    const base = computeCollaboratorTaxes({
+      salary: 3000, inssProventos: 0, irpfProventos: 0, faltaTotal: 0, dependents: 0,
+    });
+    const withHe = computeCollaboratorTaxes({
+      salary: 3000, inssProventos: 1200, irpfProventos: 1200, faltaTotal: 0, dependents: 0,
+    });
+    expect(withHe.inss).toBe(calcINSS(4200));
+    expect(withHe.fgts).toBe(calcFGTS(4200));
+    expect(withHe.inss).toBeGreaterThan(base.inss);
+    expect(withHe.fgts).toBeGreaterThan(base.fgts);
+  });
+
+  it("carro agregado/atestado (IRPF-only) sobe SÓ a base do IRPF, não INSS/FGTS", () => {
+    const r = computeCollaboratorTaxes({
+      salary: 3000, inssProventos: 0, irpfProventos: 500, faltaTotal: 0, dependents: 0,
+    });
+    expect(r.inss).toBe(calcINSS(3000));
+    expect(r.fgts).toBe(calcFGTS(3000));
+    expect(r.irpf).toBe(
+      calcIRPF({ grossSalary: 3500, inss: calcINSS(3000), dependents: 0 }),
+    );
+  });
+
+  it("falta reduz as três bases (INSS, FGTS, IRPF)", () => {
+    const r = computeCollaboratorTaxes({
+      salary: 3000, inssProventos: 0, irpfProventos: 0, faltaTotal: 400, dependents: 0,
+    });
+    expect(r.inss).toBe(calcINSS(2600));
+    expect(r.fgts).toBe(calcFGTS(2600));
+  });
+
+  it("FGTS é 8% da base de INSS (salário + proventos INSS − falta)", () => {
+    const r = computeCollaboratorTaxes({
+      salary: 3000, inssProventos: 1000, irpfProventos: 1000, faltaTotal: 0, dependents: 0,
+    });
+    expect(r.fgts).toBe(320); // 8% de 4000
+  });
+
+  it("clamp: falta maior que tudo → bases zeram, encargos = 0", () => {
+    const r = computeCollaboratorTaxes({
+      salary: 1000, inssProventos: 0, irpfProventos: 0, faltaTotal: 5000, dependents: 0,
+    });
+    expect(r.inss).toBe(0);
+    expect(r.fgts).toBe(0);
+    expect(r.irpf).toBe(0);
+  });
+
+  it("dependentes reduzem só o IRPF, não INSS/FGTS", () => {
+    const noDep = computeCollaboratorTaxes({
+      salary: 5000, inssProventos: 0, irpfProventos: 0, faltaTotal: 0, dependents: 0,
+    });
+    const withDep = computeCollaboratorTaxes({
+      salary: 5000, inssProventos: 0, irpfProventos: 0, faltaTotal: 0, dependents: 2,
+    });
+    expect(withDep.inss).toBe(noDep.inss);
+    expect(withDep.fgts).toBe(noDep.fgts);
+    expect(withDep.irpf).toBeLessThanOrEqual(noDep.irpf);
   });
 });

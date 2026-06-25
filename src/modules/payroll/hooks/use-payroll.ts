@@ -9,7 +9,13 @@ import type {
   PayrollAlertWithCollaborator,
   PayrollPeriodWithStats,
 } from "../types";
-import { periodToMonthYear, formatPeriodLabel, IRPF_TAXABLE_EARNING_TYPES } from "../types";
+import {
+  periodToMonthYear,
+  formatPeriodLabel,
+  IRPF_TAXABLE_EARNING_TYPES,
+  INSS_TAXABLE_EARNING_TYPES,
+  FALTA_BASE_DEBIT_TYPES,
+} from "../types";
 import type {
   OpenPeriodValues,
   NewEntryValues,
@@ -22,6 +28,7 @@ import {
   calcIRPF,
   calcFGTS,
   calcSalarioFamilia,
+  computeCollaboratorTaxes,
   eligibleChildrenForSalarioFamilia,
   SALARIO_FAMILIA_LIMITE_2026,
 } from "@/lib/payroll/cltCalc";
@@ -287,6 +294,178 @@ async function loadVacationSalarySkip(
     month,
     year,
   );
+}
+
+// Tipos de lançamento que MUDAM a base de encargos (INSS/FGTS/IRPF): proventos
+// tributáveis (hora extra, gratificação, periculosidade, carro agregado,
+// atestado) + falta. Criar/excluir um desses dispara o recálculo dirigido.
+const BASE_AFFECTING_TYPES = new Set<string>([
+  ...IRPF_TAXABLE_EARNING_TYPES,
+  ...FALTA_BASE_DEBIT_TYPES,
+]);
+
+export function entryTypeAffectsTaxBase(type: string): boolean {
+  return BASE_AFFECTING_TYPES.has(type);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Recálculo DIRIGIDO de encargos de UM colaborador no mês.
+//
+// Reflete os proventos avulsos na base: INSS/FGTS = salário + (hora extra,
+// periculosidade) − faltas; IRPF = salário + (esses + gratificação, carro
+// agregado, atestado) − faltas. Usa computeCollaboratorTaxes (fonte única,
+// mesma do "Recalcular" do período inteiro). Só período aberto (o chamador
+// garante). Recibo de férias ('ferias-%') nunca é tocado nem somado.
+// ─────────────────────────────────────────────────────────────────────────────
+async function recalcCollaboratorTaxes(params: {
+  companyId: string;
+  collaboratorId: string;
+  month: number;
+  year: number;
+}): Promise<void> {
+  const { companyId, collaboratorId, month, year } = params;
+
+  // Apaga os encargos atuais do colaborador no mês (auto-popular sem external_id
+  // OU sync inss-base/irpf-base/fgts-base) + VT, pra recriar do zero. NÃO toca no
+  // IRRF/INSS do recibo de férias ('ferias-%').
+  const deleteTaxes = async () => {
+    const { error: delTaxErr } = await supabase
+      .from("payroll_entries")
+      .delete()
+      .eq("company_id", companyId)
+      .eq("collaborator_id", collaboratorId)
+      .eq("month", month)
+      .eq("year", year)
+      .in("type", ["inss", "irpf", "fgts"])
+      .or("external_id.is.null,external_id.in.(inss-base,irpf-base,fgts-base)");
+    if (delTaxErr) throw new Error("Falha ao limpar encargos: " + delTaxErr.message);
+    const { error: delVtErr } = await supabase
+      .from("payroll_entries")
+      .delete()
+      .eq("company_id", companyId)
+      .eq("collaborator_id", collaboratorId)
+      .eq("month", month)
+      .eq("year", year)
+      .eq("type", "desconto")
+      .like("external_id", "vt-%");
+    if (delVtErr) throw new Error("Falha ao limpar VT: " + delVtErr.message);
+  };
+
+  // Colaborador (salário/dependentes/loja).
+  const { data: collab } = await supabase
+    .from("collaborators")
+    .select("id, store_id, dependents_count, current_salary, status, position:positions(salary)")
+    .eq("id", collaboratorId)
+    .maybeSingle();
+  if (!collab) return;
+
+  const salary = resolvePayrollSalary(
+    collab as { current_salary?: number | null; position?: { salary?: number } | null },
+  );
+
+  // Sem salário OU inativo → zera encargos e sai.
+  if (!(salary > 0) || (collab as { status?: string }).status !== "ativo") {
+    await deleteTaxes();
+    return;
+  }
+
+  // Recibo de férias do mês anterior cobre este mês → sem salário/encargos.
+  const skipSalaryNext = await loadVacationSalarySkip(companyId, month, year);
+  if (skipSalaryNext.has(collaboratorId)) {
+    await deleteTaxes();
+    return;
+  }
+
+  // Soma proventos (INSS-tributáveis + IRPF-tributáveis) e faltas do mês,
+  // excluindo recibo de férias. value é sempre > 0 (CHECK).
+  const provRows = await fetchAllRows<{
+    type: string;
+    value: number;
+    external_id: string | null;
+  }>(() =>
+    supabase
+      .from("payroll_entries")
+      .select("type, value, external_id")
+      .eq("company_id", companyId)
+      .eq("collaborator_id", collaboratorId)
+      .eq("month", month)
+      .eq("year", year)
+      .in("type", [...IRPF_TAXABLE_EARNING_TYPES, ...FALTA_BASE_DEBIT_TYPES]),
+  );
+  const inssTaxSet = new Set<string>(INSS_TAXABLE_EARNING_TYPES);
+  const irpfTaxSet = new Set<string>(IRPF_TAXABLE_EARNING_TYPES);
+  const faltaSet = new Set<string>(FALTA_BASE_DEBIT_TYPES);
+  let inssProventos = 0;
+  let irpfProventos = 0;
+  let faltaTotal = 0;
+  for (const e of provRows ?? []) {
+    if (typeof e.external_id === "string" && e.external_id.startsWith("ferias-")) continue;
+    const v = Number(e.value) || 0;
+    if (inssTaxSet.has(e.type)) inssProventos += v;
+    if (irpfTaxSet.has(e.type)) irpfProventos += v;
+    if (faltaSet.has(e.type)) faltaTotal += v;
+  }
+
+  const deps = (collab as { dependents_count?: number }).dependents_count ?? 0;
+  const taxes = computeCollaboratorTaxes({
+    salary,
+    inssProventos,
+    irpfProventos,
+    faltaTotal,
+    dependents: deps,
+  });
+
+  await deleteTaxes();
+
+  const storeId = (collab as { store_id?: string | null }).store_id ?? null;
+  const baseRow = {
+    company_id: companyId,
+    collaborator_id: collaboratorId,
+    store_id: storeId,
+    is_fixed: true,
+    is_payable: true,
+    month,
+    year,
+  };
+  const rows: PayrollEntry[] = [];
+  if (taxes.inss > 0) {
+    rows.push({ ...baseRow, type: "inss" as const, description: "INSS (tabela 2026)", value: taxes.inss } as PayrollEntry);
+  }
+  if (taxes.fgts > 0) {
+    rows.push({ ...baseRow, type: "fgts" as const, description: "FGTS (8%)", value: taxes.fgts } as PayrollEntry);
+  }
+  if (taxes.irpf > 0) {
+    rows.push({
+      ...baseRow,
+      type: "irpf" as const,
+      description: deps > 0 ? `IRPF (tabela 2026, ${deps} dep.)` : "IRPF (tabela 2026)",
+      value: taxes.irpf,
+    } as PayrollEntry);
+  }
+
+  // VT: 6% do salário base (não da base de encargos), se tiver benefício transporte.
+  const { data: vtAssign } = await supabase
+    .from("benefits_assignments")
+    .select("collaborator_id, benefit:benefits!inner(category)")
+    .eq("benefit.category", VT_BENEFIT_CATEGORY)
+    .eq("collaborator_id", collaboratorId);
+  if ((vtAssign ?? []).length > 0) {
+    const vt = calcVtDiscount(salary);
+    if (vt > 0) {
+      rows.push({
+        ...baseRow,
+        external_id: vtDiscountExternalId(collaboratorId, year, month),
+        type: "desconto" as const,
+        description: VT_DISCOUNT_DESCRIPTION,
+        value: vt,
+      } as PayrollEntry);
+    }
+  }
+
+  if (rows.length > 0) {
+    const { error: insErr } = await supabase.from("payroll_entries").insert(rows);
+    if (insErr) throw new Error("Falha ao recriar encargos: " + insErr.message);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1369,7 +1548,8 @@ export function usePayrollPeriods() {
 
   // ─────────────────────────────────────────────────────────────────────────
   // Recalcula INSS/IRPF/FGTS de um período, preservando/recuperando salario_base.
-  // Apaga os encargos atuais e reinjeta usando calcAllTaxes.
+  // Apaga os encargos atuais e reinjeta via computeCollaboratorTaxes (base =
+  // salário + proventos que integram INSS/IRPF − faltas).
   // Útil pra periodos antigos com valores obsoletos.
   // ─────────────────────────────────────────────────────────────────────────
   const recalculateTaxes = useMutation({
@@ -1432,18 +1612,28 @@ export function usePayrollPeriods() {
       //     ficam só no salário. Exclui proventos do recibo de férias (IRRF próprio).
       const { data: taxableProvs } = await supabase
         .from("payroll_entries")
-        .select("collaborator_id, value, external_id")
+        .select("collaborator_id, type, value, external_id")
         .eq("company_id", companyId)
         .eq("month", month)
         .eq("year", year)
-        .in("type", [...IRPF_TAXABLE_EARNING_TYPES]);
+        .in("type", [...IRPF_TAXABLE_EARNING_TYPES, ...FALTA_BASE_DEBIT_TYPES]);
+      // Buckets por colaborador: proventos que integram INSS, proventos que
+      // integram IRPF (superset) e faltas (reduzem as duas bases). Recibo de
+      // férias ('ferias-%') fica de fora. value é sempre > 0 (CHECK).
+      const inssTaxSet = new Set<string>(INSS_TAXABLE_EARNING_TYPES);
+      const irpfTaxSet = new Set<string>(IRPF_TAXABLE_EARNING_TYPES);
+      const faltaSet = new Set<string>(FALTA_BASE_DEBIT_TYPES);
       const irpfExtraByCollab = new Map<string, number>();
+      const inssExtraByCollab = new Map<string, number>();
+      const faltaByCollab = new Map<string, number>();
       for (const e of taxableProvs ?? []) {
         if (typeof e.external_id === "string" && e.external_id.startsWith("ferias-")) continue;
-        irpfExtraByCollab.set(
-          e.collaborator_id,
-          (irpfExtraByCollab.get(e.collaborator_id) ?? 0) + Number(e.value),
-        );
+        const v = Number(e.value) || 0;
+        const cid = e.collaborator_id;
+        const t = (e as { type: string }).type;
+        if (inssTaxSet.has(t)) inssExtraByCollab.set(cid, (inssExtraByCollab.get(cid) ?? 0) + v);
+        if (irpfTaxSet.has(t)) irpfExtraByCollab.set(cid, (irpfExtraByCollab.get(cid) ?? 0) + v);
+        if (faltaSet.has(t)) faltaByCollab.set(cid, (faltaByCollab.get(cid) ?? 0) + v);
       }
 
       // Quem tem benefício de Vale Transporte (categoria 'transport') → recria
@@ -1469,13 +1659,16 @@ export function usePayrollPeriods() {
         if (salary <= 0) continue;
         if (skipSalaryNext.has(c.id)) continue;
         const deps = (c as { dependents_count?: number }).dependents_count ?? 0;
-        // INSS/FGTS só sobre o salário base; IRPF sobre salário + proventos
-        // tributáveis do mês (gratificação etc.), menos INSS e dependentes.
-        const inss = calcINSS(salary);
-        const fgts = calcFGTS(salary);
-        const irpfGross = salary + (irpfExtraByCollab.get(c.id) ?? 0);
-        const irpf = calcIRPF({ grossSalary: irpfGross, inss, dependents: deps });
-        const taxes = { inss, irpf, fgts };
+        // INSS/FGTS sobre salário + proventos que integram (hora extra,
+        // periculosidade) − faltas; IRPF sobre salário + proventos tributáveis
+        // (+ gratificação, carro agregado, atestado) − faltas, menos INSS e deps.
+        const taxes = computeCollaboratorTaxes({
+          salary,
+          inssProventos: inssExtraByCollab.get(c.id) ?? 0,
+          irpfProventos: irpfExtraByCollab.get(c.id) ?? 0,
+          faltaTotal: faltaByCollab.get(c.id) ?? 0,
+          dependents: deps,
+        });
         const covered = existingBaseCoverage.get(c.id) ?? new Set<BasePayrollType>();
         const base = {
           company_id: companyId,
@@ -1541,6 +1734,20 @@ export function usePayrollPeriods() {
           .insert(newBaseEntries);
         if (insertBaseError) throw insertBaseError;
       }
+
+      // Auditoria: as linhas de INSS/IRPF/FGTS/VT NÃO são logadas (audit_log_trigger
+      // pula encargos derivados, pra não poluir). Registra 1 entrada-resumo do
+      // recálculo ("fulano recalculou a folha de tal competência").
+      try {
+        await supabase.rpc("log_payroll_recalc", {
+          p_company_id: companyId,
+          p_reference_month: reference_month,
+          p_scope: "periodo",
+        });
+      } catch (e) {
+        console.error("Falha ao registrar auditoria do recálculo:", e);
+      }
+
       return { count: newBaseEntries.length };
     },
     onSuccess: (result) => {
@@ -1695,7 +1902,25 @@ export function usePayrollEntries(periodId: string | undefined) {
       });
       if (error) throw error;
 
-      return { pushedToAgenda: shouldPushAsAdicional };
+      // Recalcula encargos do colaborador se o lançamento muda a base de cálculo
+      // (hora extra, gratificação, periculosidade, falta). Best-effort: não
+      // derruba a criação do lançamento se o recálculo falhar — só avisa.
+      let recalcWarning = false;
+      if (entryTypeAffectsTaxBase(values.type)) {
+        try {
+          await recalcCollaboratorTaxes({
+            companyId,
+            collaboratorId: values.collaborator_id,
+            month,
+            year,
+          });
+        } catch (e) {
+          recalcWarning = true;
+          console.error("Falha ao recalcular encargos após lançamento:", e);
+        }
+      }
+
+      return { pushedToAgenda: shouldPushAsAdicional, recalcWarning };
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["payroll-entries"] });
@@ -1703,6 +1928,9 @@ export function usePayrollEntries(periodId: string | undefined) {
         ? " ✓ (sincronizado com a agenda como adicional)"
         : " ✓";
       toast.success("Lançamento criado" + suffix);
+      if (result?.recalcWarning) {
+        toast.warning('Encargos não recalcularam sozinhos — clique em "Recalcular".');
+      }
     },
     onError: (err: Error) => {
       toast.error(err.message ?? "Não rolou. Tenta de novo?");
@@ -1716,33 +1944,55 @@ export function usePayrollEntries(periodId: string | undefined) {
   // re-sync). Pra deletar sync, apaga o período inteiro.
   // ─────────────────────────────────────────────────────────────────────────
   const deleteEntry = useMutation({
-    mutationFn: async (entryId: string) => {
+    mutationFn: async ({ entryId, reason }: { entryId: string; reason: string }) => {
       if (!period || !companyId) throw new Error("Período não encontrado");
       if (period.status !== "open") {
-        throw new Error("Período fechado. Reabra antes de deletar.");
+        throw new Error("Período fechado. Reabra antes de excluir.");
       }
-      // Confirma que é avulso antes de deletar (defesa em profundidade)
-      const { data: entry, error: fetchError } = await supabase
+      const motivo = reason.trim();
+      if (motivo.length < 3) {
+        throw new Error("Informe o motivo da exclusão (mínimo 3 caracteres).");
+      }
+
+      // Captura tipo + colaborador ANTES de excluir, pra decidir se precisa
+      // recalcular encargos depois (a RPC apaga a linha no servidor).
+      const { data: entryInfo } = await supabase
         .from("payroll_entries")
-        .select("id, is_fixed, external_id")
+        .select("type, collaborator_id")
         .eq("id", entryId)
-        .single();
-      if (fetchError || !entry) throw fetchError ?? new Error("Lançamento não encontrado");
-      if (entry.is_fixed) {
-        throw new Error("Lançamento fixo (do salário/encargo) — use estorno.");
-      }
-      if (entry.external_id) {
-        throw new Error("Lançamento sincronizado — não pode ser deletado.");
-      }
-      const { error } = await supabase
-        .from("payroll_entries")
-        .delete()
-        .eq("id", entryId);
+        .maybeSingle();
+
+      // Exclusão COM motivo via RPC SECURITY DEFINER: o audit_log só aceita
+      // escrita por trigger, então a RPC valida permissão (financeiro:can_delete)
+      // + período aberto no servidor, exclui, e anexa o motivo à linha de
+      // auditoria (after.deletion_reason). Permite excluir QUALQUER lançamento do
+      // mês (avulso, sincronizado, desconto), não só os avulsos sem external_id.
+      const { error } = await supabase.rpc("delete_payroll_entry_with_reason", {
+        p_entry_id: entryId,
+        p_reason: motivo,
+      });
       if (error) throw error;
+
+      // Se o lançamento excluído mudava a base (hora extra, falta, etc.),
+      // recalcula os encargos do colaborador. Best-effort.
+      const info = entryInfo as { type?: string; collaborator_id?: string } | null;
+      if (info?.type && info.collaborator_id && entryTypeAffectsTaxBase(info.type)) {
+        const { month, year } = periodToMonthYear(period.reference_month);
+        try {
+          await recalcCollaboratorTaxes({
+            companyId,
+            collaboratorId: info.collaborator_id,
+            month,
+            year,
+          });
+        } catch (e) {
+          console.error("Falha ao recalcular encargos após exclusão:", e);
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payroll-entries"] });
-      toast.success("Lançamento removido ✓");
+      toast.success("Lançamento excluído ✓");
     },
     onError: (err: Error) => {
       toast.error(err.message ?? "Não rolou. Tenta de novo?");
