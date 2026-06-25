@@ -80,6 +80,7 @@ export const COLUMN_LABELS: Record<string, string> = {
   "*.notes": "Observações",
   "*.is_active": "Ativo",
   "*.company_id": "Empresa",
+  "*.deletion_reason": "Motivo da exclusão",
 
   // collaborators
   "collaborators.name": "Nome",

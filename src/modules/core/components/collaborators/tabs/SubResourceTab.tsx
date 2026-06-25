@@ -142,6 +142,12 @@ export function SubResourceTab<TRow extends { id: string; external_id?: string |
     },
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey });
+      // Excluir um plano de saúde cascateia nos descontos da folha (a edge
+      // function remove os 'plano-saude-%' dos períodos abertos) — invalida a
+      // folha pra refletir a remoção sem precisar recarregar a página.
+      if (kind === "planos") {
+        queryClient.invalidateQueries({ queryKey: ["payroll-entries"] });
+      }
       const msg =
         vars.action === "create" ? `${titleSingular} criado.`
         : vars.action === "update" ? `${titleSingular} atualizado.`

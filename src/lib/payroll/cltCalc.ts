@@ -44,15 +44,15 @@ export const FGTS_RATE = 0.08;
 // (qualquer idade). Isento de INSS/IRPF/FGTS. Empregador paga e compensa
 // no INSS a recolher.
 //
-// Valores 2025 (placeholder pra 2026 — atualizar quando MTP publicar):
-//   • Limite: R$ 1.906,04
-//   • Valor por filho: R$ 65,00
+// Valores 2026:
+//   • Limite: R$ 1.906,04  (confirmar reajuste anual na Portaria MTPS/MF)
+//   • Valor por filho: R$ 67,54
 //
 // Fonte: https://www.gov.br/inss/pt-br/noticias/o-que-e-salario-familia-e-quem-tem-direito
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const SALARIO_FAMILIA_LIMITE_2026 = 1906.04;
-export const SALARIO_FAMILIA_VALOR_2026 = 65.0;
+export const SALARIO_FAMILIA_VALOR_2026 = 67.54;
 
 /** Idade-limite (exclusivo) pra filho não inválido. Lei 4.266/63 art. 1º. */
 export const SALARIO_FAMILIA_IDADE_LIMITE = 14;
@@ -136,6 +136,46 @@ export function calcAllTaxes(args: {
     dependents: args.dependents,
   });
   const fgts = calcFGTS(args.grossSalary);
+  return { inss, irpf, fgts };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Encargos do colaborador no mês, considerando proventos avulsos.
+//
+// FONTE ÚNICA DA VERDADE pros encargos quando há lançamentos além do salário:
+// usada tanto pelo "Recalcular" do período inteiro quanto pelo recálculo
+// dirigido a 1 colaborador (use-payroll.ts), pra os dois nunca divergirem.
+//
+//   • base INSS/FGTS = salário base + proventos que integram INSS
+//     (hora extra, periculosidade) − faltas.  (clamp ≥ 0)
+//   • base IRPF      = salário base + proventos tributáveis no IRPF
+//     (os de cima + gratificação + carro agregado + atestado) − faltas, menos INSS e
+//     dedução por dependente (subtraídos dentro de calcIRPF).  (clamp ≥ 0)
+//
+// `inssProventos`, `irpfProventos` e `faltaTotal` já vêm SOMADOS pelo chamador
+// (positivos; recibo de férias 'ferias-%' excluído). Como payroll_entries tem
+// CHECK (value > 0), não existem linhas negativas — a "remoção" de um provento é
+// feita apagando a linha (e re-somando), não com estorno negativo.
+// ─────────────────────────────────────────────────────────────────────────────
+export function computeCollaboratorTaxes(args: {
+  salary: number;
+  inssProventos: number;
+  irpfProventos: number;
+  faltaTotal: number;
+  dependents: number;
+}): { inss: number; irpf: number; fgts: number } {
+  const salary = Math.max(0, Number(args.salary) || 0);
+  const inssProventos = Math.max(0, Number(args.inssProventos) || 0);
+  const irpfProventos = Math.max(0, Number(args.irpfProventos) || 0);
+  const faltaTotal = Math.max(0, Number(args.faltaTotal) || 0);
+
+  const inssBase = Math.max(0, salary + inssProventos - faltaTotal);
+  const inss = calcINSS(inssBase);
+  const fgts = calcFGTS(inssBase);
+
+  const irpfBase = Math.max(0, salary + irpfProventos - faltaTotal);
+  const irpf = calcIRPF({ grossSalary: irpfBase, inss, dependents: args.dependents });
+
   return { inss, irpf, fgts };
 }
 

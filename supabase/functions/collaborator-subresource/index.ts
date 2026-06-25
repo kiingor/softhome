@@ -484,11 +484,70 @@ serve(async (req) => {
     }
     const { error: delErr } = await sbAdmin.from(cfg.table).delete().eq("id", localId!);
     if (delErr) return jsonResponse({ error: "Delete local falhou (remoto ok)", details: delErr.message }, 500);
-    return jsonResponse({ success: true });
+
+    // Cascata do plano de saúde: ao remover o plano, apaga os descontos já
+    // materializados na folha (external_id 'plano-saude-{ext}-{YYYYMM}') dos
+    // períodos ABERTOS (preserva fechados/exportados — folha finalizada). Sem
+    // isto o desconto fica órfão na folha após o RH excluir o plano no cadastro.
+    let cascaded = 0;
+    if (kind === "planos" && item?.external_id) {
+      try {
+        cascaded = await prunePlanoSaudeDeductions(
+          sbAdmin,
+          collab.id,
+          collab.company_id,
+          String(item.external_id),
+        );
+      } catch (err) {
+        // Não derruba a exclusão do plano por causa do cascata; loga e segue.
+        console.error("Falha na cascata de desconto de plano de saúde:", (err as Error).message);
+      }
+    }
+    return jsonResponse({ success: true, cascaded });
   }
 
   return jsonResponse({ error: "action desconhecido" }, 400);
 });
+
+// Remove os descontos de folha gerados por um plano de saúde (external_id
+// 'plano-saude-{planExternalId}-{YYYYMM}') dos períodos ABERTOS do colaborador.
+// Preserva períodos fechados/exportados (folha finalizada). Retorna nº removido.
+async function prunePlanoSaudeDeductions(
+  // deno-lint-ignore no-explicit-any
+  sbAdmin: any,
+  collaboratorId: string,
+  companyId: string,
+  planExternalId: string,
+): Promise<number> {
+  const { data: deds } = await sbAdmin
+    .from("payroll_entries")
+    .select("id, month, year")
+    .eq("collaborator_id", collaboratorId)
+    .like("external_id", `plano-saude-${planExternalId}-%`);
+  if (!deds || deds.length === 0) return 0;
+
+  const { data: periods } = await sbAdmin
+    .from("payroll_periods")
+    .select("reference_month, status")
+    .eq("company_id", companyId);
+  // Meses fechados/exportados a preservar (chave "YYYY-M").
+  const closedMonths = new Set<string>();
+  for (const p of (periods ?? []) as Array<{ reference_month: string; status: string }>) {
+    if (p.status && p.status !== "open") {
+      const ym = String(p.reference_month).substring(0, 7).split("-");
+      closedMonths.add(`${Number(ym[0])}-${Number(ym[1])}`);
+    }
+  }
+
+  const idsToDelete = (deds as Array<{ id: string; month: number; year: number }>)
+    .filter((d) => !closedMonths.has(`${d.year}-${d.month}`))
+    .map((d) => d.id);
+  if (idsToDelete.length === 0) return 0;
+
+  const { error } = await sbAdmin.from("payroll_entries").delete().in("id", idsToDelete);
+  if (error) throw new Error(error.message);
+  return idsToDelete.length;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 

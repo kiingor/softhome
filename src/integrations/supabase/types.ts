@@ -4819,6 +4819,14 @@ export type Database = {
       }
     }
     Functions: {
+      delete_payroll_entry_with_reason: {
+        Args: { p_entry_id: string; p_reason: string }
+        Returns: undefined
+      }
+      log_payroll_recalc: {
+        Args: { p_company_id: string; p_reference_month: string; p_scope?: string }
+        Returns: undefined
+      }
       adjust_vacation_period_manual: {
         Args: {
           _days_sold: number
@@ -5154,6 +5162,7 @@ export type Database = {
         | "ferias"
         | "carro_agregado"
         | "periculosidade"
+        | "emprestimo"
       payroll_period_status: "open" | "closed" | "exported"
       plan_tier: "essencial" | "crescer" | "profissional" | "empresa_plus"
     }
@@ -5434,6 +5443,7 @@ export const Constants = {
         "ferias",
         "carro_agregado",
         "periculosidade",
+        "emprestimo",
       ],
       payroll_period_status: ["open", "closed", "exported"],
       plan_tier: ["essencial", "crescer", "profissional", "empresa_plus"],
