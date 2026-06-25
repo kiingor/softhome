@@ -354,7 +354,7 @@ async function recalcCollaboratorTaxes(params: {
   // Colaborador (salário/dependentes/loja).
   const { data: collab } = await supabase
     .from("collaborators")
-    .select("id, store_id, dependents_count, current_salary, status, position:positions(salary)")
+    .select("id, store_id, dependents_count, current_salary, status, regime, position:positions(salary)")
     .eq("id", collaboratorId)
     .maybeSingle();
   if (!collab) return;
@@ -363,7 +363,23 @@ async function recalcCollaboratorTaxes(params: {
     collab as { current_salary?: number | null; position?: { salary?: number } | null },
   );
 
-  // Sem salário OU inativo → zera encargos e sai.
+  // Só CLT tem encargos (INSS/IRPF/FGTS). PJ/estagiário: remove os encargos (se
+  // existirem) e sai, sem tocar em VT/avulsos.
+  if ((collab as { regime?: string }).regime !== "clt") {
+    const { error: delNonClt } = await supabase
+      .from("payroll_entries")
+      .delete()
+      .eq("company_id", companyId)
+      .eq("collaborator_id", collaboratorId)
+      .eq("month", month)
+      .eq("year", year)
+      .in("type", ["inss", "irpf", "fgts"])
+      .or("external_id.is.null,external_id.in.(inss-base,irpf-base,fgts-base)");
+    if (delNonClt) throw new Error("Falha ao limpar encargos (não-CLT): " + delNonClt.message);
+    return;
+  }
+
+  // Sem salário OU inativo → zera encargos (taxes + VT) e sai.
   if (!(salary > 0) || (collab as { status?: string }).status !== "ativo") {
     await deleteTaxes();
     return;
@@ -539,7 +555,7 @@ export function usePayrollPeriods() {
         const { data: collaborators } = await supabase
           .from("collaborators")
           .select(
-            "id, position_id, store_id, dependents_count, current_salary, position:positions(salary)",
+            "id, position_id, store_id, dependents_count, current_salary, regime, position:positions(salary)",
           )
           .eq("company_id", companyId)
           .eq("status", "ativo");
@@ -594,6 +610,8 @@ export function usePayrollPeriods() {
           }
           const deps = (c as { dependents_count?: number }).dependents_count ?? 0;
           const covered = coveredByCollab.get(c.id) ?? new Set<string>();
+          // Só CLT tem encargos (INSS/IRPF/FGTS). PJ/estagiário: só salário base.
+          const isClt = (c as { regime?: string }).regime === "clt";
 
           const salary = fullSalary;
           const taxes = calcAllTaxes({ grossSalary: salary, dependents: deps });
@@ -614,7 +632,7 @@ export function usePayrollPeriods() {
             } as PayrollEntry);
           }
 
-          if (taxes.inss > 0 && !covered.has("inss")) {
+          if (isClt && taxes.inss > 0 && !covered.has("inss")) {
             autoEntries.push({
               company_id: companyId,
               collaborator_id: c.id,
@@ -628,7 +646,7 @@ export function usePayrollPeriods() {
               year,
             } as PayrollEntry);
           }
-          if (taxes.fgts > 0 && !covered.has("fgts")) {
+          if (isClt && taxes.fgts > 0 && !covered.has("fgts")) {
             autoEntries.push({
               company_id: companyId,
               collaborator_id: c.id,
@@ -642,7 +660,7 @@ export function usePayrollPeriods() {
               year,
             } as PayrollEntry);
           }
-          if (taxes.irpf > 0 && !covered.has("irpf")) {
+          if (isClt && taxes.irpf > 0 && !covered.has("irpf")) {
             autoEntries.push({
               company_id: companyId,
               collaborator_id: c.id,
@@ -715,6 +733,8 @@ export function usePayrollPeriods() {
         // ─────────────────────────────────────────────────────────────────────
         const sfCandidates = (collaborators ?? []).filter((c) => {
           if (skipSalaryNext.has(c.id)) return false;
+          // Salário-família é benefício do INSS: só CLT.
+          if ((c as { regime?: string }).regime !== "clt") return false;
           const sal = resolvePayrollSalary(
             c as { current_salary?: number | null; position?: { salary?: number } | null },
           );
@@ -1223,7 +1243,7 @@ export function usePayrollPeriods() {
       const { data: collaborators, error: collaboratorsError } = await supabase
         .from("collaborators")
         .select(
-          "id, store_id, dependents_count, current_salary, position:positions(salary)",
+          "id, store_id, dependents_count, current_salary, regime, position:positions(salary)",
         )
         .eq("company_id", companyId)
         .eq("status", "ativo");
@@ -1271,6 +1291,8 @@ export function usePayrollPeriods() {
           skippedVacation.push(c.id);
           continue;
         }
+        // Só CLT tem encargos (INSS/IRPF/FGTS). PJ/estagiário: só salário base.
+        const isClt = (c as { regime?: string }).regime === "clt";
         const deps = (c as { dependents_count?: number }).dependents_count ?? 0;
         // INSS/FGTS só no salário base; IRPF sobre salário + proventos
         // tributáveis do mês (gratificação etc.), menos INSS e dependentes.
@@ -1296,7 +1318,7 @@ export function usePayrollPeriods() {
             value: salary,
           } as PayrollEntry);
         }
-        if (taxes.inss > 0 && !existingTaxes.has(`${c.id}::inss`)) {
+        if (isClt && taxes.inss > 0 && !existingTaxes.has(`${c.id}::inss`)) {
           newAutoEntries.push({
             ...baseEntry,
             type: "inss" as const,
@@ -1304,7 +1326,7 @@ export function usePayrollPeriods() {
             value: taxes.inss,
           } as PayrollEntry);
         }
-        if (taxes.fgts > 0 && !existingTaxes.has(`${c.id}::fgts`)) {
+        if (isClt && taxes.fgts > 0 && !existingTaxes.has(`${c.id}::fgts`)) {
           newAutoEntries.push({
             ...baseEntry,
             type: "fgts" as const,
@@ -1312,7 +1334,7 @@ export function usePayrollPeriods() {
             value: taxes.fgts,
           } as PayrollEntry);
         }
-        if (taxes.irpf > 0 && !existingTaxes.has(`${c.id}::irpf`)) {
+        if (isClt && taxes.irpf > 0 && !existingTaxes.has(`${c.id}::irpf`)) {
           newAutoEntries.push({
             ...baseEntry,
             type: "irpf" as const,
@@ -1600,7 +1622,7 @@ export function usePayrollPeriods() {
       const { data: collaborators, error: collaboratorsError } = await supabase
         .from("collaborators")
         .select(
-          "id, store_id, dependents_count, current_salary, position:positions(salary)",
+          "id, store_id, dependents_count, current_salary, regime, position:positions(salary)",
         )
         .eq("company_id", companyId)
         .eq("status", "ativo");
@@ -1658,6 +1680,8 @@ export function usePayrollPeriods() {
         );
         if (salary <= 0) continue;
         if (skipSalaryNext.has(c.id)) continue;
+        // Só CLT tem encargos. PJ/estagiário: salário base e VT ficam, sem encargos.
+        const isClt = (c as { regime?: string }).regime === "clt";
         const deps = (c as { dependents_count?: number }).dependents_count ?? 0;
         // INSS/FGTS sobre salário + proventos que integram (hora extra,
         // periculosidade) − faltas; IRPF sobre salário + proventos tributáveis
@@ -1687,7 +1711,7 @@ export function usePayrollPeriods() {
             value: salary,
           } as PayrollEntry);
         }
-        if (taxes.inss > 0) {
+        if (isClt && taxes.inss > 0) {
           newBaseEntries.push({
             ...base,
             type: "inss" as const,
@@ -1695,7 +1719,7 @@ export function usePayrollPeriods() {
             value: taxes.inss,
           } as PayrollEntry);
         }
-        if (taxes.fgts > 0) {
+        if (isClt && taxes.fgts > 0) {
           newBaseEntries.push({
             ...base,
             type: "fgts" as const,
@@ -1703,7 +1727,7 @@ export function usePayrollPeriods() {
             value: taxes.fgts,
           } as PayrollEntry);
         }
-        if (taxes.irpf > 0) {
+        if (isClt && taxes.irpf > 0) {
           newBaseEntries.push({
             ...base,
             type: "irpf" as const,
