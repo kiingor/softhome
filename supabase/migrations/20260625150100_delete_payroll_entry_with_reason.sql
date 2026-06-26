@@ -30,13 +30,14 @@ DECLARE
   v_month      int;
   v_status     text;
   v_audit_rows int;
+  v_before     jsonb;
   v_reason     text := nullif(btrim(coalesce(p_reason, '')), '');
 BEGIN
-  -- 1. Carrega o lançamento (competência + empresa)
-  SELECT company_id, year, month
-    INTO v_company_id, v_year, v_month
-    FROM public.payroll_entries
-   WHERE id = p_entry_id;
+  -- 1. Carrega o lançamento (snapshot + competência + empresa)
+  SELECT to_jsonb(pe), pe.company_id, pe.year, pe.month
+    INTO v_before, v_company_id, v_year, v_month
+    FROM public.payroll_entries pe
+   WHERE pe.id = p_entry_id;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Lançamento não encontrado';
   END IF;
@@ -76,14 +77,18 @@ BEGIN
      AND action = 'delete'
      AND record_id = p_entry_id;
 
-  -- Atomicidade "excluiu ⇒ motivo registrado": se a linha de auditoria do delete
-  -- não foi encontrada (ex.: trigger audit_payroll_entries desabilitado/alterado),
-  -- aborta TUDO — o DELETE acima sofre rollback — em vez de excluir sem registrar
-  -- o motivo (LGPD). Como DELETE+UPDATE rodam na mesma transação da função, o
-  -- RAISE desfaz ambos.
+  -- Atomicidade "excluiu ⇒ motivo registrado". Encargos DERIVADOS (INSS/IRPF/FGTS
+  -- e desconto de VT 'vt-%') NÃO são logados pelo audit_log_trigger (ele pula pra
+  -- não poluir nos recálculos em lote). Numa exclusão MANUAL com motivo, se o
+  -- trigger não gravou (UPDATE casou 0 linhas), registramos explicitamente — em
+  -- vez de cancelar — pra a exclusão ser sempre auditada.
   GET DIAGNOSTICS v_audit_rows = ROW_COUNT;
   IF v_audit_rows = 0 THEN
-    RAISE EXCEPTION 'Falha ao registrar o motivo da exclusão na auditoria — operação cancelada';
+    INSERT INTO public.audit_log (user_id, company_id, action, table_name, record_id, before, after)
+    VALUES (
+      auth.uid(), v_company_id, 'delete', 'payroll_entries', p_entry_id, v_before,
+      jsonb_build_object('deletion_reason', v_reason)
+    );
   END IF;
 END;
 $$;
