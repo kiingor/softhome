@@ -21,6 +21,7 @@ import { formatCurrency } from "@/lib/formatters";
 import { StatBlock } from "./StatBlock";
 import {
   isEarning,
+  MANUAL_DEBIT_TYPES,
   ENTRY_TYPE_LABELS,
   ENTRY_TYPE_COLORS,
   type PayrollEntryWithCollaborator,
@@ -99,12 +100,15 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
       target.set(cid, cur);
     }
 
-    // Descontos manuais (plano de saúde, adiantamento) — só aplicam ao mensal.
+    // Débitos manuais que reduzem o líquido: desconto (plano de saúde, VT),
+    // adiantamento, falta e empréstimo. INSS/IRPF entram à parte; FGTS é encargo
+    // do empregador (fora). Só aplicam ao pagamento mensal.
     type Discount = { label: string; value: number };
     const discountsByCollab = new Map<string, Discount[]>();
+    const MANUAL_DEBIT_SET = new Set<string>(MANUAL_DEBIT_TYPES);
     for (const e of entries) {
-      if (e.type !== "desconto") continue;
-      if (isVacEntry(e)) continue; // defensivo: férias não tem desconto
+      if (!MANUAL_DEBIT_SET.has(e.type)) continue;
+      if (isVacEntry(e)) continue; // defensivo: férias não tem débito manual
       const v = Number(e.value);
       if (!(v > 0)) continue;
       const arr = discountsByCollab.get(e.collaborator_id) ?? [];
