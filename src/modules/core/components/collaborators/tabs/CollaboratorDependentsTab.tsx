@@ -22,7 +22,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Trash, CircleNotch as Loader2, Users } from "@phosphor-icons/react";
+import { Plus, Trash, Pencil, CircleNotch as Loader2, Users } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { formatCPFInput } from "@/lib/validators";
 import { EmptyState } from "@/shared/components/EmptyState";
@@ -67,6 +67,8 @@ export function CollaboratorDependentsTab({
 }: Props) {
   const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
+  /** id do dependente em edição; null = adicionando um novo. */
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "",
     birth_date: "",
@@ -76,6 +78,38 @@ export function CollaboratorDependentsTab({
     is_health_plan_dependent: false,
     is_invalid: false,
   });
+
+  const EMPTY_FORM = {
+    name: "",
+    birth_date: "",
+    cpf: "",
+    kinship: "filho",
+    is_irpf_dependent: false,
+    is_health_plan_dependent: false,
+    is_invalid: false,
+  };
+  const openCreate = () => {
+    setEditingId(null);
+    setForm(EMPTY_FORM);
+    setIsOpen(true);
+  };
+  const openEdit = (d: Dependent) => {
+    setEditingId(d.id);
+    setForm({
+      name: d.name ?? "",
+      birth_date: d.birth_date ?? "",
+      cpf: d.cpf ? formatCPFInput(d.cpf) : "",
+      kinship: d.kinship ?? "filho",
+      is_irpf_dependent: d.is_irpf_dependent,
+      is_health_plan_dependent: d.is_health_plan_dependent,
+      is_invalid: d.is_invalid,
+    });
+    setIsOpen(true);
+  };
+  const closeDialog = () => {
+    setIsOpen(false);
+    setEditingId(null);
+  };
 
   const { data: dependents = [], isLoading } = useQuery({
     queryKey: ["collaborator-dependents", collaboratorId],
@@ -162,6 +196,62 @@ export function CollaboratorDependentsTab({
     onError: (err: Error) => toast.error("Não rolou. " + err.message),
   });
 
+  const update = useMutation({
+    mutationFn: async () => {
+      if (!editingId) return;
+      // Campos da agenda (nome, nascimento, CPF, parentesco) via edge function
+      // (PUSH → agenda → local). As flags do DNA (IRPF/plano/inválido) não
+      // existem na agenda — vão num UPDATE local direto, sempre setando o valor
+      // (true OU false), diferente do create que só liga as true.
+      const { data, error } = await supabase.functions.invoke("collaborator-subresource", {
+        body: {
+          action: "update",
+          kind: "parentes",
+          collaboratorId,
+          localId: editingId,
+          data: {
+            name: form.name.trim(),
+            birth_date: form.birth_date || null,
+            cpf: form.cpf.replace(/\D/g, "") || null,
+            kinship: form.kinship,
+          },
+        },
+      });
+      if (error) {
+        const detail = await extractFnErrorDetail(error);
+        throw new Error(detail);
+      }
+      if (data && typeof data === "object" && "error" in data) {
+        const err = data as { error: string; details?: string };
+        throw new Error(err.details ? `${err.error}: ${err.details}` : err.error);
+      }
+      const { error: localErr } = await supabase
+        .from("collaborator_dependents")
+        .update({
+          is_irpf_dependent: form.is_irpf_dependent,
+          is_health_plan_dependent: form.is_health_plan_dependent,
+          is_invalid: form.is_invalid,
+        })
+        .eq("id", editingId);
+      if (localErr) throw new Error(localErr.message);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["collaborator-dependents", collaboratorId],
+      });
+      queryClient.invalidateQueries({ queryKey: ["collaborator", collaboratorId] });
+      setIsOpen(false);
+      setEditingId(null);
+      setForm(EMPTY_FORM);
+      toast.success(
+        AGENDA_SYNC_DISABLED
+          ? "Dependente atualizado ✓"
+          : "Dependente atualizado ✓ (sincronizado com a agenda)",
+      );
+    },
+    onError: (err: Error) => toast.error("Não rolou. " + err.message),
+  });
+
   const remove = useMutation({
     mutationFn: async (id: string) => {
       const { data, error } = await supabase.functions.invoke("collaborator-subresource", {
@@ -206,7 +296,7 @@ export function CollaboratorDependentsTab({
             cálculo da folha automaticamente.
           </p>
           {canEdit && (
-            <Button size="sm" onClick={() => setIsOpen(true)}>
+            <Button size="sm" onClick={openCreate}>
               <Plus className="w-4 h-4 mr-1" />
               Adicionar
             </Button>
@@ -221,7 +311,7 @@ export function CollaboratorDependentsTab({
           description="Cadastra dependentes legais e familiares. Quem é IRPF afeta o cálculo da folha automaticamente."
           action={
             canEdit && (
-              <Button onClick={() => setIsOpen(true)}>
+              <Button onClick={openCreate}>
                 <Plus className="w-4 h-4 mr-2" />
                 Adicionar dependente
               </Button>
@@ -265,15 +355,27 @@ export function CollaboratorDependentsTab({
                   )}
                 </div>
                 {canEdit && (
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => remove.mutate(d.id)}
-                    disabled={remove.isPending}
-                    className="text-destructive hover:text-destructive"
-                  >
-                    <Trash className="w-4 h-4" />
-                  </Button>
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => openEdit(d)}
+                      className="text-muted-foreground hover:text-foreground"
+                      title="Editar dependente"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => remove.mutate(d.id)}
+                      disabled={remove.isPending}
+                      className="text-destructive hover:text-destructive"
+                      title="Excluir dependente"
+                    >
+                      <Trash className="w-4 h-4" />
+                    </Button>
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -281,10 +383,12 @@ export function CollaboratorDependentsTab({
         </div>
       )}
 
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <Dialog open={isOpen} onOpenChange={(o) => (o ? setIsOpen(true) : closeDialog())}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Adicionar dependente</DialogTitle>
+            <DialogTitle>
+              {editingId ? "Editar dependente" : "Adicionar dependente"}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
@@ -388,14 +492,16 @@ export function CollaboratorDependentsTab({
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsOpen(false)}>
+            <Button variant="outline" onClick={closeDialog}>
               Cancelar
             </Button>
             <Button
-              onClick={() => create.mutate()}
-              disabled={create.isPending || !form.name.trim()}
+              onClick={() => (editingId ? update.mutate() : create.mutate())}
+              disabled={
+                (editingId ? update.isPending : create.isPending) || !form.name.trim()
+              }
             >
-              {create.isPending ? (
+              {(editingId ? update.isPending : create.isPending) ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               ) : null}
               Salvar
