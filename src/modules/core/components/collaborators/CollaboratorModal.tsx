@@ -1569,7 +1569,13 @@ const CollaboratorModal = ({
       if (e.type === "fgts") return 0; // FGTS vai pra taxTotal, não pro entriesTotal
       if (e.type === "inss" || e.type === "irpf") return -e.value;
       if (e.type === "custo" || e.type === "despesa") return -e.value;
-      if (e.type === "desconto" || e.type === "falta" || e.type === "adiantamento") return -e.value;
+      if (
+        e.type === "desconto" ||
+        e.type === "falta" ||
+        e.type === "adiantamento" ||
+        e.type === "emprestimo"
+      )
+        return -e.value;
       return e.value; // proventos
     };
 
