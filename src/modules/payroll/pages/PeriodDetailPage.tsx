@@ -81,6 +81,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PaymentsTab } from "../components/PaymentsTab";
 import { StatBlock } from "../components/StatBlock";
 import { VacationAdvanceDialog } from "../components/VacationAdvanceDialog";
+import { PayrollValidationButton } from "../components/validation/PayrollValidationButton";
 import { toast } from "sonner";
 import { useDashboard } from "@/contexts/DashboardContext";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -564,6 +565,13 @@ export default function PeriodDetailPage() {
                   {alerts.length}
                 </span>
               </Button>
+            )}
+            {canViewPayments && (
+              <PayrollValidationButton
+                companyId={currentCompany?.id}
+                referenceMonth={period.reference_month}
+                canManage={canManagePayments}
+              />
             )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
