@@ -16,9 +16,10 @@ export const parseCurrencyInput = (value: string): number => {
 };
 
 // Format currency for input display (R$ 1.234,56)
-export const formatCurrencyForInput = (value: string): string => {
-  // Remove all non-digits
-  const digits = value.replace(/\D/g, "");
+export const formatCurrencyForInput = (value: string | number): string => {
+  // Aceita number (ex.: valor já numérico vindo do banco) sem quebrar — coage
+  // pra string antes do replace.
+  const digits = String(value ?? "").replace(/\D/g, "");
   
   if (!digits) return "";
   

@@ -41,6 +41,7 @@ export const ACTIVE_ENTRY_TYPES = [
   "gratificacao",
   "carro_agregado",
   "periculosidade",
+  "auxilio_vale_transporte",
   "desconto",
   "emprestimo",
 ] as const;
@@ -63,6 +64,7 @@ export const MANUAL_CREDIT_TYPES = [
   "carro_agregado",
   "periculosidade",
   "atestado",
+  "auxilio_vale_transporte",
 ] as const;
 
 /** Lançamentos manuais a DÉBITO (desconto, sai do líquido). */
@@ -99,6 +101,8 @@ export const ENTRY_TYPE_COLORS: Record<string, string> = {
     "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-900/60",
   periculosidade:
     "bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200 dark:bg-fuchsia-950/40 dark:text-fuchsia-300 dark:border-fuchsia-900/60",
+  auxilio_vale_transporte:
+    "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/60",
   atestado:
     "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-900/60 dark:text-slate-300 dark:border-slate-700",
   adiantamento:
@@ -129,6 +133,7 @@ export const ENTRY_TYPE_LABELS: Record<string, string> = {
   gratificacao: "Gratificação",
   carro_agregado: "Carro Agregado",
   periculosidade: "Periculosidade",
+  auxilio_vale_transporte: "Auxílio Vale Transporte",
   desconto: "Desconto",
   emprestimo: "Empréstimo",
   ferias: "Férias",
@@ -151,6 +156,7 @@ export const EARNINGS_TYPES = [
   "carro_agregado",
   "periculosidade",
   "atestado",
+  "auxilio_vale_transporte",
   "ferias",
   "salario_familia",
 ] as const;

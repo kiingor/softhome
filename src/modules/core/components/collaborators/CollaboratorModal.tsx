@@ -44,7 +44,7 @@ import { toast } from "sonner";
 import { formatCPFInput, cleanCPF, validateCPF, formatPhoneInput, formatCEPInput, cleanCEP, BRAZIL_STATES } from "@/lib/validators";
 import { sendWhatsAppNotification } from "@/lib/whatsappNotifications";
 import { AGENDA_SYNC_DISABLED } from "@/lib/agenda-sync";
-import { formatCurrency, formatCurrencyForInput, parseCurrencyInput, getCurrentCompetencia, formatDateBR, toTitleCase } from "@/lib/formatters";
+import { formatCurrency, formatCurrencyForInput, formatNumberAsCurrency, parseCurrencyInput, getCurrentCompetencia, formatDateBR, toTitleCase } from "@/lib/formatters";
 import { calculateMonthlyBenefitValue, getBenefitCalculationDescription, DayAbbrev } from "@/lib/workingDays";
 import { calcAllTaxes } from "@/lib/payroll/cltCalc";
 import { useStoreHolidays } from "@/modules/payroll/hooks/use-store-holidays";
@@ -280,7 +280,7 @@ const CollaboratorModal = ({
 
   // Entry form state - extended with month/year/installment
   const [entryForm, setEntryForm] = useState({
-    type: "hora_extra" as "salario_base" | "hora_extra" | "custo" | "despesa" | "beneficio",
+    type: "hora_extra" as "salario_base" | "hora_extra" | "custo" | "despesa" | "beneficio" | "auxilio_vale_transporte",
     description: "",
     value: "",
     is_fixed: false,
@@ -1632,6 +1632,7 @@ const CollaboratorModal = ({
       bonificacao: "Bonificação",
       gratificacao: "Gratificação",
       carro_agregado: "Carro Agregado",
+      auxilio_vale_transporte: "Auxílio Vale Transporte",
       desconto: "Desconto",
       // Legacy
       salario: "Salário",
@@ -2568,7 +2569,9 @@ const CollaboratorModal = ({
                                               onClick={() =>
                                                 setEditingAssignmentValue({
                                                   assignment,
-                                                  inputValue: formatCurrencyForInput(baseValue),
+                                                  // baseValue pode ser número (custom_value) ou string
+                                                  // (benefit.value do banco) — normaliza pra number.
+                                                  inputValue: formatNumberAsCurrency(Number(baseValue)),
                                                 })
                                               }
                                             >
@@ -3053,6 +3056,7 @@ const CollaboratorModal = ({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="auxilio_vale_transporte">Auxílio Vale Transporte</SelectItem>
                   <SelectItem value="carro_agregado">Carro Agregado</SelectItem>
                   <SelectItem value="bonificacao">Bonificação</SelectItem>
                   <SelectItem value="gratificacao">Gratificação</SelectItem>
