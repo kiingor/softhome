@@ -32,10 +32,12 @@ export default function AplicarTestePage() {
       try {
         const t = await getApplicationTestByToken(token);
         if (!t) {
-          setError("Link inválido ou expirado.");
+          setError("Link inválido.");
         } else {
           setTest(t);
-          if (t.status === "in_progress") setStarted(true);
+          // Já respondeu? Mostra a tela de "concluído" (não "expirado").
+          if (t.status === "completed" || t.status === "reviewed") setCompleted(true);
+          else if (t.status === "in_progress") setStarted(true);
         }
       } catch (err) {
         setError((err as Error).message);
