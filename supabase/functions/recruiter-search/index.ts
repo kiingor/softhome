@@ -221,7 +221,7 @@ serve(async (req) => {
     sessionId = newSession.id;
   }
 
-  // 2. Embed da query (iarouter — gemini-embedding-001 @ 1536)
+  // 2. Embed da query (OpenAI — text-embedding-3-small @ 1536)
   let queryEmbedding: number[];
   try {
     queryEmbedding = await embedText(query);
