@@ -3,7 +3,7 @@
 // Processa o PDF do CV de um candidato:
 //   1. Baixa o PDF (do Storage bucket 'candidate-cvs' OU de URL pública externa)
 //   2. Envia pra IA (iarouter/dna-model) que extrai resumo estruturado em pt-BR
-//   3. Embed do resumo via iarouter (gemini-embedding-001 @ 1536)
+//   3. Embed do resumo via OpenAI (text-embedding-3-small @ 1536)
 //   4. Upsert em candidate_embeddings + atualiza candidates (cv_url se filePath,
 //      cv_summary, cv_processed_at)
 //
@@ -16,8 +16,8 @@
 // interna entre Edge Functions, ex: api-candidates).
 //
 // Deploy: npx supabase functions deploy cv-process
-// Secrets necessários: ANTHROPIC_API_KEY, ANTHROPIC_BASE_URL (iarouter),
-//                      SUPABASE_SERVICE_ROLE_KEY (auto)
+// Secrets necessários: ANTHROPIC_API_KEY, ANTHROPIC_BASE_URL (iarouter, p/ Claude),
+//                      OPENAI_API_KEY (embeddings), SUPABASE_SERVICE_ROLE_KEY (auto)
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.0";
@@ -318,7 +318,7 @@ serve(async (req) => {
     );
   }
 
-  // 6. Embedding (iarouter — gemini-embedding-001 @ 1536)
+  // 6. Embedding (OpenAI — text-embedding-3-small @ 1536)
   let embedding: number[];
   try {
     embedding = await embedText(summary);
