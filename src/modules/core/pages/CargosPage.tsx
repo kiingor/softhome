@@ -180,6 +180,38 @@ export default function CargosPage() {
     positionMutation.mutate({ action: 'delete', id });
   };
 
+  // Exclusão de cargo é LOCAL-only: não sincroniza com a agenda (positions usa
+  // syncToRemote:false e o AGENDA_SYNC_DISABLED reforça isso no server). Cargo em
+  // uso é bloqueado pelo banco via FK (occupational_exams = NO ACTION); pré-checa
+  // aqui pra dar mensagem clara em vez do erro cru de constraint.
+  const confirmDeletePosition = async () => {
+    if (!deletingPosition) return;
+    const pos = deletingPosition;
+    setDeletingPosition(null);
+    try {
+      const [{ count: collabCount }, { count: examCount }] = await Promise.all([
+        supabase
+          .from('collaborators')
+          .select('id', { count: 'exact', head: true })
+          .eq('position_id', pos.id),
+        supabase
+          .from('occupational_exams')
+          .select('id', { count: 'exact', head: true })
+          .or(`position_id.eq.${pos.id},previous_position_id.eq.${pos.id}`),
+      ]);
+      const emUso = (collabCount ?? 0) + (examCount ?? 0);
+      if (emUso > 0) {
+        toast.error(
+          `"${pos.name}" está em uso (colaboradores ou exames vinculados) e não pode ser excluído. Remaneje antes de excluir.`,
+        );
+        return;
+      }
+    } catch {
+      // Se a checagem falhar, deixa o banco ser o guarda — a FK bloqueia se em uso.
+    }
+    handlePositionDelete(pos.id);
+  };
+
   const createDocMutation = useMutation({
     mutationFn: async (data: { name: string; observation: string; file_type: string }) => {
       const { error } = await supabase.from('position_documents').insert({
@@ -442,17 +474,16 @@ export default function CargosPage() {
                             {canDelete && (
                               <>
                                 <DropdownMenuSeparator />
-                                {/* Excluir cargo DESATIVADO — cadastros corporativos sensíveis.
-                                    Colaboradores apontam pra positions via FK e há FK em
-                                    position_documents. Pra "remover" desative na agenda;
-                                    sync replica como inativo aqui. */}
+                                {/* Exclusão LOCAL-only: não toca a agenda (positions usa
+                                    syncToRemote:false + AGENDA_SYNC_DISABLED no server). Cargo em
+                                    uso é bloqueado antes (confirmDeletePosition); documentos do
+                                    cargo caem por cascade. */}
                                 <DropdownMenuItem
-                                  disabled
-                                  className="text-muted-foreground"
-                                  title="Não é possível excluir cargo. Desative na agenda — sync replica aqui."
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={() => setDeletingPosition(position)}
                                 >
                                   <Trash2 className="w-4 h-4 mr-2" />
-                                  Excluir (indisponível)
+                                  Excluir
                                 </DropdownMenuItem>
                               </>
                             )}
@@ -691,13 +722,14 @@ export default function CargosPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir Cargo</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem certeza que deseja excluir "{deletingPosition?.name}"? Esta ação não pode ser desfeita.
+              Tem certeza que deseja excluir "{deletingPosition?.name}"? Não dá pra desfazer — os
+              documentos obrigatórios do cargo também são removidos. Não afeta a agenda.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => { if (deletingPosition) { handlePositionDelete(deletingPosition.id); setDeletingPosition(null); } }}
+              onClick={confirmDeletePosition}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Excluir
