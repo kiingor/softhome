@@ -199,8 +199,8 @@ describe("constantes auditáveis", () => {
     expect(INSS_CEILING_2026).toBe(988.09);
   });
 
-  it("limite salário-família 2026 é R$ 1.906,04", () => {
-    expect(SALARIO_FAMILIA_LIMITE_2026).toBe(1906.04);
+  it("limite salário-família 2026 é R$ 1.980,38", () => {
+    expect(SALARIO_FAMILIA_LIMITE_2026).toBe(1980.38);
   });
 
   it("valor por filho do salário-família 2026 é R$ 67,54", () => {
@@ -294,14 +294,14 @@ describe("calcSalarioFamilia", () => {
     expect(r.eligible).toBe(true);
   });
 
-  it("salário no limite exato (R$ 1.906,04) + 1 filho → R$ 67,54", () => {
-    const r = calcSalarioFamilia({ grossSalary: 1906.04, eligibleChildrenCount: 1 });
+  it("salário no limite exato (R$ 1.980,38) + 1 filho → R$ 67,54", () => {
+    const r = calcSalarioFamilia({ grossSalary: 1980.38, eligibleChildrenCount: 1 });
     expect(r.value).toBe(67.54);
     expect(r.eligible).toBe(true);
   });
 
-  it("salário R$ 1.906,05 (1 centavo acima do limite) → R$ 0, não elegível", () => {
-    const r = calcSalarioFamilia({ grossSalary: 1906.05, eligibleChildrenCount: 2 });
+  it("salário R$ 1.980,39 (1 centavo acima do limite) → R$ 0, não elegível", () => {
+    const r = calcSalarioFamilia({ grossSalary: 1980.39, eligibleChildrenCount: 2 });
     expect(r.value).toBe(0);
     expect(r.eligible).toBe(false);
   });
@@ -327,7 +327,7 @@ describe("calcSalarioFamilia", () => {
   it("perChild e limit retornados pra UI", () => {
     const r = calcSalarioFamilia({ grossSalary: 1500, eligibleChildrenCount: 1 });
     expect(r.perChild).toBe(67.54);
-    expect(r.limit).toBe(1906.04);
+    expect(r.limit).toBe(1980.38);
   });
 
   it("contagem fracionada/negativa → tratada como inteiro >= 0", () => {
