@@ -44,14 +44,14 @@ export const FGTS_RATE = 0.08;
 // (qualquer idade). Isento de INSS/IRPF/FGTS. Empregador paga e compensa
 // no INSS a recolher.
 //
-// Valores 2026:
-//   • Limite: R$ 1.906,04  (confirmar reajuste anual na Portaria MTPS/MF)
+// Valores 2026 (Portaria Interministerial MPS/MF nº 13, de 09/01/2026):
+//   • Limite: R$ 1.980,38  (renda mensal do empregado)
 //   • Valor por filho: R$ 67,54
 //
 // Fonte: https://www.gov.br/inss/pt-br/noticias/o-que-e-salario-familia-e-quem-tem-direito
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const SALARIO_FAMILIA_LIMITE_2026 = 1906.04;
+export const SALARIO_FAMILIA_LIMITE_2026 = 1980.38;
 export const SALARIO_FAMILIA_VALOR_2026 = 67.54;
 
 /** Idade-limite (exclusivo) pra filho não inválido. Lei 4.266/63 art. 1º. */
