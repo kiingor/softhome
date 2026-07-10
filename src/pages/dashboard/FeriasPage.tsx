@@ -57,6 +57,7 @@ const FeriasPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [periodStatusFilter, setPeriodStatusFilter] = useState("all");
+  const [situationFilter, setSituationFilter] = useState("all");
   const [rejectingRequest, setRejectingRequest] = useState<VacationRequest | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
   const [deletingRequest, setDeletingRequest] = useState<VacationRequest | null>(null);
@@ -97,6 +98,7 @@ const FeriasPage = () => {
 
   // Collaborators overview: merge collaborators with their vacation periods
   const collaboratorsOverview = useMemo(() => {
+    const now = new Date();
     return allCollaborators
       .filter(c => !searchTerm || c.name.toLowerCase().includes(searchTerm.toLowerCase()))
       .map(collab => {
@@ -118,6 +120,32 @@ const FeriasPage = () => {
             : addDays(parseISO(activePeriod.end_date), 365);
         }
 
+        // Situação exibida na coluna (e base do filtro de Situação). Calculada
+        // aqui — não no render — pra que o dropdown consiga filtrar por ela.
+        const isExpiring = !!concessiveDeadline && concessiveDeadline <= addDays(now, 60);
+        const isOverdue = !!concessiveDeadline && concessiveDeadline < now;
+        let situationLabel = "Sem período";
+        let situationClass = "bg-muted text-muted-foreground";
+        if (activeRequest?.status === "in_progress") {
+          situationLabel = "Em Gozo";
+          situationClass = "bg-green-100 text-green-800 border-green-200";
+        } else if (activeRequest?.status === "approved") {
+          situationLabel = "Férias Agendadas";
+          situationClass = "bg-blue-100 text-blue-800 border-blue-200";
+        } else if (isOverdue) {
+          situationLabel = "Vencido!";
+          situationClass = "bg-red-100 text-red-800 border-red-200";
+        } else if (isExpiring) {
+          situationLabel = "Vencendo";
+          situationClass = "bg-yellow-100 text-yellow-800 border-yellow-200";
+        } else if (currentPeriod?.status === "pending") {
+          situationLabel = "Adquirindo";
+          situationClass = "bg-blue-50 text-blue-700 border-blue-200";
+        } else if (currentPeriod?.status === "available") {
+          situationLabel = "Disponível";
+          situationClass = "bg-green-50 text-green-700 border-green-200";
+        }
+
         return {
           ...collab,
           periods: collabPeriods,
@@ -125,9 +153,14 @@ const FeriasPage = () => {
           totalRemaining,
           activeRequest,
           concessiveDeadline,
+          isExpiring,
+          isOverdue,
+          situationLabel,
+          situationClass,
         };
-      });
-  }, [allCollaborators, periods, requests, searchTerm]);
+      })
+      .filter(c => situationFilter === "all" || c.situationLabel === situationFilter);
+  }, [allCollaborators, periods, requests, searchTerm, situationFilter]);
 
   const handleApprove = async (request: VacationRequest) => {
     if (!user?.id) return;
@@ -261,6 +294,21 @@ const FeriasPage = () => {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input placeholder="Buscar colaborador..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-9" />
               </div>
+              <Select value={situationFilter} onValueChange={setSituationFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Situação" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  <SelectItem value="Adquirindo">Adquirindo</SelectItem>
+                  <SelectItem value="Disponível">Disponível</SelectItem>
+                  <SelectItem value="Em Gozo">Em Gozo</SelectItem>
+                  <SelectItem value="Férias Agendadas">Férias Agendadas</SelectItem>
+                  <SelectItem value="Vencendo">Vencendo</SelectItem>
+                  <SelectItem value="Vencido!">Vencido</SelectItem>
+                  <SelectItem value="Sem período">Sem período</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <Card>
@@ -287,32 +335,7 @@ const FeriasPage = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody className="stagger-animation">
-                    {collaboratorsOverview.map(c => {
-                      const isExpiring = c.concessiveDeadline && c.concessiveDeadline <= addDays(new Date(), 60);
-                      const isOverdue = c.concessiveDeadline && c.concessiveDeadline < new Date();
-                      let situationLabel = "Sem período";
-                      let situationClass = "bg-muted text-muted-foreground";
-                      if (c.activeRequest?.status === "in_progress") {
-                        situationLabel = "Em Gozo";
-                        situationClass = "bg-green-100 text-green-800 border-green-200";
-                      } else if (c.activeRequest?.status === "approved") {
-                        situationLabel = "Férias Agendadas";
-                        situationClass = "bg-blue-100 text-blue-800 border-blue-200";
-                      } else if (isOverdue) {
-                        situationLabel = "Vencido!";
-                        situationClass = "bg-red-100 text-red-800 border-red-200";
-                      } else if (isExpiring) {
-                        situationLabel = "Vencendo";
-                        situationClass = "bg-yellow-100 text-yellow-800 border-yellow-200";
-                      } else if (c.currentPeriod?.status === "pending") {
-                        situationLabel = "Adquirindo";
-                        situationClass = "bg-blue-50 text-blue-700 border-blue-200";
-                      } else if (c.currentPeriod?.status === "available") {
-                        situationLabel = "Disponível";
-                        situationClass = "bg-green-50 text-green-700 border-green-200";
-                      }
-
-                      return (
+                    {collaboratorsOverview.map(c => (
                         <TableRow key={c.id} className="table-row-animate">
                           <TableCell className="font-medium">{c.name}</TableCell>
                           <TableCell>
@@ -328,7 +351,7 @@ const FeriasPage = () => {
                           <TableCell className="text-center font-bold">{c.totalRemaining}</TableCell>
                           <TableCell>
                             {c.concessiveDeadline ? (
-                              <span className={isOverdue ? "text-destructive font-semibold" : isExpiring ? "text-yellow-600 font-semibold" : ""}>
+                              <span className={c.isOverdue ? "text-destructive font-semibold" : c.isExpiring ? "text-yellow-600 font-semibold" : ""}>
                                 {format(c.concessiveDeadline, "dd/MM/yyyy")}
                               </span>
                             ) : "—"}
@@ -336,9 +359,9 @@ const FeriasPage = () => {
                           <TableCell>
                             <Badge
                               variant="outline"
-                              className={`whitespace-nowrap ${situationClass}`}
+                              className={`whitespace-nowrap ${c.situationClass}`}
                             >
-                              {situationLabel}
+                              {c.situationLabel}
                             </Badge>
                           </TableCell>
                           {canManage && (
@@ -378,8 +401,7 @@ const FeriasPage = () => {
                             </TableCell>
                           )}
                         </TableRow>
-                      );
-                    })}
+                    ))}
                   </TableBody>
                 </Table>
               )}
