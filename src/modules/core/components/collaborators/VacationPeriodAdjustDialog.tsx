@@ -145,6 +145,8 @@ export function VacationPeriodAdjustDialog({ open, onOpenChange, period }: Props
       toast.success("Período atualizado");
       queryClient.invalidateQueries({ queryKey: ["vacation-periods-collaborator"] });
       queryClient.invalidateQueries({ queryKey: ["vacation-periods"] });
+      // Aba Férias do cadastro (SubResourceTab kind="ferias") lê por esta key.
+      queryClient.invalidateQueries({ queryKey: ["subresource-ferias"] });
       onOpenChange(false);
     },
     onError: (err: Error) => {
