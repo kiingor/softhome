@@ -266,6 +266,15 @@ const CollaboratorModal = ({
   const [addEntryOpen, setAddEntryOpen] = useState(false);
   const [addBenefitOpen, setAddBenefitOpen] = useState(false);
   const [deletingEntry, setDeletingEntry] = useState<any>(null);
+  const [editingFixedEntry, setEditingFixedEntry] = useState<{
+    id: string;
+    type: string;
+    description: string | null;
+    value: number;
+  } | null>(null);
+  const [editEntryValue, setEditEntryValue] = useState("");
+  const [editEntryDescription, setEditEntryDescription] = useState("");
+  const [savingFixedEdit, setSavingFixedEdit] = useState(false);
   const [deletingAssignment, setDeletingAssignment] = useState<any>(null);
   const [editingAssignmentValue, setEditingAssignmentValue] = useState<{
     assignment: any;
@@ -1390,6 +1399,22 @@ const CollaboratorModal = ({
     }
   };
 
+  // external_ids das materializações de um item da ficha nos períodos ABERTOS
+  // da empresa (formato fixedEntryExternalId do use-payroll: 'fixed-<id>-<YYYY-MM>').
+  // Período fechado é imutável — fica de fora de propósito.
+  const fixedEntryOpenExternalIds = async (fixedId: string): Promise<string[]> => {
+    const { data, error } = await supabase
+      .from("payroll_periods")
+      .select("reference_month")
+      .eq("company_id", currentCompany!.id)
+      .eq("status", "open");
+    if (error) throw error;
+    return (data ?? []).map((p) => {
+      const [y, m] = String(p.reference_month).split("-");
+      return `fixed-${fixedId}-${y}-${m}`;
+    });
+  };
+
   // Delete payroll entry
   const handleDeleteEntry = async () => {
     if (!deletingEntry) return;
@@ -1401,29 +1426,92 @@ const CollaboratorModal = ({
       return;
     }
 
-    // Sintéticos (salário/encargo) não são linhas reais — vêm do cadastro.
-    if (deletingEntry._synthetic) {
-      toast.error("Salário/encargo vem do cadastro — ajuste o salário do colaborador.");
+    // Só itens da ficha fixa são excluíveis daqui. Salário/encargo derivam do
+    // cadastro e linhas sincronizadas (plano de saúde, VT) pertencem aos seus
+    // módulos — o botão nem aparece; guarda defensiva se chegar por outro caminho.
+    if (!deletingEntry._fixed) {
+      toast.error("Esse lançamento é gerenciado pela folha ou pelo módulo de origem.");
       setDeletingEntry(null);
       return;
     }
 
     try {
-      if (deletingEntry._fixed) {
-        // Ficha fixa: remove de vez. Some da folha aberta/futura ao Repopular.
-        await supabase
-          .from("collaborator_fixed_entries")
+      // Remove também a materialização nos períodos abertos: o Repopular NÃO
+      // limpa órfãos de ficha excluída (só consolida legado sem external_id).
+      const extIds = await fixedEntryOpenExternalIds(deletingEntry.id);
+      if (extIds.length > 0) {
+        const { error: peErr } = await supabase
+          .from("payroll_entries")
           .delete()
-          .eq("id", deletingEntry.id);
-        await refetchFixedEntries();
-      } else {
-        await supabase.from("payroll_entries").delete().eq("id", deletingEntry.id);
-        refetchEntries();
+          .eq("collaborator_id", collaboratorId!)
+          .in("external_id", extIds);
+        if (peErr) throw peErr;
       }
+      const { error } = await supabase
+        .from("collaborator_fixed_entries")
+        .delete()
+        .eq("id", deletingEntry.id);
+      if (error) throw error;
+      await refetchFixedEntries();
+      refetchEntries();
       setDeletingEntry(null);
-      toast.success("Lançamento removido!");
+      toast.success("Lançamento removido do cadastro e da folha aberta.");
     } catch (error) {
-      toast.error("Erro ao remover lançamento");
+      toast.error(
+        error instanceof Error ? error.message : "Erro ao remover lançamento",
+      );
+    }
+  };
+
+  // Edita valor/descrição de um item da ficha fixa e reflete na hora nos
+  // períodos abertos (mesma linha que o Repopular materializa via upsert).
+  const handleSaveFixedEntryEdit = async () => {
+    if (!editingFixedEntry) return;
+    const numericValue = parseCurrencyInput(editEntryValue);
+    if (!(numericValue > 0)) {
+      toast.error("Valor precisa ser maior que zero.");
+      return;
+    }
+    setSavingFixedEdit(true);
+    try {
+      const { error } = await supabase
+        .from("collaborator_fixed_entries")
+        .update({
+          value: numericValue,
+          description: editEntryDescription || null,
+        })
+        .eq("id", editingFixedEntry.id);
+      if (error) {
+        if (error.code === "23505") {
+          toast.error("Já existe um lançamento fixo desse tipo e descrição.");
+          return;
+        }
+        throw error;
+      }
+
+      const extIds = await fixedEntryOpenExternalIds(editingFixedEntry.id);
+      if (extIds.length > 0) {
+        const { error: peErr } = await supabase
+          .from("payroll_entries")
+          .update({
+            value: numericValue,
+            description: editEntryDescription || null,
+          })
+          .eq("collaborator_id", collaboratorId!)
+          .in("external_id", extIds);
+        if (peErr) throw peErr;
+      }
+
+      await refetchFixedEntries();
+      refetchEntries();
+      setEditingFixedEntry(null);
+      toast.success("Lançamento atualizado ✓ — folha aberta já reflete o novo valor.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Erro ao atualizar lançamento",
+      );
+    } finally {
+      setSavingFixedEdit(false);
     }
   };
 
@@ -2435,15 +2523,31 @@ const CollaboratorModal = ({
                                     )}
                                   </div>
                                 </div>
-                                {canManage && (
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
-                                    onClick={() => setDeletingEntry(entry)}
-                                  >
-                                    <X className="w-3 h-3" />
-                                  </Button>
+                                {canManage && (entry._fixed || isNew) && (
+                                  <div className="flex shrink-0">
+                                    {entry._fixed && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                        onClick={() => {
+                                          setEditingFixedEntry(entry);
+                                          setEditEntryValue(formatNumberAsCurrency(Number(entry.value)));
+                                          setEditEntryDescription(entry.description ?? "");
+                                        }}
+                                      >
+                                        <Pencil className="w-3 h-3" />
+                                      </Button>
+                                    )}
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                                      onClick={() => setDeletingEntry(entry)}
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </Button>
+                                  </div>
                                 )}
                               </div>
                             </div>
@@ -3239,12 +3343,52 @@ const CollaboratorModal = ({
       </Dialog>
 
       {/* Delete Entry Confirmation */}
+      <Dialog open={!!editingFixedEntry} onOpenChange={(open) => !open && setEditingFixedEntry(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Lançamento</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-xs text-muted-foreground">
+              {editingFixedEntry ? getEntryTypeLabel(editingFixedEntry.type) : ""} da
+              ficha fixa — o novo valor vale daqui pra frente e atualiza a folha{" "}
+              <strong>aberta</strong> na hora. Competência fechada não muda.
+            </p>
+            <div className="space-y-2">
+              <Label>Descrição</Label>
+              <Input
+                value={editEntryDescription}
+                onChange={(e) => setEditEntryDescription(e.target.value)}
+                placeholder="Descrição do lançamento"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Valor</Label>
+              <Input
+                value={editEntryValue}
+                onChange={(e) => setEditEntryValue(formatCurrencyForInput(e.target.value))}
+                placeholder="R$ 0,00"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-4">
+              <Button variant="outline" onClick={() => setEditingFixedEntry(null)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleSaveFixedEntryEdit} disabled={savingFixedEdit}>
+                {savingFixedEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : "Salvar"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <AlertDialog open={!!deletingEntry} onOpenChange={(open) => !open && setDeletingEntry(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Remover Lançamento</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem certeza que deseja remover este lançamento? Esta ação não pode ser desfeita.
+              Remove o lançamento do cadastro e da folha em competência aberta.
+              Competência fechada não muda. Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
