@@ -42,6 +42,7 @@ export interface DiffResult {
 // Grupos comparáveis (rótulo amigável).
 const GROUP_LABELS: Record<string, string> = {
   salario: "Salário base",
+  salario_retroativo: "Salário Retroativo",
   hora_extra: "Horas extras / adicionais",
   periculosidade: "Periculosidade",
   gratificacao: "Gratificação",
@@ -96,6 +97,7 @@ function pdfGroupOf(e: ParsedCollaborator["entries"][number]): string | null {
       if (e.entryType === "periculosidade") return "periculosidade";
       if (e.entryType === "gratificacao") return "gratificacao";
       if (e.entryType === "atestado") return "atestado";
+      if (e.entryType === "salario_retroativo") return "salario_retroativo";
       return "hora_extra";
     default:
       return null; // ferias, informativo, rescisao, unknown
@@ -109,6 +111,8 @@ function sysGroupOf(e: SystemEntry): string | null {
   switch (e.type) {
     case "salario_base":
       return "salario";
+    case "salario_retroativo":
+      return "salario_retroativo";
     case "hora_extra":
       return "hora_extra";
     case "periculosidade":
@@ -151,7 +155,7 @@ function sumByGroup<T>(items: T[], grouper: (i: T) => string | null, valueOf: (i
 }
 
 // Líquido do sistema = créditos − débitos (FGTS é custo do empregador, não entra).
-const CREDIT_GROUPS = new Set(["salario", "hora_extra", "periculosidade", "gratificacao", "atestado", "salario_familia"]);
+const CREDIT_GROUPS = new Set(["salario", "salario_retroativo", "hora_extra", "periculosidade", "gratificacao", "atestado", "salario_familia"]);
 const DEBIT_GROUPS = new Set(["inss", "irpf", "plano_saude", "vale_transporte", "emprestimo", "desconto_outros"]);
 
 function systemLiquido(byGroup: Map<string, number>): number {
