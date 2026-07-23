@@ -96,6 +96,7 @@ const KEYWORD_FALLBACKS: { match: RegExp; mapping: CodeMapping }[] = [
   { match: /\bIRRF\b|imposto de renda/i, mapping: { group: "irpf", entryType: "irpf", label: "IRRF" } },
   { match: /\bFGTS\b/i, mapping: { group: "fgts", entryType: "fgts", label: "FGTS" } },
   { match: /empr[eé]stimo|consignad/i, mapping: { group: "emprestimo", entryType: "emprestimo", label: "Empréstimo" } },
+  { match: /diferen[cç]a\s+(de\s+)?sal[aá]rio|sal[aá]rio\s+retroativ|retroativ/i, mapping: { group: "provento", entryType: "salario_retroativo", label: "Salário Retroativo" } },
   { match: /salário contratual|sal[aá]rio base|saldo de sal[aá]rio/i, mapping: { group: "salario", entryType: "salario_base", label: "Salário" } },
   { match: /periculosidade/i, mapping: { group: "provento", entryType: "periculosidade", label: "Periculosidade" } },
   { match: /gratifica/i, mapping: { group: "provento", entryType: "gratificacao", label: "Gratificação" } },

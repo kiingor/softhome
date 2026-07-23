@@ -42,6 +42,7 @@ const ENUM_LABELS: Record<string, Record<string, string>> = {
   },
   payroll_entry_type: {
     salario_base: "Salário base",
+    salario_retroativo: "Salário Retroativo",
     hora_extra: "Hora extra",
     falta: "Falta",
     atestado: "Atestado",
