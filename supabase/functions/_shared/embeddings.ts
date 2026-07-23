@@ -1,37 +1,46 @@
 /**
  * Embeddings compartilhados — TODA geração de embedding de candidato passa por
- * aqui, batendo no gateway iarouter (endpoint OpenAI-compatible /v1/embeddings).
+ * aqui, batendo DIRETO na API da OpenAI (`api.openai.com/v1/embeddings`).
  *
- * Modelo: `gemini-embedding-001` @ 1536 dims — escolhido pra manter compat com a
- * coluna `vector(1536)` e o índice ivfflat já existentes (sem migração de schema).
- * Credenciais vêm de ANTHROPIC_BASE_URL / ANTHROPIC_API_KEY (mesmo gateway do
- * Claude; nomes legados de quando o secret apontava pra Anthropic direto).
+ * Modelo: `text-embedding-3-small` @ 1536 dims — casa com a coluna
+ * `vector(1536)` e o índice ivfflat (`vector_cosine_ops`) já existentes, sem
+ * migração de schema. É o modelo pro qual a tabela foi desenhada originalmente.
+ *
+ * Histórico da rota de embeddings:
+ *   OpenAI (original) → iarouter/gemini-embedding-001 (PR #46, quando a
+ *   OPENAI_API_KEY estava inválida) → OpenAI direto de novo (o iarouter ficou
+ *   sem credencial de provider de embeddings: `/v1/embeddings` respondia
+ *   `400 "No credentials for embedding provider"` pra gemini E openai, enquanto
+ *   `/v1/messages` seguia OK). Como o espaço vetorial gemini ≠ openai, cada
+ *   troca de modelo exige RE-BACKFILL de todo o corpus (scripts/backfill-*).
  *
  * CRÍTICO: a query (recruiter-search) e o corpus (cv-process, recruitment-apply)
- * DEVEM usar o MESMO modelo + dims. Se divergir, a busca compara espaços vetoriais
- * diferentes e o ranking vira lixo. Por isso fica centralizado num só lugar.
+ * DEVEM usar o MESMO modelo + dims. Se divergir, a busca compara espaços
+ * vetoriais diferentes e o ranking vira lixo. Por isso fica centralizado aqui.
+ *
+ * Secret necessário: `OPENAI_API_KEY` (Supabase Edge Functions).
  */
 
-/** Modelo de embedding no formato provider/model exigido pelo iarouter. */
-export const EMBED_MODEL = "gemini/gemini-embedding-001";
+/** Modelo de embedding da OpenAI. 1536 dims é o nativo do `-3-small`. */
+export const EMBED_MODEL = "text-embedding-3-small";
 
 /** Dimensões pedidas — casa com a coluna vector(1536) e o índice ivfflat. */
 export const EMBED_DIMENSIONS = 1536;
 
 /** Valor gravado em candidate_embeddings.model (rastreabilidade do que indexou). */
-export const EMBED_MODEL_LABEL = "gemini-embedding-001";
+export const EMBED_MODEL_LABEL = "text-embedding-3-small";
+
+const OPENAI_EMBEDDINGS_URL = "https://api.openai.com/v1/embeddings";
 
 /**
- * Gera o embedding de um texto via iarouter. Lança em erro de rede/HTTP ou se o
+ * Gera o embedding de um texto via OpenAI. Lança em erro de rede/HTTP ou se o
  * shape vier inesperado (deixa o chamador decidir se é fatal).
  */
 export async function embedText(input: string): Promise<number[]> {
-  const baseURL = (Deno.env.get("ANTHROPIC_BASE_URL") ?? "").replace(/\/+$/, "");
-  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!baseURL) throw new Error("[embeddings] ANTHROPIC_BASE_URL ausente");
-  if (!apiKey) throw new Error("[embeddings] ANTHROPIC_API_KEY ausente");
+  const apiKey = Deno.env.get("OPENAI_API_KEY");
+  if (!apiKey) throw new Error("[embeddings] OPENAI_API_KEY ausente");
 
-  const resp = await fetch(`${baseURL}/v1/embeddings`, {
+  const resp = await fetch(OPENAI_EMBEDDINGS_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -45,21 +54,16 @@ export async function embedText(input: string): Promise<number[]> {
   });
 
   if (!resp.ok) {
-    throw new Error(`iarouter embeddings ${resp.status}: ${await resp.text()}`);
+    throw new Error(`OpenAI embeddings ${resp.status}: ${await resp.text()}`);
   }
 
   const j = await resp.json();
-  let embedding = j?.data?.[0]?.embedding;
-  // O router às vezes ignora `dimensions` e devolve o vetor cheio (3072).
-  // gemini-embedding-001 usa Matryoshka (MRL): os primeiros N componentes já
-  // são um embedding válido de dimensão N. Truncar mantém a direção (logo o
-  // ranking por cosseno) e casa com a coluna vector(1536) + o corpus indexado.
-  if (Array.isArray(embedding) && embedding.length > EMBED_DIMENSIONS) {
-    embedding = embedding.slice(0, EMBED_DIMENSIONS);
-  }
+  const embedding = j?.data?.[0]?.embedding;
+  // text-embedding-3-small @ dimensions=1536 já devolve exatamente 1536 (nativo),
+  // então não precisa truncar como no gemini (Matryoshka).
   if (!Array.isArray(embedding) || embedding.length !== EMBED_DIMENSIONS) {
     throw new Error(
-      `iarouter embeddings: shape inesperado (len=${embedding?.length ?? "null"})`,
+      `OpenAI embeddings: shape inesperado (len=${embedding?.length ?? "null"})`,
     );
   }
   return embedding as number[];

@@ -1,25 +1,27 @@
-// One-off: re-embedda candidate_embeddings com o novo modelo do iarouter
-// (gemini-embedding-001 @ 1536), substituindo os vetores antigos da OpenAI
-// (text-embedding-3-small) que ficaram num espaço vetorial incompatível.
+// One-off: re-embedda candidate_embeddings com OpenAI text-embedding-3-small
+// @ 1536, substituindo os vetores anteriores (gemini-embedding-001 do iarouter)
+// que ficaram num espaço vetorial incompatível quando o iarouter perdeu a
+// credencial de provider de embeddings. DEVE bater no mesmo modelo que o
+// _shared/embeddings.ts das edge functions, senão query x corpus divergem.
 //
 // Idempotente: rodar de novo só re-escreve os mesmos vetores. Re-embedda a
 // partir da coluna `content` (o cv_summary que originou o embedding).
 //
 // Uso (PowerShell):
-//   $env:IAROUTER_KEY="sk-..."; node scripts/backfill-embeddings.cjs
-// Requer no ambiente: SUPABASE_ACCESS_TOKEN (Management API), IAROUTER_KEY.
+//   $env:OPENAI_API_KEY="sk-..."; node scripts/backfill-embeddings.cjs
+// Requer no ambiente: SUPABASE_ACCESS_TOKEN (Management API), OPENAI_API_KEY.
 
 const PROJECT_REF = "mxqbawfazgvdnyhrarlz";
-const IAROUTER_URL = "https://iarouter.softcomia.com/v1/embeddings";
-const EMBED_MODEL = "gemini/gemini-embedding-001";
-const EMBED_MODEL_LABEL = "gemini-embedding-001";
+const OPENAI_URL = "https://api.openai.com/v1/embeddings";
+const EMBED_MODEL = "text-embedding-3-small";
+const EMBED_MODEL_LABEL = "text-embedding-3-small";
 const EMBED_DIMENSIONS = 1536;
 const CONCURRENCY = 4;
 
 const sbToken = process.env.SUPABASE_ACCESS_TOKEN;
-const iarouterKey = process.env.IAROUTER_KEY;
+const openaiKey = process.env.OPENAI_API_KEY;
 if (!sbToken) { console.error("falta SUPABASE_ACCESS_TOKEN"); process.exit(1); }
-if (!iarouterKey) { console.error("falta IAROUTER_KEY"); process.exit(1); }
+if (!openaiKey) { console.error("falta OPENAI_API_KEY"); process.exit(1); }
 
 async function runSql(query) {
   const r = await fetch(
@@ -39,21 +41,19 @@ async function runSql(query) {
 }
 
 async function embed(input) {
-  const r = await fetch(IAROUTER_URL, {
+  const r = await fetch(OPENAI_URL, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${iarouterKey}`,
+      Authorization: `Bearer ${openaiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ model: EMBED_MODEL, input, dimensions: EMBED_DIMENSIONS }),
   });
   const text = await r.text();
-  if (!r.ok) throw new Error(`iarouter ${r.status}: ${text.slice(0, 200)}`);
+  if (!r.ok) throw new Error(`openai ${r.status}: ${text.slice(0, 200)}`);
   const j = JSON.parse(text);
-  let v = j?.data?.[0]?.embedding;
-  // Router às vezes ignora `dimensions` e devolve 3072; gemini-embedding-001 é
-  // MRL, então truncar pros primeiros 1536 é um embedding válido e consistente.
-  if (Array.isArray(v) && v.length > EMBED_DIMENSIONS) v = v.slice(0, EMBED_DIMENSIONS);
+  const v = j?.data?.[0]?.embedding;
+  // text-embedding-3-small @ dimensions=1536 já devolve 1536 nativo (sem truncar).
   if (!Array.isArray(v) || v.length !== EMBED_DIMENSIONS) {
     throw new Error(`shape inesperado len=${v && v.length}`);
   }

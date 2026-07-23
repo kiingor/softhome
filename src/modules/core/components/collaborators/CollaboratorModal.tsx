@@ -3017,6 +3017,7 @@ const CollaboratorModal = ({
                       emptyDescription="Nenhum período de férias registrado."
                       canManage={canManage}
                       fields={FERIAS_FIELDS}
+                      onEditOverride={(row: any) => setAdjustingPeriod(row)}
                       renderRow={(row: any) => ({
                         title: `${formatDateBR(row.start_date)} → ${formatDateBR(row.end_date)}`,
                         meta: `${VACATION_STATUS_LABEL[row.status] ?? row.status ?? "—"}${row.notes ? " · " + toTitleCase(row.notes) : ""}`,

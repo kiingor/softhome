@@ -74,6 +74,10 @@ export interface SubResourceTabProps<TRow extends { id: string; external_id?: st
   renderRow: (row: TRow) => { title: React.ReactNode; meta?: React.ReactNode };
   /** Pode editar/criar/deletar? Se false, vira read-only. */
   canManage: boolean;
+  /** Se fornecido, o lápis de editar chama isto em vez de abrir o form genérico
+   *  (ex.: férias abre o VacationPeriodAdjustDialog, com Período de Gozo + baixa
+   *  de status via RPC). "Novo" continua usando o form genérico. */
+  onEditOverride?: (row: TRow) => void;
 }
 
 export function SubResourceTab<TRow extends { id: string; external_id?: string | null }>(
@@ -82,7 +86,7 @@ export function SubResourceTab<TRow extends { id: string; external_id?: string |
   const queryClient = useQueryClient();
   const {
     kind, collaboratorId, table, orderBy, titleSingular, icon,
-    emptyTitle, emptyDescription, fields, renderRow, canManage,
+    emptyTitle, emptyDescription, fields, renderRow, canManage, onEditOverride,
   } = props;
 
   const [formOpen, setFormOpen] = useState(false);
@@ -214,7 +218,7 @@ export function SubResourceTab<TRow extends { id: string; external_id?: string |
                   )}
                   {canManage && (
                     <>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(row)}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => (onEditOverride ? onEditOverride(row) : openEdit(row))}>
                         <Pencil className="w-4 h-4" />
                       </Button>
                       <Button
@@ -235,7 +239,7 @@ export function SubResourceTab<TRow extends { id: string; external_id?: string |
       )}
 
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle>
               {editing ? `Editar ${titleSingular.toLowerCase()}` : `Novo ${titleSingular.toLowerCase()}`}
@@ -246,16 +250,19 @@ export function SubResourceTab<TRow extends { id: string; external_id?: string |
                 : "Será sincronizado com a agenda (api.softcom.cloud)."}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-3">
-            {fields.map((f) => (
-              <FieldInput
-                key={f.name}
-                field={f}
-                value={formData[f.name]}
-                onChange={(v) => setFormData((p) => ({ ...p, [f.name]: v }))}
-              />
-            ))}
-            <DialogFooter>
+          <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+            {/* Corpo rolável — telas baixas não cortam os campos de baixo */}
+            <div className="space-y-3 overflow-y-auto flex-1 pr-1 -mr-1">
+              {fields.map((f) => (
+                <FieldInput
+                  key={f.name}
+                  field={f}
+                  value={formData[f.name]}
+                  onChange={(v) => setFormData((p) => ({ ...p, [f.name]: v }))}
+                />
+              ))}
+            </div>
+            <DialogFooter className="pt-4 mt-1 border-t">
               <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
                 Cancelar
               </Button>
