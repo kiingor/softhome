@@ -316,8 +316,9 @@ export function entryTypeAffectsTaxBase(type: string): boolean {
 // agregado, atestado) − faltas. Usa computeCollaboratorTaxes (fonte única,
 // mesma do "Recalcular" do período inteiro). Só período aberto (o chamador
 // garante). Recibo de férias ('ferias-%') nunca é tocado nem somado.
+// Exportado: o cadastro (CollaboratorModal) chama após editar o salário.
 // ─────────────────────────────────────────────────────────────────────────────
-async function recalcCollaboratorTaxes(params: {
+export async function recalcCollaboratorTaxes(params: {
   companyId: string;
   collaboratorId: string;
   month: number;

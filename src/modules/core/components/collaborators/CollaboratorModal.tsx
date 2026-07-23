@@ -48,6 +48,7 @@ import { formatCurrency, formatCurrencyForInput, formatNumberAsCurrency, parseCu
 import { calculateMonthlyBenefitValue, getBenefitCalculationDescription, DayAbbrev } from "@/lib/workingDays";
 import { calcAllTaxes } from "@/lib/payroll/cltCalc";
 import { useStoreHolidays } from "@/modules/payroll/hooks/use-store-holidays";
+import { recalcCollaboratorTaxes } from "@/modules/payroll/hooks/use-payroll";
 import CollaboratorValidationTab from "./CollaboratorValidationTab";
 import { PositionChangeDialog } from "@/components/exames/PositionChangeDialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -275,6 +276,9 @@ const CollaboratorModal = ({
   const [editEntryValue, setEditEntryValue] = useState("");
   const [editEntryDescription, setEditEntryDescription] = useState("");
   const [savingFixedEdit, setSavingFixedEdit] = useState(false);
+  const [editingSalary, setEditingSalary] = useState(false);
+  const [editSalaryValue, setEditSalaryValue] = useState("");
+  const [savingSalary, setSavingSalary] = useState(false);
   const [deletingAssignment, setDeletingAssignment] = useState<any>(null);
   const [editingAssignmentValue, setEditingAssignmentValue] = useState<{
     assignment: any;
@@ -1515,6 +1519,67 @@ const CollaboratorModal = ({
     }
   };
 
+  // Edita o salário do colaborador (current_salary) e reflete no mês corrente
+  // da folha: atualiza a linha salario_base do período aberto mais recente e
+  // recalcula INSS/IRPF/FGTS + VT via recalcCollaboratorTaxes (motor da folha).
+  // Meses anteriores não mudam — diferença retroativa é lançamento avulso
+  // "Salário Retroativo" na folha. Salário-família não recalcula aqui (raro;
+  // o Repopular do período cobre).
+  const handleSaveSalaryEdit = async () => {
+    const numericValue = parseCurrencyInput(editSalaryValue);
+    if (!(numericValue > 0)) {
+      toast.error("Valor precisa ser maior que zero.");
+      return;
+    }
+    setSavingSalary(true);
+    try {
+      const { error } = await supabase
+        .from("collaborators")
+        .update({ current_salary: numericValue })
+        .eq("id", collaboratorId!);
+      if (error) throw error;
+
+      const { data: periods, error: perErr } = await supabase
+        .from("payroll_periods")
+        .select("reference_month")
+        .eq("company_id", currentCompany!.id)
+        .eq("status", "open")
+        .order("reference_month", { ascending: false })
+        .limit(1);
+      if (perErr) throw perErr;
+
+      if (periods && periods.length > 0) {
+        const [y, m] = String(periods[0].reference_month).split("-").map(Number);
+        const { error: upErr } = await supabase
+          .from("payroll_entries")
+          .update({ value: numericValue })
+          .eq("collaborator_id", collaboratorId!)
+          .eq("type", "salario_base")
+          .eq("month", m)
+          .eq("year", y);
+        if (upErr) throw upErr;
+        await recalcCollaboratorTaxes({
+          companyId: currentCompany!.id,
+          collaboratorId: collaboratorId!,
+          month: m,
+          year: y,
+        });
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ["collaborator", collaboratorId] });
+      queryClient.invalidateQueries({ queryKey: ["collaborators"] });
+      refetchEntries();
+      setEditingSalary(false);
+      toast.success("Salário atualizado ✓ — folha do mês aberto recalculada.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Erro ao atualizar salário",
+      );
+    } finally {
+      setSavingSalary(false);
+    }
+  };
+
   // Add pending benefit (for new collaborators)
   const handleAddPendingBenefit = () => {
     if (!selectedBenefitId) {
@@ -2523,8 +2588,21 @@ const CollaboratorModal = ({
                                     )}
                                   </div>
                                 </div>
-                                {canManage && (entry._fixed || isNew) && (
+                                {canManage && (entry._fixed || entry.type === "salario_base" || isNew) && (
                                   <div className="flex shrink-0">
+                                    {entry.type === "salario_base" && !isNew && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                        onClick={() => {
+                                          setEditingSalary(true);
+                                          setEditSalaryValue(formatNumberAsCurrency(Number(entry.value)));
+                                        }}
+                                      >
+                                        <Pencil className="w-3 h-3" />
+                                      </Button>
+                                    )}
                                     {entry._fixed && (
                                       <Button
                                         variant="ghost"
@@ -2539,14 +2617,16 @@ const CollaboratorModal = ({
                                         <Pencil className="w-3 h-3" />
                                       </Button>
                                     )}
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                                      onClick={() => setDeletingEntry(entry)}
-                                    >
-                                      <X className="w-3 h-3" />
-                                    </Button>
+                                    {(entry._fixed || isNew) && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                                        onClick={() => setDeletingEntry(entry)}
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </Button>
+                                    )}
                                   </div>
                                 )}
                               </div>
@@ -3343,6 +3423,39 @@ const CollaboratorModal = ({
       </Dialog>
 
       {/* Delete Entry Confirmation */}
+      <Dialog open={editingSalary} onOpenChange={setEditingSalary}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Salário</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-xs text-muted-foreground">
+              Atualiza o salário do cadastro e a linha de salário do mês{" "}
+              <strong>aberto</strong> atual — INSS/IRPF/FGTS e desconto de VT
+              recalculam na hora. Meses anteriores não mudam: pra diferença de
+              competência passada, use o lançamento avulso{" "}
+              <strong>Salário Retroativo</strong> na folha.
+            </p>
+            <div className="space-y-2">
+              <Label>Salário</Label>
+              <Input
+                value={editSalaryValue}
+                onChange={(e) => setEditSalaryValue(formatCurrencyForInput(e.target.value))}
+                placeholder="R$ 0,00"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-4">
+              <Button variant="outline" onClick={() => setEditingSalary(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleSaveSalaryEdit} disabled={savingSalary}>
+                {savingSalary ? <Loader2 className="w-4 h-4 animate-spin" /> : "Salvar"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!editingFixedEntry} onOpenChange={(open) => !open && setEditingFixedEntry(null)}>
         <DialogContent>
           <DialogHeader>
