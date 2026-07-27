@@ -15,6 +15,8 @@ import {
   IRPF_TAXABLE_EARNING_TYPES,
   INSS_TAXABLE_EARNING_TYPES,
   FALTA_BASE_DEBIT_TYPES,
+  isPeriodEditable,
+  periodLockedMessage,
 } from "../types";
 import type {
   OpenPeriodValues,
@@ -1850,10 +1852,8 @@ export function usePayrollEntries(periodId: string | undefined) {
       if (!period || !companyId) throw new Error("Período não encontrado");
       const { month, year } = periodToMonthYear(period.reference_month);
 
-      if (period.status !== "open") {
-        throw new Error(
-          "Período fechado. Pra alterar, reabre o fechamento ou cria estorno."
-        );
+      if (!isPeriodEditable(period.status)) {
+        throw new Error(periodLockedMessage(period.status));
       }
 
       // Decisão de produto: lançamento FIXO de gratificação/bonificação é
@@ -1971,8 +1971,8 @@ export function usePayrollEntries(periodId: string | undefined) {
   const deleteEntry = useMutation({
     mutationFn: async ({ entryId, reason }: { entryId: string; reason: string }) => {
       if (!period || !companyId) throw new Error("Período não encontrado");
-      if (period.status !== "open") {
-        throw new Error("Período fechado. Reabra antes de excluir.");
+      if (!isPeriodEditable(period.status)) {
+        throw new Error(periodLockedMessage(period.status));
       }
       const motivo = reason.trim();
       if (motivo.length < 3) {

@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   ArrowLeft,
+  ArrowUUpLeft,
   CircleNotch as Loader2,
   Plus,
   Lock,
@@ -107,7 +108,12 @@ import {
   periodToMonthYear,
   isEarning,
   isDeduction,
+  isPeriodEditable,
+  PERIOD_TRANSITIONS,
+  type PeriodTransition,
 } from "../types";
+import { PayrollApprovalTab } from "../components/PayrollApprovalTab";
+import { useSetPeriodStatus } from "../hooks/use-payroll-approval";
 import type { NewEntryValues } from "../schemas/payroll.schema";
 import { exportPayrollExcel } from "../services/payroll-export.service";
 import { formatCurrency } from "@/lib/formatters";
@@ -119,6 +125,10 @@ export default function PeriodDetailPage() {
   const paymentsPermission = usePermissions("folha_pagamentos");
   const canViewPayments = paymentsPermission.canView || paymentsPermission.isAdmin;
   const canManagePayments = canManage && (paymentsPermission.canEdit || paymentsPermission.isAdmin);
+  // Aprovar como diretoria é gate de PAPEL, nunca de módulo: o toggle "Acesso
+  // total" da tela de permissões concede todos os módulos, então gatear por
+  // módulo transformaria qualquer usuário com acesso total em diretoria.
+  const canApproveDiretoria = hasAnyRole(["diretoria", "admin_gc"]);
 
   const {
     period,
@@ -141,6 +151,11 @@ export default function PeriodDetailPage() {
   } | null>(null);
   /** Motivo da exclusão (obrigatório, registrado na auditoria). */
   const [deleteReason, setDeleteReason] = useState("");
+  /** Transição de status pendente de confirmação (aprovar / devolver). */
+  const [pendingTransition, setPendingTransition] =
+    useState<PeriodTransition | null>(null);
+  const [transitionReason, setTransitionReason] = useState("");
+  const setPeriodStatus = useSetPeriodStatus(id);
 
   const { data: alerts = [] } = usePayrollAlerts(id);
 
@@ -463,8 +478,17 @@ export default function PeriodDetailPage() {
     );
   }
 
-  const isOpen = period.status === "open";
-  const isClosed = period.status === "closed" || period.status === "exported";
+  // Editável = 'open' ou 'aprovado_rh' (a folha só congela quando a diretoria
+  // aprova). Fonte única em types.ts, espelhando payroll_period_is_locked() no
+  // banco — não enumerar status travados aqui.
+  const isEditable = isPeriodEditable(period.status);
+  const isReopenable =
+    period.status === "closed" || period.status === "exported";
+  // Transições de fluxo disponíveis a partir do status atual, filtradas pelo
+  // papel de quem está olhando.
+  const transitions = (PERIOD_TRANSITIONS[period.status] ?? []).filter((t) =>
+    t.role === "diretoria" ? canApproveDiretoria : canManage,
+  );
 
   const handleNewEntry = async (values: NewEntryValues) => {
     await createEntry.mutateAsync(values);
@@ -595,7 +619,7 @@ export default function PeriodDetailPage() {
                   Exportar Excel
                 </DropdownMenuItem>
 
-                {canManage && isOpen && (
+                {canManage && isEditable && (
                   <>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onSelect={() => setIsNewEntryOpen(true)}>
@@ -610,19 +634,34 @@ export default function PeriodDetailPage() {
                       <RefreshCw className="w-4 h-4 mr-2" />
                       Recalcular encargos
                     </DropdownMenuItem>
-
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onSelect={() => setConfirmAction("close")}
-                      className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                    >
-                      <Lock className="w-4 h-4 mr-2" />
-                      Fechar período
-                    </DropdownMenuItem>
                   </>
                 )}
 
-                {canManage && isClosed && (
+                {transitions.length > 0 && (
+                  <>
+                    <DropdownMenuSeparator />
+                    {transitions.map((t) => (
+                      <DropdownMenuItem
+                        key={t.to}
+                        onSelect={() => setPendingTransition(t)}
+                        className={
+                          t.destructive
+                            ? "text-destructive focus:text-destructive focus:bg-destructive/10"
+                            : undefined
+                        }
+                      >
+                        {t.destructive ? (
+                          <ArrowUUpLeft className="w-4 h-4 mr-2" />
+                        ) : (
+                          <Lock className="w-4 h-4 mr-2" />
+                        )}
+                        {t.label}
+                      </DropdownMenuItem>
+                    ))}
+                  </>
+                )}
+
+                {canManage && isReopenable && (
                   <>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onSelect={() => setConfirmAction("reopen")}>
@@ -691,14 +730,24 @@ export default function PeriodDetailPage() {
           Os KPIs saíram daqui — agora ficam DENTRO de cada aba, com os totais
           próprios (lançamentos ≠ pagamentos). */}
 
-      {/* Tabs: Lançamentos (RH) / Pagamentos (Financeiro) */}
+      {/* Tabs: Lançamentos (RH) / Pagamentos (Financeiro) / Aprovação (Diretoria) */}
       <Tabs defaultValue="lancamentos" className="space-y-4">
         <TabsList>
           <TabsTrigger value="lancamentos">Lançamentos</TabsTrigger>
           {canViewPayments && (
             <TabsTrigger value="pagamentos">Pagamentos</TabsTrigger>
           )}
+          <TabsTrigger value="aprovacao">Aprovação</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="aprovacao">
+          <PayrollApprovalTab
+            periodId={period.id}
+            entries={filteredEntries}
+            status={period.status}
+            canComment={canManage || canApproveDiretoria}
+          />
+        </TabsContent>
 
         {canViewPayments && (
           <TabsContent value="pagamentos">
@@ -982,7 +1031,7 @@ export default function PeriodDetailPage() {
                   <p className="text-sm text-muted-foreground mb-2">
                     Mês ainda zerado.
                   </p>
-                  {canManage && isOpen && (
+                  {canManage && isEditable && (
                     <Button onClick={() => setIsNewEntryOpen(true)}>
                       <Plus className="w-4 h-4 mr-2" />
                       Lançar primeiro
@@ -1234,7 +1283,7 @@ export default function PeriodDetailPage() {
                                   {formatCurrency(Math.abs(value))}
                                 </TableCell>
                                 <TableCell className="w-[44px] p-0 pr-1 align-middle">
-                                  {canManage && !isClosed ? (
+                                  {canManage && isEditable ? (
                                     <Button
                                       type="button"
                                       size="icon"
@@ -1451,6 +1500,87 @@ export default function PeriodDetailPage() {
               }}
             >
               {confirmAction === "close" ? "Fechar" : "Reabrir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Transição de status do fluxo de aprovação */}
+      <AlertDialog
+        open={!!pendingTransition}
+        onOpenChange={(o) => {
+          if (!o) {
+            setPendingTransition(null);
+            setTransitionReason("");
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{pendingTransition?.label}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingTransition?.to === "aprovado_rh" &&
+                "A folha vai pra fila da diretoria. O RH continua podendo corrigir lançamentos até a diretoria aprovar."}
+              {pendingTransition?.to === "aprovado_diretoria" &&
+                "Aprovação final: a folha CONGELA. Ninguém mais cria, edita ou exclui lançamento até alguém devolver pra rascunho."}
+              {pendingTransition?.needsReason &&
+                " Conta o motivo — ele fica registrado no histórico e aparece pra quem for corrigir."}
+              {pendingTransition?.to === "closed" &&
+                "Fecha a competência pra exportar pro contador."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          {pendingTransition?.needsReason && (
+            <div className="space-y-2">
+              <Label htmlFor="transition-reason">Motivo</Label>
+              <Textarea
+                id="transition-reason"
+                value={transitionReason}
+                onChange={(e) => setTransitionReason(e.target.value)}
+                placeholder="Ex: gratificação da Ana está com valor do mês passado"
+                rows={3}
+              />
+              {transitionReason.trim().length > 0 &&
+                transitionReason.trim().length < 5 && (
+                  <p className="text-xs text-destructive">
+                    Pelo menos 5 caracteres.
+                  </p>
+                )}
+            </div>
+          )}
+
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={
+                setPeriodStatus.isPending ||
+                (pendingTransition?.needsReason === true &&
+                  transitionReason.trim().length < 5)
+              }
+              onClick={async (ev) => {
+                // Sem o preventDefault o AlertDialog fecha antes da mutation
+                // resolver e o erro do servidor não chega na tela.
+                ev.preventDefault();
+                if (!pendingTransition) return;
+                try {
+                  await setPeriodStatus.mutateAsync({
+                    toStatus: pendingTransition.to,
+                    reason: transitionReason,
+                  });
+                  toast.success(`${pendingTransition.label} ✓`);
+                  setPendingTransition(null);
+                  setTransitionReason("");
+                } catch {
+                  // O onError do hook já mostra a mensagem do banco.
+                }
+              }}
+              className={
+                pendingTransition?.destructive
+                  ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  : undefined
+              }
+            >
+              {pendingTransition?.label}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

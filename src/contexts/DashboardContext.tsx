@@ -2,7 +2,18 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
 
-export type AppRole = "admin" | "admin_gc" | "gestor_gc" | "gestor" | "contador" | "colaborador";
+// Alinhado ao enum app_role do banco (+ "admin", que não existe no enum mas é
+// aceito em várias checagens legadas do front). "diretoria" aprova a folha em
+// última instância — ver migration 20260727120000.
+export type AppRole =
+  | "admin"
+  | "admin_gc"
+  | "rh"
+  | "gestor_gc"
+  | "gestor"
+  | "contador"
+  | "colaborador"
+  | "diretoria";
 
 interface Company {
   id: string;

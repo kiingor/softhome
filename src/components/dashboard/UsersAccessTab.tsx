@@ -49,10 +49,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-type DashboardRole = "admin_gc" | "gestor_gc" | "contador" | "colaborador";
+type DashboardRole =
+  | "admin_gc"
+  | "diretoria"
+  | "rh"
+  | "gestor_gc"
+  | "contador"
+  | "colaborador";
 
 const ROLE_LABELS: Record<DashboardRole, string> = {
   admin_gc: "Administrador G&C",
+  diretoria: "Diretoria",
+  rh: "RH",
   gestor_gc: "Gestor G&C",
   contador: "Contador",
   colaborador: "Colaborador",
