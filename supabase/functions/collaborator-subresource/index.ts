@@ -530,10 +530,14 @@ async function prunePlanoSaudeDeductions(
     .from("payroll_periods")
     .select("reference_month, status")
     .eq("company_id", companyId);
-  // Meses fechados/exportados a preservar (chave "YYYY-M").
+  // Meses TRAVADOS a preservar (chave "YYYY-M"). Editável = rascunho ou
+  // aprovado pelo RH; a folha só congela quando a diretoria aprova (espelha
+  // public.payroll_period_is_locked — migration 20260727120100). Enumeramos os
+  // editáveis, nunca os travados: status novo nasce travado por padrão.
+  const EDITABLE_PERIOD_STATUSES = ["open", "aprovado_rh"];
   const closedMonths = new Set<string>();
   for (const p of (periods ?? []) as Array<{ reference_month: string; status: string }>) {
-    if (p.status && p.status !== "open") {
+    if (p.status && !EDITABLE_PERIOD_STATUSES.includes(p.status)) {
       const ym = String(p.reference_month).substring(0, 7).split("-");
       closedMonths.add(`${Number(ym[0])}-${Number(ym[1])}`);
     }

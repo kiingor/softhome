@@ -24,6 +24,8 @@ import { ChangePasswordDialog } from "./ChangePasswordDialog";
 const roleLabels: Record<string, string> = {
   admin: "Administrador G&C",
   admin_gc: "Administrador G&C",
+  diretoria: "Diretoria",
+  rh: "RH",
   gestor_gc: "Gestor G&C",
   gestor: "Gestor",
   contador: "Contador",

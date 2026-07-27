@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useDashboard } from "@/contexts/DashboardContext";
 import { toast } from "sonner";
+import { isPeriodEditable } from "@/modules/payroll/types";
 import {
   calcVacation,
   calcVacationPaymentDate,
@@ -326,7 +327,10 @@ export const useApproveVacationRequest = () => {
         .eq("reference_month", `${payrollYear}-${String(payrollMonth).padStart(2, "0")}-01`)
         .maybeSingle();
 
-      const folhaAberta = period?.status === "open";
+      // Postar férias vale enquanto o RH pode editar a folha — inclui
+      // 'aprovado_rh'. Depois que a diretoria aprova, a request fica
+      // posted=false e entra na folha seguinte (ou após devolução).
+      const folhaAberta = isPeriodEditable(period?.status);
 
       let entryIds: string[] = [];
 

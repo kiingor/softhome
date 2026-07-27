@@ -49,6 +49,7 @@ import { calculateMonthlyBenefitValue, getBenefitCalculationDescription, DayAbbr
 import { calcAllTaxes } from "@/lib/payroll/cltCalc";
 import { useStoreHolidays } from "@/modules/payroll/hooks/use-store-holidays";
 import { recalcCollaboratorTaxes } from "@/modules/payroll/hooks/use-payroll";
+import { PERIOD_EDITABLE_STATUSES } from "@/modules/payroll/types";
 import CollaboratorValidationTab from "./CollaboratorValidationTab";
 import { PositionChangeDialog } from "@/components/exames/PositionChangeDialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -1403,15 +1404,16 @@ const CollaboratorModal = ({
     }
   };
 
-  // external_ids das materializações de um item da ficha nos períodos ABERTOS
+  // external_ids das materializações de um item da ficha nos períodos EDITÁVEIS
   // da empresa (formato fixedEntryExternalId do use-payroll: 'fixed-<id>-<YYYY-MM>').
-  // Período fechado é imutável — fica de fora de propósito.
+  // Editável = rascunho ou aprovado pelo RH; folha aprovada pela diretoria é
+  // imutável e fica de fora de propósito.
   const fixedEntryOpenExternalIds = async (fixedId: string): Promise<string[]> => {
     const { data, error } = await supabase
       .from("payroll_periods")
       .select("reference_month")
       .eq("company_id", currentCompany!.id)
-      .eq("status", "open");
+      .in("status", [...PERIOD_EDITABLE_STATUSES]);
     if (error) throw error;
     return (data ?? []).map((p) => {
       const [y, m] = String(p.reference_month).split("-");
@@ -1543,7 +1545,7 @@ const CollaboratorModal = ({
         .from("payroll_periods")
         .select("reference_month")
         .eq("company_id", currentCompany!.id)
-        .eq("status", "open")
+        .in("status", [...PERIOD_EDITABLE_STATUSES])
         .order("reference_month", { ascending: false })
         .limit(1);
       if (perErr) throw perErr;

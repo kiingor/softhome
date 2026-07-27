@@ -800,6 +800,7 @@ export type Database = {
           id: string
           is_company_expense: boolean
           name: string
+          region_id: string | null
           value: number
           value_type: string
         }
@@ -812,6 +813,7 @@ export type Database = {
           id?: string
           is_company_expense?: boolean
           name: string
+          region_id?: string | null
           value?: number
           value_type?: string
         }
@@ -824,6 +826,7 @@ export type Database = {
           id?: string
           is_company_expense?: boolean
           name?: string
+          region_id?: string | null
           value?: number
           value_type?: string
         }
@@ -840,6 +843,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "benefits_region_id_fkey"
+            columns: ["region_id"]
+            isOneToOne: false
+            referencedRelation: "vt_regions"
             referencedColumns: ["id"]
           },
         ]
@@ -3769,8 +3779,109 @@ export type Database = {
           },
         ]
       }
+      payroll_period_approvals: {
+        Row: {
+          action: string
+          actor_role: string
+          company_id: string
+          created_at: string
+          created_by: string | null
+          from_status:
+            | Database["public"]["Enums"]["payroll_period_status"]
+            | null
+          id: string
+          period_id: string
+          reason: string | null
+          to_status: Database["public"]["Enums"]["payroll_period_status"]
+        }
+        Insert: {
+          action: string
+          actor_role: string
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          from_status?:
+            | Database["public"]["Enums"]["payroll_period_status"]
+            | null
+          id?: string
+          period_id: string
+          reason?: string | null
+          to_status: Database["public"]["Enums"]["payroll_period_status"]
+        }
+        Update: {
+          action?: string
+          actor_role?: string
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          from_status?:
+            | Database["public"]["Enums"]["payroll_period_status"]
+            | null
+          id?: string
+          period_id?: string
+          reason?: string | null
+          to_status?: Database["public"]["Enums"]["payroll_period_status"]
+        }
+        Relationships: []
+      }
+      payroll_period_notes: {
+        Row: {
+          author_stage: string
+          body: string
+          collaborator_id: string | null
+          company_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_resolved: boolean
+          period_id: string
+          period_status_at_note:
+            | Database["public"]["Enums"]["payroll_period_status"]
+            | null
+          resolved_at: string | null
+          resolved_by: string | null
+          scope: string
+          updated_at: string
+        }
+        Insert: {
+          author_stage?: string
+          body: string
+          collaborator_id?: string | null
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_resolved?: boolean
+          period_id: string
+          period_status_at_note?:
+            | Database["public"]["Enums"]["payroll_period_status"]
+            | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          author_stage?: string
+          body?: string
+          collaborator_id?: string | null
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_resolved?: boolean
+          period_id?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       payroll_periods: {
         Row: {
+          approved_dir_at: string | null
+          approved_dir_by: string | null
+          approved_rh_at: string | null
+          approved_rh_by: string | null
           closed_at: string | null
           closed_by: string | null
           company_id: string
@@ -3782,10 +3893,17 @@ export type Database = {
           id: string
           notes: string | null
           reference_month: string
+          returned_at: string | null
+          returned_by: string | null
+          returned_reason: string | null
           status: Database["public"]["Enums"]["payroll_period_status"]
           updated_at: string
         }
         Insert: {
+          approved_dir_at?: string | null
+          approved_dir_by?: string | null
+          approved_rh_at?: string | null
+          approved_rh_by?: string | null
           closed_at?: string | null
           closed_by?: string | null
           company_id: string
@@ -3797,10 +3915,17 @@ export type Database = {
           id?: string
           notes?: string | null
           reference_month: string
+          returned_at?: string | null
+          returned_by?: string | null
+          returned_reason?: string | null
           status?: Database["public"]["Enums"]["payroll_period_status"]
           updated_at?: string
         }
         Update: {
+          approved_dir_at?: string | null
+          approved_dir_by?: string | null
+          approved_rh_at?: string | null
+          approved_rh_by?: string | null
           closed_at?: string | null
           closed_by?: string | null
           company_id?: string
@@ -3812,6 +3937,9 @@ export type Database = {
           id?: string
           notes?: string | null
           reference_month?: string
+          returned_at?: string | null
+          returned_by?: string | null
+          returned_reason?: string | null
           status?: Database["public"]["Enums"]["payroll_period_status"]
           updated_at?: string
         }
@@ -4404,6 +4532,7 @@ export type Database = {
           manual_adjustment_notes: string | null
           start_date: string
           status: string
+          value_paid: number | null
         }
         Insert: {
           collaborator_id: string
@@ -4584,6 +4713,177 @@ export type Database = {
             columns: ["vacation_period_id"]
             isOneToOne: false
             referencedRelation: "vacation_periods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vt_period_entries: {
+        Row: {
+          collaborator_id: string
+          company_id: string
+          created_at: string
+          current_balance: number
+          discount_posted: number | null
+          id: string
+          is_validated: boolean
+          next_month_value: number
+          period_id: string
+          region_id: string | null
+          saturday_days: number
+          saturday_diff: number
+          total_recharged: number
+          updated_at: string
+          validated_at: string | null
+          validated_by: string | null
+          value_per_day: number
+          working_days: number
+        }
+        Insert: {
+          collaborator_id: string
+          company_id: string
+          created_at?: string
+          current_balance?: number
+          discount_posted?: number | null
+          id?: string
+          is_validated?: boolean
+          next_month_value?: number
+          period_id: string
+          region_id?: string | null
+          saturday_days?: number
+          saturday_diff?: number
+          total_recharged?: number
+          updated_at?: string
+          validated_at?: string | null
+          validated_by?: string | null
+          value_per_day?: number
+          working_days?: number
+        }
+        Update: {
+          collaborator_id?: string
+          company_id?: string
+          created_at?: string
+          current_balance?: number
+          discount_posted?: number | null
+          id?: string
+          is_validated?: boolean
+          next_month_value?: number
+          period_id?: string
+          region_id?: string | null
+          saturday_days?: number
+          saturday_diff?: number
+          total_recharged?: number
+          updated_at?: string
+          validated_at?: string | null
+          validated_by?: string | null
+          value_per_day?: number
+          working_days?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vt_period_entries_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vt_period_entries_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vt_period_entries_period_id_fkey"
+            columns: ["period_id"]
+            isOneToOne: false
+            referencedRelation: "vt_periods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vt_period_entries_region_id_fkey"
+            columns: ["region_id"]
+            isOneToOne: false
+            referencedRelation: "vt_regions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vt_periods: {
+        Row: {
+          company_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          reference_month: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          reference_month: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          reference_month?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vt_periods_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vt_regions: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+          value_per_day: number
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+          value_per_day: number
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+          value_per_day?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vt_regions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]
@@ -4823,6 +5123,22 @@ export type Database = {
         Args: { p_entry_id: string; p_reason: string }
         Returns: undefined
       }
+      set_payroll_period_status: {
+        Args: {
+          p_period_id: string
+          p_to_status: Database["public"]["Enums"]["payroll_period_status"]
+          p_reason?: string | null
+        }
+        Returns: Database["public"]["Enums"]["payroll_period_status"]
+      }
+      resolve_payroll_period_note: {
+        Args: { p_note_id: string; p_resolved: boolean }
+        Returns: undefined
+      }
+      payroll_period_is_locked: {
+        Args: { p_company_id: string; p_reference_month: string }
+        Returns: boolean
+      }
       log_payroll_recalc: {
         Args: { p_company_id: string; p_reference_month: string; p_scope?: string }
         Returns: undefined
@@ -4871,6 +5187,7 @@ export type Database = {
           _gozo_end_date?: string | null
           _data_limite?: string | null
           _notes?: string | null
+          _value_paid?: number | null
         }
         Returns: {
           collaborator_id: string
@@ -4891,6 +5208,7 @@ export type Database = {
           manual_adjustment_notes: string | null
           start_date: string
           status: string
+          value_paid: number | null
         }
         SetofOptions: {
           from: "*"
@@ -5075,6 +5393,7 @@ export type Database = {
         | "contador"
         | "colaborador"
         | "gestor_gc"
+        | "diretoria"
       application_stage:
         | "new"
         | "screening"
@@ -5163,7 +5482,12 @@ export type Database = {
         | "carro_agregado"
         | "periculosidade"
         | "emprestimo"
-      payroll_period_status: "open" | "closed" | "exported"
+      payroll_period_status:
+        | "open"
+        | "aprovado_rh"
+        | "aprovado_diretoria"
+        | "closed"
+        | "exported"
       plan_tier: "essencial" | "crescer" | "profissional" | "empresa_plus"
     }
     CompositeTypes: {
@@ -5348,6 +5672,7 @@ export const Constants = {
         "contador",
         "colaborador",
         "gestor_gc",
+        "diretoria",
       ],
       application_stage: [
         "new",
@@ -5445,7 +5770,13 @@ export const Constants = {
         "periculosidade",
         "emprestimo",
       ],
-      payroll_period_status: ["open", "closed", "exported"],
+      payroll_period_status: [
+        "open",
+        "aprovado_rh",
+        "aprovado_diretoria",
+        "closed",
+        "exported",
+      ],
       plan_tier: ["essencial", "crescer", "profissional", "empresa_plus"],
     },
   },

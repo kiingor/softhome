@@ -238,17 +238,93 @@ export function isEmployerCost(type: string): boolean {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const PERIOD_STATUS_LABELS: Record<PayrollPeriodStatus, string> = {
-  open: "Aberto",
+  open: "Rascunho",
+  aprovado_rh: "Aprovado RH",
+  aprovado_diretoria: "Aprovado Diretoria",
   closed: "Fechado",
   exported: "Exportado",
 };
 
 export const PERIOD_STATUS_COLORS: Record<PayrollPeriodStatus, string> = {
-  open: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+  open: "bg-slate-100 text-slate-800 dark:bg-slate-800/60 dark:text-slate-300",
+  aprovado_rh:
+    "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+  aprovado_diretoria:
+    "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
   closed:
     "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
   exported:
     "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Trava da folha — espelho EXATO de public.payroll_period_is_locked() (migration
+// 20260727120100). Regra de produto: a folha só congela quando a DIRETORIA
+// aprova; em 'open' e 'aprovado_rh' o RH continua editando.
+//
+// Enumeramos os EDITÁVEIS (lista curta e fechada), nunca os travados: assim um
+// status novo nasce travado por padrão em vez de furar a regra em silêncio.
+// ─────────────────────────────────────────────────────────────────────────────
+export const PERIOD_EDITABLE_STATUSES = ["open", "aprovado_rh"] as const;
+
+export function isPeriodEditable(
+  status: PayrollPeriodStatus | null | undefined,
+): boolean {
+  if (!status) return false;
+  return (PERIOD_EDITABLE_STATUSES as readonly string[]).includes(status);
+}
+
+/** Mensagem pro usuário quando a edição é recusada por causa do status. */
+export function periodLockedMessage(
+  status: PayrollPeriodStatus | null | undefined,
+): string {
+  if (status === "aprovado_diretoria") {
+    return "A diretoria já aprovou essa folha. Peça a devolução pra rascunho antes de alterar.";
+  }
+  if (status === "exported") {
+    return "Folha já exportada pra contabilidade. Reabra antes de alterar.";
+  }
+  return "Período fechado. Pra alterar, reabre o fechamento ou cria estorno.";
+}
+
+// Transições válidas do fluxo — espelho de public.payroll_period_transition_action.
+// `role` diz quem pode disparar: 'rh' = quem edita a folha, 'diretoria' = só
+// diretoria/admin_gc. `needsReason` marca as devoluções (motivo obrigatório).
+export interface PeriodTransition {
+  to: PayrollPeriodStatus;
+  label: string;
+  role: "rh" | "diretoria";
+  needsReason?: boolean;
+  destructive?: boolean;
+}
+
+export const PERIOD_TRANSITIONS: Partial<
+  Record<PayrollPeriodStatus, PeriodTransition[]>
+> = {
+  open: [
+    { to: "aprovado_rh", label: "Aprovar (RH)", role: "rh" },
+  ],
+  aprovado_rh: [
+    { to: "aprovado_diretoria", label: "Aprovar (Diretoria)", role: "diretoria" },
+    {
+      to: "open",
+      label: "Devolver pra rascunho",
+      role: "rh",
+      needsReason: true,
+      destructive: true,
+    },
+  ],
+  aprovado_diretoria: [
+    {
+      to: "aprovado_rh",
+      label: "Devolver pro RH",
+      role: "diretoria",
+      needsReason: true,
+      destructive: true,
+    },
+    { to: "closed", label: "Fechar período", role: "rh" },
+  ],
+  closed: [{ to: "exported", label: "Marcar como exportado", role: "rh" }],
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
