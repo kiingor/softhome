@@ -1,11 +1,18 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import type { Database } from "@/integrations/supabase/types";
+
+type ReviewInsert =
+  Database["public"]["Tables"]["payroll_collaborator_reviews"]["Insert"];
 
 // Conferência de lançamentos por colaborador dentro de um período de folha.
 // 1 registro por (período, colaborador). Espelha o fluxo de "Pago" da aba
 // Pagamentos, mas no nível do colaborador (o RH confere a pessoa inteira e
 // anota uma observação quando há divergência).
+/** Parecer da diretoria por colaborador. null = ainda não avaliado. */
+export type DirectorStatus = "aprovado" | "atencao";
+
 export interface PayrollReview {
   id: string;
   period_id: string;
@@ -14,6 +21,10 @@ export interface PayrollReview {
   observation: string | null;
   reviewed_at: string | null;
   reviewed_by: string | null;
+  /** Independente de is_reviewed: a conferência é do RH, o parecer é da diretoria. */
+  director_status: DirectorStatus | null;
+  director_status_at: string | null;
+  director_status_by: string | null;
 }
 
 export function usePayrollReviews(periodId: string | undefined) {
@@ -35,6 +46,7 @@ export function usePayrollReviews(periodId: string | undefined) {
 interface ReviewPatch {
   is_reviewed?: boolean;
   observation?: string | null;
+  director_status?: DirectorStatus | null;
 }
 
 export function useUpsertPayrollReview(periodId: string) {
@@ -49,7 +61,9 @@ export function useUpsertPayrollReview(periodId: string) {
       patch: ReviewPatch;
     }) => {
       const { data: userData } = await supabase.auth.getUser();
-      const payload: Record<string, unknown> = {
+      // Tipado pelo schema (era Record<string, unknown>, que desligava a
+      // checagem justamente no ponto de escrita no banco).
+      const payload: ReviewInsert = {
         period_id: periodId,
         collaborator_id: collaboratorId,
         ...patch,

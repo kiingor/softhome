@@ -3681,6 +3681,9 @@ export type Database = {
         Row: {
           collaborator_id: string
           created_at: string
+          director_status: string | null
+          director_status_at: string | null
+          director_status_by: string | null
           id: string
           is_reviewed: boolean
           observation: string | null
@@ -3692,6 +3695,9 @@ export type Database = {
         Insert: {
           collaborator_id: string
           created_at?: string
+          director_status?: string | null
+          director_status_at?: string | null
+          director_status_by?: string | null
           id?: string
           is_reviewed?: boolean
           observation?: string | null
@@ -3703,6 +3709,9 @@ export type Database = {
         Update: {
           collaborator_id?: string
           created_at?: string
+          director_status?: string | null
+          director_status_at?: string | null
+          director_status_by?: string | null
           id?: string
           is_reviewed?: boolean
           observation?: string | null

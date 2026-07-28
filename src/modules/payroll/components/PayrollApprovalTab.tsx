@@ -49,6 +49,11 @@ import {
   usePeriodApprovals,
   type PayrollPeriodNote,
 } from "../hooks/use-payroll-approval";
+import {
+  usePayrollReviews,
+  useUpsertPayrollReview,
+  type DirectorStatus,
+} from "../hooks/use-payroll-reviews";
 
 interface PayrollApprovalTabProps {
   periodId: string;
@@ -183,6 +188,17 @@ export function PayrollApprovalTab({
 
   const { data: notes = [] } = usePeriodNotes(periodId);
   const { data: approvals = [] } = usePeriodApprovals(periodId);
+  const { data: reviews = [] } = usePayrollReviews(periodId);
+  const setStatus = useUpsertPayrollReview(periodId);
+
+  // Parecer da diretoria por colaborador (aprovado / atenção / não avaliado).
+  const statusByCollab = useMemo(() => {
+    const m = new Map<string, DirectorStatus>();
+    for (const r of reviews) {
+      if (r.director_status) m.set(r.collaborator_id, r.director_status);
+    }
+    return m;
+  }, [reviews]);
 
   const summary = useMemo(() => buildApprovalSummary(entries), [entries]);
   const totals = useMemo(() => sumApprovalTotals(summary), [summary]);
@@ -212,11 +228,25 @@ export function PayrollApprovalTab({
         const hasOpenNote = (notesByCollab.get(r.collaboratorId) ?? []).some(
           (n) => !n.is_resolved,
         );
-        if (!hasOpenNote && r.liquido > 0) return false;
+        const marcadoAtencao =
+          statusByCollab.get(r.collaboratorId) === "atencao";
+        if (!hasOpenNote && !marcadoAtencao && r.liquido > 0) return false;
       }
       return true;
     });
-  }, [summary, search, onlyFlagged, notesByCollab]);
+  }, [summary, search, onlyFlagged, notesByCollab, statusByCollab]);
+
+  // Progresso do parecer — a diretoria precisa saber quanto falta olhar.
+  const parecerCount = useMemo(() => {
+    let aprovados = 0;
+    let atencao = 0;
+    for (const r of summary) {
+      const s = statusByCollab.get(r.collaboratorId);
+      if (s === "aprovado") aprovados += 1;
+      else if (s === "atencao") atencao += 1;
+    }
+    return { aprovados, atencao, pendentes: summary.length - aprovados - atencao };
+  }, [summary, statusByCollab]);
 
   const toggle = (id: string) =>
     setExpanded((prev) => {
@@ -293,6 +323,23 @@ export function PayrollApprovalTab({
         </Button>
       </div>
 
+      {/* Progresso do parecer por colaborador */}
+      <div className="flex flex-wrap items-center gap-3 text-xs">
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+          {parecerCount.aprovados} aprovado
+          {parecerCount.aprovados === 1 ? "" : "s"}
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+          {parecerCount.atencao} com atenção
+        </span>
+        <span className="flex items-center gap-1.5 text-muted-foreground">
+          <span className="w-2.5 h-2.5 rounded-full bg-muted-foreground/40" />
+          {parecerCount.pendentes} sem parecer
+        </span>
+      </div>
+
       {totals.liquidoNaoPositivo > 0 && (
         <div className="rounded-lg border border-rose-200 bg-rose-50 dark:bg-rose-950/20 dark:border-rose-900/60 p-3 text-xs">
           <strong>{totals.liquidoNaoPositivo}</strong> colaborador
@@ -313,7 +360,7 @@ export function PayrollApprovalTab({
               <TableHead className="text-right">Descontos</TableHead>
               <TableHead className="text-right">Líquido</TableHead>
               <TableHead className="text-right">FGTS</TableHead>
-              <TableHead className="w-[52px]" />
+              <TableHead className="w-[150px]" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -330,10 +377,17 @@ export function PayrollApprovalTab({
               const isOpen = expanded.has(row.collaboratorId);
               const collabNotes = notesByCollab.get(row.collaboratorId) ?? [];
               const openNotes = collabNotes.filter((n) => !n.is_resolved).length;
+              const parecer = statusByCollab.get(row.collaboratorId) ?? null;
               return (
                 <Fragment key={row.collaboratorId}>
                   <TableRow
-                    className="cursor-pointer hover:bg-muted/50"
+                    className={`cursor-pointer hover:bg-muted/50 ${
+                      parecer === "aprovado"
+                        ? "bg-emerald-50/60 dark:bg-emerald-950/20"
+                        : parecer === "atencao"
+                        ? "bg-amber-50/60 dark:bg-amber-950/20"
+                        : ""
+                    }`}
                     onClick={() => toggle(row.collaboratorId)}
                   >
                     <TableCell className="p-0 pl-2 align-middle">
@@ -382,8 +436,76 @@ export function PayrollApprovalTab({
                     <TableCell className="text-right font-mono text-xs text-muted-foreground">
                       {formatCurrency(row.fgts)}
                     </TableCell>
-                    <TableCell className="p-0 pr-2" onClick={(e) => e.stopPropagation()}>
-                      <Popover>
+                    <TableCell
+                      className="p-0 pr-2"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex items-center justify-end gap-1">
+                        {/* Parecer da diretoria. Clicar de novo no mesmo botão
+                            limpa o parecer (volta pra "não avaliado"). */}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={!canComment || setStatus.isPending}
+                          className={`h-7 px-2 text-xs gap-1 ${
+                            parecer === "aprovado"
+                              ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300"
+                              : "text-muted-foreground"
+                          }`}
+                          title={
+                            parecer === "aprovado"
+                              ? "Aprovado — clique pra desmarcar"
+                              : "Marcar como aprovado"
+                          }
+                          onClick={() =>
+                            setStatus.mutate({
+                              collaboratorId: row.collaboratorId,
+                              patch: {
+                                director_status:
+                                  parecer === "aprovado" ? null : "aprovado",
+                              },
+                            })
+                          }
+                        >
+                          <CheckCircle
+                            className="w-3.5 h-3.5"
+                            weight={parecer === "aprovado" ? "fill" : "regular"}
+                          />
+                          <span className="hidden xl:inline">Aprovado</span>
+                        </Button>
+
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={!canComment || setStatus.isPending}
+                          className={`h-7 px-2 text-xs gap-1 ${
+                            parecer === "atencao"
+                              ? "bg-amber-100 text-amber-800 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-300"
+                              : "text-muted-foreground"
+                          }`}
+                          title={
+                            parecer === "atencao"
+                              ? "Atenção — clique pra desmarcar"
+                              : "Marcar como atenção"
+                          }
+                          onClick={() =>
+                            setStatus.mutate({
+                              collaboratorId: row.collaboratorId,
+                              patch: {
+                                director_status:
+                                  parecer === "atencao" ? null : "atencao",
+                              },
+                            })
+                          }
+                        >
+                          <Warning
+                            className="w-3.5 h-3.5"
+                            weight={parecer === "atencao" ? "fill" : "regular"}
+                          />
+                          <span className="hidden xl:inline">Atenção</span>
+                        </Button>
+
+                        <Popover>
                         <PopoverTrigger asChild>
                           <Button
                             variant="ghost"
@@ -408,7 +530,8 @@ export function PayrollApprovalTab({
                             compact
                           />
                         </PopoverContent>
-                      </Popover>
+                        </Popover>
+                      </div>
                     </TableCell>
                   </TableRow>
 
