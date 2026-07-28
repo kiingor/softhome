@@ -42,16 +42,54 @@ describe("buildApprovalSummary", () => {
     expect(rows[0].custoTotal).toBe(3240);
   });
 
-  it("mantém bonificação (custo de setor) FORA do líquido da pessoa", () => {
+  it("soma bonificação (custo de setor) no bruto e no líquido", () => {
     const rows = buildApprovalSummary([
       entry("c1", "Ana", "salario_base", 3000),
       entry("c1", "Ana", "bonificacao", 4000),
     ]);
 
-    expect(rows[0].bruto).toBe(3000);
-    expect(rows[0].liquido).toBe(3000);
+    expect(rows[0].bruto).toBe(7000);
+    expect(rows[0].liquido).toBe(7000);
+    // Subtotal informativo: quanto do bruto veio de bonificação.
     expect(rows[0].bonificacao).toBe(4000);
+    // Não conta em dobro: custo = bruto (já com bonificação) + FGTS.
     expect(rows[0].custoTotal).toBe(7000);
+  });
+
+  it("bonificação não é contada em dobro no custo total", () => {
+    const rows = buildApprovalSummary([
+      entry("c1", "Ana", "salario_base", 3000),
+      entry("c1", "Ana", "bonificacao", 4000),
+      entry("c1", "Ana", "fgts", 240),
+    ]);
+
+    expect(rows[0].bruto).toBe(7000);
+    expect(rows[0].custoTotal).toBe(7240);
+  });
+
+  it("bonificação entra como crédito, nunca abatendo o líquido", () => {
+    // Regressão: a tela pintava bonificação como desconto (bug de 27/07).
+    const comBonificacao = buildApprovalSummary([
+      entry("c1", "Ana", "salario_base", 3909.79),
+      entry("c1", "Ana", "gratificacao", 500),
+      entry("c1", "Ana", "bonificacao", 4000),
+      entry("c1", "Ana", "emprestimo", 1101.28),
+      entry("c1", "Ana", "inss", 357.77),
+      entry("c1", "Ana", "desconto", 228),
+    ]);
+    const semBonificacao = buildApprovalSummary([
+      entry("c1", "Ana", "salario_base", 3909.79),
+      entry("c1", "Ana", "gratificacao", 500),
+      entry("c1", "Ana", "emprestimo", 1101.28),
+      entry("c1", "Ana", "inss", 357.77),
+      entry("c1", "Ana", "desconto", 228),
+    ]);
+
+    expect(comBonificacao[0].descontos).toBe(semBonificacao[0].descontos);
+    expect(comBonificacao[0].liquido).toBe(
+      semBonificacao[0].liquido + 4000,
+    );
+    expect(comBonificacao[0].liquido).toBe(6722.74);
   });
 
   it("NÃO esconde quem fica com líquido negativo (ao contrário da aba Pagamentos)", () => {
@@ -120,9 +158,10 @@ describe("buildApprovalSummary", () => {
     );
 
     expect(totals.pessoas).toBe(2);
-    expect(totals.bruto).toBe(5000);
+    // Bruto inclui a bonificação de 500 do Bruno.
+    expect(totals.bruto).toBe(5500);
     expect(totals.descontos).toBe(450);
-    expect(totals.liquido).toBe(4550);
+    expect(totals.liquido).toBe(5050);
     expect(totals.fgts).toBe(400);
     expect(totals.bonificacao).toBe(500);
     expect(totals.custoTotal).toBe(5900);

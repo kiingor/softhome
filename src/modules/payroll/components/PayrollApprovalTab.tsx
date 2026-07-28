@@ -33,6 +33,7 @@ import {
   ENTRY_TYPE_LABELS,
   ENTRY_TYPE_COLORS,
   isEarning,
+  isEmployerCost,
   type PayrollEntryWithCollaborator,
   type PayrollPeriodStatus,
 } from "../types";
@@ -240,9 +241,9 @@ export function PayrollApprovalTab({
 
       {totals.bonificacao > 0 && (
         <p className="text-xs text-muted-foreground">
-          Além disso, {formatCurrency(totals.bonificacao)} em{" "}
-          <strong>bonificação (custo de setor)</strong>, que não entra no líquido
-          de ninguém. Custo total da folha:{" "}
+          Do bruto acima, {formatCurrency(totals.bonificacao)} são{" "}
+          <strong>bonificação (custo de setor)</strong> — já somados no líquido.
+          Custo total da folha (bruto + FGTS):{" "}
           <strong>{formatCurrency(totals.custoTotal)}</strong>.
         </p>
       )}
@@ -413,7 +414,19 @@ export function PayrollApprovalTab({
 
                   {isOpen &&
                     row.entries.map((e) => {
-                      const earning = isEarning(e.type) && e.type !== "bonificacao";
+                      // 3 naturezas, não 2 — o bug anterior era tratar tudo que
+                      // não fosse provento como desconto, o que pintava a
+                      // bonificação de vermelho com sinal de menos (parecia
+                      // abater do salário).
+                      //   credito     → soma no líquido (inclui bonificação)
+                      //   debito      → sai do líquido
+                      //   informativo → fora do líquido (só FGTS, que é custo
+                      //                 do empregador e nunca sai do salário)
+                      const natureza = isEmployerCost(e.type)
+                        ? "informativo"
+                        : isEarning(e.type)
+                        ? "credito"
+                        : "debito";
                       return (
                         <TableRow key={e.id} className="bg-muted/30">
                           <TableCell />
@@ -430,19 +443,28 @@ export function PayrollApprovalTab({
                               <span className="text-muted-foreground truncate">
                                 {e.description ?? ""}
                               </span>
+                              {natureza === "informativo" && (
+                                <span className="text-[10px] text-muted-foreground shrink-0 whitespace-nowrap">
+                                  · fora do líquido
+                                </span>
+                              )}
                             </div>
                           </TableCell>
                           <TableCell
                             colSpan={4}
                             className={`text-right font-mono text-xs ${
-                              e.type === "fgts"
+                              natureza === "informativo"
                                 ? "text-muted-foreground"
-                                : earning
+                                : natureza === "credito"
                                 ? "text-orange-700 dark:text-orange-300"
                                 : "text-rose-700 dark:text-rose-300"
                             }`}
                           >
-                            {e.type === "fgts" ? "" : earning ? "+ " : "- "}
+                            {natureza === "credito"
+                              ? "+ "
+                              : natureza === "debito"
+                              ? "- "
+                              : ""}
                             {formatCurrency(Number(e.value))}
                           </TableCell>
                           <TableCell />

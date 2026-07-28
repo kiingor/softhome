@@ -20,15 +20,19 @@ import {
 //     clamp de lá remove.
 //
 // Classificação (fonte única em types.ts):
-//   bruto     = Σ proventos (isEarning) — exceto bonificação, ver abaixo
+//   bruto     = Σ proventos (isEarning), bonificação INCLUÍDA
 //   descontos = Σ deduções (isDeduction: INSS, IRPF, falta, adiantamento,
 //               desconto, empréstimo)
 //   líquido   = bruto − descontos
 //   fgts      = custo do EMPREGADOR (isEmployerCost) — nunca sai do salário de
 //               quem recebe, então fica fora do líquido e é somado à parte
-//   bonificação = "CUSTO SETOR" vindo da agenda. É custo interno de setor, não
-//               remuneração da pessoa (a aba Lançamentos já a esconde por isso,
-//               PR #37). Fica numa coluna própria, fora do líquido.
+//
+// BONIFICAÇÃO ("CUSTO SETOR", vinda da agenda): entra no bruto e no líquido como
+// provento normal — decisão do PO em 27/07/2026. O campo `bonificacao` continua
+// existindo, mas como SUBTOTAL informativo de quanto do bruto veio daí; não
+// somar de novo em cima do bruto, sob risco de contar em dobro.
+// Nota: a aba Lançamentos esconde bonificação (PR #37, "custo interno de
+// setor"), então os totais das duas telas divergem de propósito.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface CollaboratorApprovalSummary {
@@ -39,7 +43,7 @@ export interface CollaboratorApprovalSummary {
   liquido: number;
   fgts: number;
   bonificacao: number;
-  /** Custo total pra empresa: bruto + FGTS + bonificação. */
+  /** Custo total pra empresa: bruto (já com bonificação) + FGTS. */
   custoTotal: number;
   entries: PayrollEntryWithCollaborator[];
 }
@@ -83,12 +87,12 @@ export function buildApprovalSummary(
     row.entries.push(e);
 
     const value = Number(e.value) || 0;
-    if (e.type === "bonificacao") {
-      row.bonificacao += value;
-    } else if (isEmployerCost(e.type)) {
+    if (isEmployerCost(e.type)) {
       row.fgts += value;
     } else if (isEarning(e.type)) {
       row.bruto += value;
+      // Subtotal informativo — já contabilizado no bruto acima.
+      if (e.type === "bonificacao") row.bonificacao += value;
     } else if (isDeduction(e.type)) {
       row.descontos += value;
     }
@@ -100,7 +104,7 @@ export function buildApprovalSummary(
     row.fgts = round2(row.fgts);
     row.bonificacao = round2(row.bonificacao);
     row.liquido = round2(row.bruto - row.descontos);
-    row.custoTotal = round2(row.bruto + row.fgts + row.bonificacao);
+    row.custoTotal = round2(row.bruto + row.fgts);
     // Dentro da pessoa: proventos primeiro, maior valor no topo.
     row.entries.sort((a, b) => {
       const ea = isEarning(a.type) ? 0 : 1;
