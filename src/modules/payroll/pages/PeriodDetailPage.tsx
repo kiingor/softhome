@@ -34,6 +34,7 @@ import {
 import {
   ArrowLeft,
   ArrowUUpLeft,
+  Copy,
   CircleNotch as Loader2,
   Plus,
   Lock,
@@ -330,6 +331,15 @@ export default function PeriodDetailPage() {
 
   const isFiltering = storeFilter !== "all" || teamFilter !== "all";
 
+  const handleCopyPix = async (pixKey: string) => {
+    try {
+      await navigator.clipboard.writeText(pixKey);
+      toast.success("PIX copiado");
+    } catch {
+      toast.error("Não consegui copiar. Tenta selecionar e copiar manualmente.");
+    }
+  };
+
   const toggleCollab = (id: string) => {
     setExpandedCollabs((prev) => {
       const next = new Set(prev);
@@ -354,6 +364,7 @@ export default function PeriodDetailPage() {
       id: string;
       name: string;
       surname: string | null;
+      pixKey: string | null;
       entries: DisplayEntry[];
       taxBreakdown: { inss: number; irpf: number; fgts: number };
       net: number;
@@ -366,6 +377,7 @@ export default function PeriodDetailPage() {
           id: collabId,
           name: e.collaborator?.name ?? "(sem nome)",
           surname: e.collaborator?.softcom_surname ?? null,
+          pixKey: e.collaborator?.pix_key ?? null,
           entries: [],
           taxBreakdown: { inss: 0, irpf: 0, fgts: 0 },
           net: 0,
@@ -1126,6 +1138,35 @@ export default function PeriodDetailPage() {
                                 </span>
                               ) : (
                                 <span className="truncate">{g.name}</span>
+                              )}
+                            </div>
+                            {/* PIX do colaborador — mesma apresentação da aba
+                                Pagamentos, pra quem confere o lançamento não
+                                precisar trocar de aba pra ver a chave. */}
+                            <div className="flex items-center gap-1.5 text-xs mt-1 pl-[3.25rem]">
+                              {g.pixKey ? (
+                                <>
+                                  <span className="text-muted-foreground">PIX:</span>
+                                  <span className="font-mono text-foreground/80 truncate max-w-[260px]">
+                                    {g.pixKey}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={(ev) => {
+                                      ev.stopPropagation();
+                                      handleCopyPix(g.pixKey!);
+                                    }}
+                                    className="inline-flex items-center justify-center w-5 h-5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                    aria-label="Copiar chave PIX"
+                                    title="Copiar chave PIX"
+                                  >
+                                    <Copy className="w-3.5 h-3.5" />
+                                  </button>
+                                </>
+                              ) : (
+                                <span className="text-muted-foreground/70 italic">
+                                  PIX não cadastrado
+                                </span>
                               )}
                             </div>
                           </TableCell>
