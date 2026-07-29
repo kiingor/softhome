@@ -60,25 +60,9 @@ const MONTHLY_MERGED_TYPES = [
 
 const MONTHLY_MERGED_SET = new Set<string>(MONTHLY_MERGED_TYPES);
 
-/** Plural pro resumo da linha quando o mesmo tipo aparece mais de uma vez. */
-const MERGED_PLURAL: Record<string, string> = {
-  salario_base: "salários base",
-  gratificacao: "gratificações",
-  hora_extra: "lançamentos de hora extra",
-  periculosidade: "adicionais de periculosidade",
-  salario_familia: "cotas de salário-família",
-};
-
-/** "Salário base + 2 gratificações + Hora extra" — detalhe fica no popup. */
-function describeMergedLine(merged: PayrollEntryWithCollaborator[]): string {
-  const parts: string[] = [];
-  for (const type of MONTHLY_MERGED_TYPES) {
-    const n = merged.filter((e) => e.type === type).length;
-    if (n === 0) continue;
-    const label = ENTRY_TYPE_LABELS[type] ?? type;
-    parts.push(n === 1 ? label : `${n} ${MERGED_PLURAL[type] ?? label}`);
-  }
-  return parts.join(" + ");
+/** Tipos distintos que compõem a linha, na ordem de exibição — viram as tags. */
+function mergedTypes(merged: PayrollEntryWithCollaborator[]): string[] {
+  return MONTHLY_MERGED_TYPES.filter((t) => merged.some((e) => e.type === t));
 }
 
 interface PaymentRecord {
@@ -174,6 +158,8 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
       irpf: number;
       discounts: Discount[];
       components: Component[];
+      /** Tipos que a linha somou — viram as tags na listagem. */
+      types: string[];
     };
     const breakdownByEntry = new Map<string, EntryBreakdown>();
     const adjustedEntries: PayrollEntryWithCollaborator[] = [];
@@ -224,7 +210,8 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
         if (adjusted > 0) {
           adjustedEntries.push({
             ...primary,
-            description: describeMergedLine(merged),
+            // As tags dizem O QUE somou; aqui vai o detalhe de cada lançamento.
+            description: components.map((c) => c.label).join(" · "),
             value: adjusted,
           } as PayrollEntryWithCollaborator);
           breakdownByEntry.set(primary.id, {
@@ -232,6 +219,7 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
             irpf: taxes.irpf,
             discounts: collabDiscounts,
             components,
+            types: mergedTypes(merged),
           });
         }
       }
@@ -248,6 +236,7 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
             label: e.description ?? ENTRY_TYPE_LABELS[e.type] ?? e.type,
             value: Number(e.value),
           }],
+          types: [e.type],
         });
       }
 
@@ -279,6 +268,9 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
             irpf: vacTax.irpf,
             discounts: [],
             components,
+            // Férias já se apresenta como um pagamento próprio: 1 tag só, o
+            // detalhe (1/3, grat s/férias) fica no popup.
+            types: ["ferias"],
           });
         }
       }
@@ -499,7 +491,7 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
                 }
               />
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <p
                     className={`text-sm truncate ${
                       isPaid ? "text-muted-foreground" : "font-medium text-foreground"
@@ -507,14 +499,21 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
                   >
                     {entry.collaborator?.name ?? "(sem nome)"}
                   </p>
-                  <span
-                    className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide font-medium border shrink-0 ${
-                      ENTRY_TYPE_COLORS[entry.type] ??
-                      "bg-muted text-muted-foreground border-border"
-                    }`}
-                  >
-                    {ENTRY_TYPE_LABELS[entry.type] ?? entry.type}
-                  </span>
+                  {/* Uma tag por tipo que a linha somou — o valor à direita é o
+                      líquido do conjunto, então precisa ficar claro o que entrou. */}
+                  {(taxBreakdownByEntry.get(entry.id)?.types ?? [entry.type]).map(
+                    (type) => (
+                      <span
+                        key={type}
+                        className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide font-medium border shrink-0 ${
+                          ENTRY_TYPE_COLORS[type] ??
+                          "bg-muted text-muted-foreground border-border"
+                        }`}
+                      >
+                        {ENTRY_TYPE_LABELS[type] ?? type}
+                      </span>
+                    ),
+                  )}
                 </div>
                 <div className="flex items-center gap-1.5 text-xs mt-0.5">
                   {pixKey ? (
@@ -599,8 +598,8 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
                             </div>
                           ))}
                           {hasMultipleComponents && (
-                            <div className="border-t border-border pt-1.5 flex items-center justify-between gap-2 text-muted-foreground">
-                              <span>Bruto</span>
+                            <div className="border-t border-border pt-1.5 flex items-center justify-between gap-2 font-medium">
+                              <span>Soma (bruto)</span>
                               <span className="font-mono">
                                 {formatCurrency(grossValue)}
                               </span>
