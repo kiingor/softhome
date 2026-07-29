@@ -33,6 +33,54 @@ interface PaymentsTabProps {
   canManage: boolean;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Pagamento mensal — o que entra na MESMA linha (mesmo PIX)
+//
+// Regra de produto: o colaborador recebe UM pagamento com salário base,
+// gratificações, hora extra, periculosidade e salário-família juntos.
+//
+// É também o recorte correto pro líquido: o INSS/IRPF do mês incide sobre essa
+// base (hora extra e periculosidade integram a base — ver
+// INSS_TAXABLE_EARNING_TYPES em ../types), então o imposto descontado aqui bate
+// com o contracheque em vez de sair todo do salário base.
+//
+// FORA daqui, cada um em sua linha: bonificação (custo de setor) e carro
+// agregado — a diretoria confere esses à parte. Benefício pagável, atestado,
+// VT e salário retroativo também seguem em linha própria.
+//
+// A ordem do array é a ordem de exibição no popup de detalhe.
+// ─────────────────────────────────────────────────────────────────────────────
+const MONTHLY_MERGED_TYPES = [
+  "salario_base",
+  "gratificacao",
+  "hora_extra",
+  "periculosidade",
+  "salario_familia",
+] as const;
+
+const MONTHLY_MERGED_SET = new Set<string>(MONTHLY_MERGED_TYPES);
+
+/** Plural pro resumo da linha quando o mesmo tipo aparece mais de uma vez. */
+const MERGED_PLURAL: Record<string, string> = {
+  salario_base: "salários base",
+  gratificacao: "gratificações",
+  hora_extra: "lançamentos de hora extra",
+  periculosidade: "adicionais de periculosidade",
+  salario_familia: "cotas de salário-família",
+};
+
+/** "Salário base + 2 gratificações + Hora extra" — detalhe fica no popup. */
+function describeMergedLine(merged: PayrollEntryWithCollaborator[]): string {
+  const parts: string[] = [];
+  for (const type of MONTHLY_MERGED_TYPES) {
+    const n = merged.filter((e) => e.type === type).length;
+    if (n === 0) continue;
+    const label = ENTRY_TYPE_LABELS[type] ?? type;
+    parts.push(n === 1 ? label : `${n} ${MERGED_PLURAL[type] ?? label}`);
+  }
+  return parts.join(" + ");
+}
+
 interface PaymentRecord {
   id: string;
   period_id: string;
@@ -52,14 +100,15 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
   // - benefícios entram só se is_payable=true (categoria 'adicional');
   //   demais benefícios são vouchers/serviços, pagos por outro fluxo
   // - FGTS fora: é encargo do empregador, não desconta do colaborador
-  // - **Pagamento Mensal**: salário base + grats recorrentes mescladas em
-  //   1 linha. INSS/IRPF regulares + descontos manuais incidem sobre essa
-  //   base (já contabilizados no mesmo período mas SEM o prefixo ferias-).
+  // - **Pagamento Mensal**: 1 linha só com salário base, gratificações, hora
+  //   extra, periculosidade e salário-família (MONTHLY_MERGED_TYPES).
+  //   INSS/IRPF regulares + descontos manuais incidem sobre essa base (já
+  //   contabilizados no mesmo período mas SEM o prefixo ferias-).
   // - **Pagamento de Férias** (entries com external_id LIKE 'ferias-%'):
   //   linha SEPARADA. Mescla ferias + 1/3 + grat s/Férias + bon s/Férias,
   //   menos INSS s/Férias e IRRF s/Férias (também com prefixo ferias-).
   //   É um cheque distinto (CLT art. 145: D-2 do gozo).
-  // - Outros proventos mensais (bonificação fora férias, hora extra,
+  // - Outros proventos mensais (bonificação/custo de setor, carro agregado,
   //   benefício pagável) continuam como linhas separadas.
   // - estornos: par positivo+negativo do mesmo (collab,tipo) somam ≤ 0 → some
   const { payableEntries, taxBreakdownByEntry } = useMemo(() => {
@@ -149,35 +198,33 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
       const collabDiscounts = discountsByCollab.get(collabId) ?? [];
       const totalDiscount = collabDiscounts.reduce((s, d) => s + d.value, 0);
 
-      const salary = monthlyList.find((e) => e.type === "salario_base");
-      const grats = monthlyList.filter((e) => e.type === "gratificacao");
-      const others = monthlyList.filter(
-        (e) => e.type !== "salario_base" && e.type !== "gratificacao",
+      // Ordena pela ordem de MONTHLY_MERGED_TYPES pra o popup sair sempre na
+      // mesma sequência (salário primeiro, depois os adicionais).
+      const merged = MONTHLY_MERGED_TYPES.flatMap((t) =>
+        monthlyList.filter((e) => e.type === t),
       );
+      const others = monthlyList.filter((e) => !MONTHLY_MERGED_SET.has(e.type));
 
-      if (salary || grats.length > 0) {
-        const primary = salary ?? grats[0];
-        const components: Component[] = [];
-        if (salary) {
-          components.push({ label: "Salário Base", value: Number(salary.value) });
-        }
-        for (const g of grats) {
-          components.push({
-            label: g.description ?? ENTRY_TYPE_LABELS.gratificacao,
-            value: Number(g.value),
-          });
-        }
+      if (merged.length > 0) {
+        // Âncora do pagamento: o salário base quando existe — o id dele é o mais
+        // estável entre recálculos, então a marcação de "pago" sobrevive.
+        const primary =
+          merged.find((e) => e.type === "salario_base") ?? merged[0];
+        const components: Component[] = merged.map((e) => ({
+          // Salário base mantém rótulo fixo; os adicionais mostram a descrição
+          // do lançamento (é onde o RH escreve o motivo).
+          label:
+            e.type === "salario_base"
+              ? "Salário Base"
+              : e.description ?? ENTRY_TYPE_LABELS[e.type] ?? e.type,
+          value: Number(e.value),
+        }));
         const gross = components.reduce((s, c) => s + c.value, 0);
         const adjusted = gross - taxes.inss - taxes.irpf - totalDiscount;
         if (adjusted > 0) {
-          const mergedDesc = grats.length > 0
-            ? (salary
-                ? `Salário Base + ${grats.length === 1 ? "Gratificação" : `${grats.length} gratificações`}`
-                : (grats.length === 1 ? "Gratificação" : `${grats.length} gratificações`))
-            : "Salário Base";
           adjustedEntries.push({
             ...primary,
-            description: mergedDesc,
+            description: describeMergedLine(merged),
             value: adjusted,
           } as PayrollEntryWithCollaborator);
           breakdownByEntry.set(primary.id, {
@@ -189,7 +236,8 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
         }
       }
 
-      // Outros tipos monthly (bonificação, hora extra, benefício): linhas próprias
+      // Fora da mescla (bonificação/custo de setor, carro agregado, benefício
+      // pagável, atestado, VT, salário retroativo): cada um em sua linha.
       for (const e of others) {
         adjustedEntries.push(e as PayrollEntryWithCollaborator);
         breakdownByEntry.set(e.id, {
