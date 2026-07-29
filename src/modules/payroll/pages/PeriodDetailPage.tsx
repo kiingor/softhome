@@ -34,6 +34,7 @@ import {
 import {
   ArrowLeft,
   ArrowUUpLeft,
+  CheckCircle,
   Copy,
   CircleNotch as Loader2,
   Plus,
@@ -602,6 +603,28 @@ export default function PeriodDetailPage() {
                 </span>
               </Button>
             )}
+            {/* Transições do fluxo (Aprovar RH / Aprovar Diretoria / Devolver)
+                ficam AQUI, como ação principal — não dentro de "Ações". É o
+                que a pessoa vem fazer nesta tela. */}
+            {transitions.map((t) => (
+              <Button
+                key={t.to}
+                variant={t.destructive ? "outline" : "default"}
+                className={
+                  t.destructive
+                    ? "border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    : undefined
+                }
+                onClick={() => setPendingTransition(t)}
+              >
+                {t.destructive ? (
+                  <ArrowUUpLeft className="w-4 h-4 mr-2" />
+                ) : (
+                  <CheckCircle className="w-4 h-4 mr-2" weight="fill" />
+                )}
+                {t.label}
+              </Button>
+            ))}
             {canViewPayments && (
               <PayrollValidationButton
                 companyId={currentCompany?.id}
@@ -649,29 +672,9 @@ export default function PeriodDetailPage() {
                   </>
                 )}
 
-                {transitions.length > 0 && (
-                  <>
-                    <DropdownMenuSeparator />
-                    {transitions.map((t) => (
-                      <DropdownMenuItem
-                        key={t.to}
-                        onSelect={() => setPendingTransition(t)}
-                        className={
-                          t.destructive
-                            ? "text-destructive focus:text-destructive focus:bg-destructive/10"
-                            : undefined
-                        }
-                      >
-                        {t.destructive ? (
-                          <ArrowUUpLeft className="w-4 h-4 mr-2" />
-                        ) : (
-                          <Lock className="w-4 h-4 mr-2" />
-                        )}
-                        {t.label}
-                      </DropdownMenuItem>
-                    ))}
-                  </>
-                )}
+                {/* As transições do fluxo saíram daqui: agora são botões
+                    próprios no topo, ao lado de "Validar folha". Manter nos
+                    dois lugares duplicaria a ação. */}
 
                 {canManage && isReopenable && (
                   <>
