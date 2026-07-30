@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,10 +26,13 @@ export default function AplicarTestePage() {
   const { token } = useParams<{ token: string }>();
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<ApplicationTestSession | null>(null);
-  const [activeTest, setActiveTest] = useState<ApplicationTestSessionItem | null>(
-    null,
-  );
+  // Guarda só o ID: o teste em si é derivado de `session` a cada render, senão
+  // vira um retrato velho e o autosave grava por cima das respostas já salvas.
+  const [activeTestId, setActiveTestId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Espelho de `session` pra ler dentro do refresh sem colocá-la nas deps do
+  // useCallback (o useEffect abaixo depende de `refresh` — entraria em loop).
+  const sessionRef = useRef<ApplicationTestSession | null>(null);
 
   const refresh = useCallback(async () => {
     if (!token) return;
@@ -37,13 +40,19 @@ export default function AplicarTestePage() {
       const data = await getApplicationTestsSession(token);
       if (!data || !data.tests) {
         setError("Link inválido, expirado ou sem testes atribuídos.");
+        sessionRef.current = null;
         setSession(null);
       } else {
+        sessionRef.current = data;
         setSession(data);
         setError(null);
       }
     } catch (err) {
-      setError((err as Error).message);
+      // Só derruba a tela se ainda não havia sessão (load inicial). Se o
+      // candidato já está respondendo, uma oscilação de rede no refetch não
+      // pode fazê-lo achar que o link morreu.
+      if (sessionRef.current === null) setError((err as Error).message);
+      else toast.error("Não deu pra atualizar a lista. Tente de novo.");
     } finally {
       setLoading(false);
     }
@@ -61,13 +70,24 @@ export default function AplicarTestePage() {
       await startApplicationTestInSession(token, test.id);
     } catch (err) {
       toast.error("Não rolou iniciar. " + (err as Error).message);
+      // Motivo mais provável: a lista em tela está velha (teste concluído em
+      // outra aba). Relê pra corrigir sozinho.
+      await refresh();
       return;
     }
-    setActiveTest(test);
+    setActiveTestId(test.id);
   };
 
   const handleTestCompleted = async () => {
-    setActiveTest(null);
+    setActiveTestId(null);
+    await refresh();
+  };
+
+  // Voltar pra lista SEM releitura deixaria o próximo "Começar" abrir o teste
+  // com as respostas de quando a página carregou — e o primeiro autosave
+  // gravaria esse vazio por cima do que já estava no banco.
+  const handleCancelTest = async () => {
+    setActiveTestId(null);
     await refresh();
   };
 
@@ -102,6 +122,11 @@ export default function AplicarTestePage() {
     );
   }
 
+  // Derivado da sessão recém-lida, nunca de um retrato guardado no estado.
+  const activeTest = activeTestId
+    ? (session.tests.find((t) => t.id === activeTestId) ?? null)
+    : null;
+
   // Renderiza o teste ativo
   if (activeTest) {
     return (
@@ -119,13 +144,16 @@ export default function AplicarTestePage() {
           <Card>
             <CardContent className="p-6">
               <ApplicationTestRunner
+                // Remonta ao trocar de teste — o runner guarda as respostas em
+                // estado local, semeado só na montagem.
+                key={activeTest.id}
                 sessionToken={token!}
                 testId={activeTest.id}
                 testSlug={activeTest.test_slug}
                 testName={activeTest.name}
                 initialAnswers={activeTest.answers as unknown as Answers}
                 onCompleted={handleTestCompleted}
-                onCancel={() => setActiveTest(null)}
+                onCancel={handleCancelTest}
               />
             </CardContent>
           </Card>

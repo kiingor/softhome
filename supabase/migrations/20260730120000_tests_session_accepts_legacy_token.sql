@@ -36,6 +36,11 @@ $$;
 COMMENT ON FUNCTION public.resolve_tests_session_application(text) IS
   'Aceita o token da sessão de testes ou o access_token legado de um teste. Retorna NULL se nenhum bater.';
 
+-- Helper interna: não precisa virar endpoint no PostgREST. As RPCs públicas
+-- abaixo são SECURITY DEFINER, então continuam podendo chamá-la.
+REVOKE EXECUTE ON FUNCTION public.resolve_tests_session_application(text)
+  FROM PUBLIC, anon, authenticated;
+
 -- ─────────────────────────────────────────────────────────────────────
 -- RPC pública: lista os testes da sessão para o candidato.
 -- ─────────────────────────────────────────────────────────────────────
@@ -111,6 +116,7 @@ SET search_path = public
 AS $$
 DECLARE
   app_id uuid;
+  v_id uuid;
 BEGIN
   app_id := public.resolve_tests_session_application(p_token);
 
@@ -124,7 +130,15 @@ BEGIN
     started_at = COALESCE(started_at, now())
   WHERE id = p_test_id
     AND application_id = app_id
-    AND status IN ('not_started', 'in_progress');
+    AND status IN ('not_started', 'in_progress')
+  RETURNING id INTO v_id;
+
+  -- Sem linha casada = teste já finalizado. Devolver ok:true aqui deixaria o
+  -- candidato responder tudo de novo pra ver a resposta ser descartada no fim
+  -- (mesmo motivo documentado em 20260623150000 pras RPCs *_by_token).
+  IF v_id IS NULL THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'Esse teste já foi finalizado.');
+  END IF;
 
   RETURN jsonb_build_object('ok', true);
 END;
@@ -146,6 +160,7 @@ SET search_path = public
 AS $$
 DECLARE
   app_id uuid;
+  v_id uuid;
 BEGIN
   app_id := public.resolve_tests_session_application(p_token);
 
@@ -157,7 +172,12 @@ BEGIN
   SET answers = p_answers
   WHERE id = p_test_id
     AND application_id = app_id
-    AND status IN ('not_started', 'in_progress');
+    AND status IN ('not_started', 'in_progress')
+  RETURNING id INTO v_id;
+
+  IF v_id IS NULL THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'Esse teste já foi finalizado.');
+  END IF;
 
   RETURN jsonb_build_object('ok', true);
 END;
@@ -181,6 +201,7 @@ SET search_path = public
 AS $$
 DECLARE
   app_id uuid;
+  v_id uuid;
 BEGIN
   app_id := public.resolve_tests_session_application(p_token);
 
@@ -197,7 +218,18 @@ BEGIN
     completed_at = now()
   WHERE id = p_test_id
     AND application_id = app_id
-    AND status IN ('not_started', 'in_progress');
+    AND status IN ('not_started', 'in_progress')
+  RETURNING id INTO v_id;
+
+  -- Não sobrescreve resposta já finalizada (anti-replay), mas AVISA em vez de
+  -- fingir sucesso: senão o candidato responde tudo numa segunda aba e é
+  -- informado de que gravou, quando não gravou.
+  IF v_id IS NULL THEN
+    RETURN jsonb_build_object(
+      'ok', false,
+      'error', 'Esse teste já foi finalizado. Suas respostas anteriores estão salvas.'
+    );
+  END IF;
 
   RETURN jsonb_build_object('ok', true);
 END;
@@ -213,7 +245,11 @@ COMMIT;
 -- Volta as 4 RPCs a resolverem SÓ pelo tests_session_token: reaplique o corpo
 -- original de supabase/migrations/20260512120000_application_tests_session.sql
 -- (as 4 funções lá são CREATE OR REPLACE, então rodar aquele arquivo de novo
--- reverte este) e então:
+-- reverte este — inclusive o guard de 0 linhas, que lá não existe) e então
+-- derrube a helper, que aí fica sem chamador:
 -- BEGIN;
 -- DROP FUNCTION IF EXISTS public.resolve_tests_session_application(text);
 -- COMMIT;
+--
+-- ATENÇÃO: rodar só o DROP acima, sem reaplicar a 20260512120000 antes, quebra
+-- as 4 RPCs públicas (elas passam a chamar função inexistente). A ordem importa.
