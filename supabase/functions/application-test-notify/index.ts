@@ -81,11 +81,11 @@ serve(async (req) => {
     );
   }
 
-  // 3. Busca application + candidato + vaga
+  // 3. Busca application + candidato + vaga + sessão
   const { data: application, error: appErr } = await sbAdmin
     .from("candidate_applications")
     .select(
-      "id, company_id, candidate:candidates(id, name, phone), job:job_openings(id, title)",
+      "id, company_id, tests_session_token, candidate:candidates(id, name, phone), job:job_openings(id, title)",
     )
     .eq("id", body.application_id)
     .maybeSingle();
@@ -130,9 +130,7 @@ serve(async (req) => {
   // 5. Busca application_tests pendentes (status not_started ou in_progress)
   const { data: tests, error: testsErr } = await sbAdmin
     .from("application_tests")
-    .select(
-      "id, access_token, status, test:admission_tests(name, slug)",
-    )
+    .select("id, status, test:admission_tests(name)")
     .eq("application_id", body.application_id)
     .in("status", ["not_started", "in_progress"]);
 
@@ -153,41 +151,43 @@ serve(async (req) => {
     );
   }
 
-  // 6. Monta mensagem
+  // 6. Garante session_token (trigger normalmente já cria, mas seguro reforçar).
+  const sessionToken = (application as { tests_session_token?: string | null })
+    .tests_session_token;
+  if (!sessionToken) {
+    return jsonResponse(
+      {
+        error:
+          "Sessão de testes não criada. Atribua os testes novamente.",
+      },
+      500,
+    );
+  }
+
+  // 7. Monta mensagem (1 link único)
   const firstName = candidate.name.split(" ")[0];
   const jobTitle = job?.title ?? "vaga";
   const origin = body.public_url_origin.replace(/\/$/, "");
+  const sessionUrl = `${origin}/recrutamento/teste/${sessionToken}`;
 
-  // Se for só 1 teste, manda um link direto. Se forem vários, lista todos.
-  let messageBody: string;
-  if (tests.length === 1) {
-    const t = tests[0];
-    const testName =
-      (t.test as { name?: string } | null)?.name ?? "teste";
-    messageBody =
-      `Olá ${firstName}! 👋\n\n` +
-      `Você avançou na seleção para *${jobTitle}* na *Softcom*! 🎉\n\n` +
-      `Próxima etapa: responder o teste *${testName}*.\n\n` +
-      `Acesse o link abaixo para começar:\n` +
-      `👉 ${origin}/recrutamento/teste/${t.access_token}\n\n` +
-      `Reserve um tempinho sem distrações. Suas respostas são salvas automaticamente. 📝\n\n` +
-      `Qualquer dúvida, estamos por aqui! 💬`;
-  } else {
-    const links = tests
-      .map((t) => {
-        const testName =
-          (t.test as { name?: string } | null)?.name ?? "teste";
-        return `• *${testName}*: ${origin}/recrutamento/teste/${t.access_token}`;
-      })
-      .join("\n");
-    messageBody =
-      `Olá ${firstName}! 👋\n\n` +
-      `Você avançou na seleção para *${jobTitle}* na *Softcom*! 🎉\n\n` +
-      `Próxima etapa: responder ${tests.length} testes. Acesse os links abaixo:\n\n` +
-      `${links}\n\n` +
-      `Reserve um tempinho sem distrações. Suas respostas são salvas automaticamente. 📝\n\n` +
-      `Qualquer dúvida, estamos por aqui! 💬`;
-  }
+  const testNames = tests
+    .map((t) => (t.test as { name?: string } | null)?.name ?? "")
+    .filter((n) => n.length > 0);
+
+  const testList =
+    tests.length === 1
+      ? `*${testNames[0] ?? "1 teste"}*`
+      : `${tests.length} testes (${testNames.join(", ")})`;
+
+  const messageBody =
+    `Olá ${firstName}! 👋\n\n` +
+    `Você avançou na seleção para *${jobTitle}* na *Softcom*! 🎉\n\n` +
+    `Próxima etapa: responder ${testList}.\n\n` +
+    `Acesse o link abaixo para ver todos os testes e começar quando puder:\n` +
+    `👉 ${sessionUrl}\n\n` +
+    `Reserve um tempinho sem distrações. Suas respostas são salvas automaticamente. 📝\n` +
+    `Você pode fechar e voltar depois pelo mesmo link.\n\n` +
+    `Qualquer dúvida, estamos por aqui! 💬`;
 
   // 7. Limpa telefone (Brasil)
   let phone = candidate.phone.replace(/\D/g, "");

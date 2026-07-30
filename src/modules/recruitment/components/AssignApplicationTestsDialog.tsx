@@ -35,7 +35,8 @@ import {
 } from "@/modules/admission/components/TestResultDialog";
 import {
   assignTests,
-  buildApplicationTestUrl,
+  buildApplicationTestsSessionUrl,
+  getApplicationSessionToken,
   listApplicationTests,
   listAvailableAdmissionTests,
   type ApplicationTest,
@@ -112,6 +113,12 @@ export function AssignApplicationTestsDialog({
   const [viewing, setViewing] = useState<ApplicationTest | null>(null);
   const [showAssignMore, setShowAssignMore] = useState(false);
 
+  const { data: sessionToken } = useQuery({
+    queryKey: ["application-tests-session-token", applicationId],
+    queryFn: () => getApplicationSessionToken(applicationId),
+    enabled: open && !!applicationId,
+  });
+
   const { data: assigned = [], isLoading: loadingAssigned } = useQuery({
     queryKey: ["application-tests", applicationId],
     queryFn: () => listApplicationTests(applicationId),
@@ -153,14 +160,21 @@ export function AssignApplicationTestsDialog({
       queryClient.invalidateQueries({
         queryKey: ["application-tests", applicationId],
       });
+      queryClient.invalidateQueries({
+        queryKey: ["application-tests-session-token", applicationId],
+      });
       setSelected(new Set());
       toast.success("Testes atribuídos ✓");
     },
     onError: (err: Error) => toast.error("Não rolou. " + err.message),
   });
 
-  const copyLink = async (token: string) => {
-    const url = buildApplicationTestUrl(token);
+  const copySessionLink = async () => {
+    if (!sessionToken) {
+      toast.error("Atribua pelo menos 1 teste antes de copiar o link.");
+      return;
+    }
+    const url = buildApplicationTestsSessionUrl(sessionToken);
     await navigator.clipboard.writeText(url);
     toast.success("Link copiado ✓");
   };
@@ -262,17 +276,45 @@ export function AssignApplicationTestsDialog({
                 )}
                 {pending.length > 0 && (
                   <GroupSection title="Aguardando">
+                    {/* Sem "copiar link" por teste: agora o candidato recebe um
+                        link só pra sessão inteira (seção abaixo). */}
                     {pending.map((a) => (
                       <AssignedRow
                         key={a.id}
                         a={a}
                         def={available.find((t) => t.id === a.test_id)}
-                        onCopy={() => copyLink(a.access_token)}
                       />
                     ))}
                   </GroupSection>
                 )}
               </>
+            )}
+
+            {/* Link único da sessão — mesmo link abre todos os testes */}
+            {sessionToken && pendingTestsCount > 0 && (
+              <section className="space-y-2 pt-2 border-t">
+                <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Link para o candidato
+                </h3>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 min-w-0 rounded-md border bg-muted/30 px-3 py-2 text-xs font-mono truncate">
+                    {buildApplicationTestsSessionUrl(sessionToken)}
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={copySessionLink}
+                    className="shrink-0"
+                  >
+                    <Copy className="w-3 h-3 mr-1" />
+                    Copiar
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Mesmo link para todos os testes. O candidato vê a lista e
+                  responde um por vez.
+                </p>
+              </section>
             )}
 
             {/* Atribuir mais */}
@@ -474,20 +516,23 @@ function AssignedRow({
         {done ? summaryLine(a) : pendingLine(a)}
       </p>
 
-      {/* linha 3: uma ação, alinhada à direita */}
-      <div className="flex justify-end">
-        {done ? (
-          <Button size="sm" onClick={onView}>
-            <Eye className="w-4 h-4 mr-1.5" />
-            Ver respostas
-          </Button>
-        ) : (
-          <Button size="sm" variant="outline" onClick={onCopy}>
-            <Copy className="w-4 h-4 mr-1.5" />
-            Copiar link
-          </Button>
-        )}
-      </div>
+      {/* linha 3: uma ação, alinhada à direita. Teste pendente não tem ação
+          própria — o link agora é um só, da sessão inteira. */}
+      {(done ? onView : onCopy) && (
+        <div className="flex justify-end">
+          {done ? (
+            <Button size="sm" onClick={onView}>
+              <Eye className="w-4 h-4 mr-1.5" />
+              Ver respostas
+            </Button>
+          ) : (
+            <Button size="sm" variant="outline" onClick={onCopy}>
+              <Copy className="w-4 h-4 mr-1.5" />
+              Copiar link
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
