@@ -1,6 +1,8 @@
 import { ReactNode } from "react";
 import { Navigate } from "react-router-dom";
 import { usePortal } from "@/contexts/PortalContext";
+import SessionTimeoutGuard from "@/components/security/SessionTimeoutGuard";
+import { PORTAL_SESSION_POLICY } from "@/lib/security/session-policy";
 
 interface PortalGuardProps {
   children: ReactNode;
@@ -60,7 +62,17 @@ const PortalGuard = ({ children }: PortalGuardProps) => {
     );
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      <SessionTimeoutGuard
+        policy={PORTAL_SESSION_POLICY}
+        enabled={!!user}
+        serverSessionStartedAt={user.last_sign_in_at}
+        redirectTo="/portal/login"
+      />
+    </>
+  );
 };
 
 export default PortalGuard;

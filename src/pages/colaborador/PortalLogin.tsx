@@ -8,6 +8,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { z } from "zod";
 import { Eye, EyeSlash as EyeOff, ArrowLeft, CircleNotch as Loader2 } from "@phosphor-icons/react";
 import { BrandLogo } from "@/components/branding/BrandLogo";
+import {
+  clearSessionClocks,
+  consumeSessionEnded,
+  SESSION_END_MESSAGES,
+} from "@/lib/security/session-policy";
 const loginSchema = z.object({
   email: z.string().email("Email inválido"),
   password: z.string().min(1, "Senha é obrigatória"),
@@ -20,6 +25,17 @@ const PortalLogin = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  // Avisa quando a sessão anterior caiu por inatividade/tempo máximo.
+  useEffect(() => {
+    const reason = consumeSessionEnded();
+    if (reason) {
+      toast({
+        title: "Sessão encerrada",
+        description: SESSION_END_MESSAGES[reason],
+      });
+    }
+  }, [toast]);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -92,6 +108,10 @@ const PortalLogin = () => {
         }
         return;
       }
+
+      // Relógios de sessão zerados: a nova sessão não herda a inatividade
+      // acumulada pela anterior.
+      clearSessionClocks();
 
       const ok = await checkAndRedirect(data.user?.id ?? "");
 

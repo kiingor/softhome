@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
+import { broadcastSessionEnd, clearSessionClocks } from "@/lib/security/session-policy";
 
 // Alinhado ao enum app_role do banco (+ "admin", que não existe no enum mas é
 // aceito em várias checagens legadas do front). "diretoria" aprova a folha em
@@ -292,6 +293,9 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({ children }
   };
 
   const signOut = async () => {
+    clearSessionClocks();
+    // Derruba também as outras abas abertas (inclusive a do portal).
+    broadcastSessionEnd("manual");
     await supabase.auth.signOut();
     resetState();
   };

@@ -8,6 +8,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { z } from "zod";
 import { Eye, EyeSlash as EyeOff } from "@phosphor-icons/react";
 import { BrandLogo } from "@/components/branding/BrandLogo";
+import {
+  clearSessionClocks,
+  consumeSessionEnded,
+  SESSION_END_MESSAGES,
+} from "@/lib/security/session-policy";
 const loginSchema = z.object({
   email: z.string().email("Email inválido"),
   password: z.string().min(1, "Senha é obrigatória"),
@@ -20,6 +25,18 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  // Sessão derrubada por inatividade/tempo máximo deixa uma marca — avisamos
+  // aqui pro usuário não achar que o sistema simplesmente o expulsou.
+  useEffect(() => {
+    const reason = consumeSessionEnded();
+    if (reason) {
+      toast({
+        title: "Sessão encerrada",
+        description: SESSION_END_MESSAGES[reason],
+      });
+    }
+  }, [toast]);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -72,6 +89,10 @@ const Login = () => {
         }
         return;
       }
+
+      // Relógios de sessão zerados: a nova sessão não pode herdar a
+      // inatividade acumulada pela anterior.
+      clearSessionClocks();
 
       toast({
         title: "Login realizado! 🎉",

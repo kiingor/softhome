@@ -46,7 +46,8 @@ import {
 import type { PayrollPeriodWithStats } from "../types";
 import type { OpenPeriodValues } from "../schemas/payroll.schema";
 
-export default function PeriodosPage() {
+import PermissionGuard from "@/components/dashboard/PermissionGuard";
+function PeriodosPageContent() {
   const [isOpenDialogOpen, setIsOpenDialogOpen] = useState(false);
   const [deletingPeriod, setDeletingPeriod] = useState<PayrollPeriodWithStats | null>(null);
   const [repopulatingPeriod, setRepopulatingPeriod] = useState<PayrollPeriodWithStats | null>(null);
@@ -237,5 +238,15 @@ export default function PeriodosPage() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+// A rota /dashboard/folha não tinha gate nenhum: bastava digitar a URL.
+// O módulo 'folha' agora barra quem não tem permissão de visualizar.
+export default function PeriodosPage() {
+  return (
+    <PermissionGuard module="folha">
+      <PeriodosPageContent />
+    </PermissionGuard>
   );
 }

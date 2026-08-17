@@ -1,6 +1,7 @@
 import { useState, useEffect, createContext, useContext, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
+import { broadcastSessionEnd, clearSessionClocks } from "@/lib/security/session-policy";
 
 export type AppRole = "admin" | "admin_gc" | "gestor_gc" | "gestor" | "contador" | "colaborador";
 
@@ -109,6 +110,9 @@ export const PortalProvider: React.FC<PortalProviderProps> = ({ children }) => {
   };
 
   const signOut = async () => {
+    clearSessionClocks();
+    // Derruba também as outras abas abertas (inclusive a do dashboard).
+    broadcastSessionEnd("manual");
     try {
       await supabase.auth.signOut({ scope: "local" });
     } catch (error) {

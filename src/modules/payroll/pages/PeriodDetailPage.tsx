@@ -120,7 +120,8 @@ import type { NewEntryValues } from "../schemas/payroll.schema";
 import { exportPayrollExcel } from "../services/payroll-export.service";
 import { formatCurrency } from "@/lib/formatters";
 
-export default function PeriodDetailPage() {
+import PermissionGuard from "@/components/dashboard/PermissionGuard";
+function PeriodDetailPageContent() {
   const { id } = useParams<{ id: string }>();
   const { currentCompany, hasAnyRole } = useDashboard();
   const canManage = hasAnyRole(["admin_gc", "gestor_gc"]);
@@ -1743,3 +1744,12 @@ function ReviewObsButton({
   );
 }
 
+// A rota /dashboard/folha/:id não tinha gate nenhum: bastava digitar a URL.
+// O módulo 'folha' agora barra quem não tem permissão de visualizar.
+export default function PeriodDetailPage() {
+  return (
+    <PermissionGuard module="folha">
+      <PeriodDetailPageContent />
+    </PermissionGuard>
+  );
+}

@@ -5,9 +5,23 @@ import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import GlobalSearch from "@/components/GlobalSearch";
 import { BrandLogo } from "@/components/branding/BrandLogo";
+import SessionTimeoutGuard from "@/components/security/SessionTimeoutGuard";
+import { DASHBOARD_SESSION_POLICY } from "@/lib/security/session-policy";
+
+// Papéis que enxergam o painel interno. `colaborador` não está aqui de
+// propósito: o lugar dele é o Portal.
+const DASHBOARD_ROLES = [
+  "admin",
+  "admin_gc",
+  "rh",
+  "gestor_gc",
+  "gestor",
+  "contador",
+  "diretoria",
+] as const;
 
 const DashboardLayoutContent = () => {
-  const { user, isLoading } = useDashboard();
+  const { user, roles, isLoading } = useDashboard();
   const [searchOpen, setSearchOpen] = useState(false);
 
   useEffect(() => {
@@ -37,6 +51,22 @@ const DashboardLayoutContent = () => {
     return <Navigate to="/login" replace />;
   }
 
+  // Um colaborador do Portal que digitasse /dashboard na URL entrava no painel
+  // interno: o guard só checava se havia sessão. A RLS impedia que ele visse
+  // dados, mas a navegação, os nomes de módulo e a estrutura ficavam expostos.
+  //
+  // A checagem é deliberadamente estreita — só barra quem TEM o papel
+  // `colaborador` e nenhum papel de painel. Quem tira autoridade só de
+  // `user_permissions` (sem linha em `user_roles`) continua entrando, senão
+  // esse guard viraria um lockout.
+  const isPortalOnly =
+    roles.includes("colaborador") &&
+    !roles.some((role) => (DASHBOARD_ROLES as readonly string[]).includes(role));
+
+  if (isPortalOnly) {
+    return <Navigate to="/colaborador" replace />;
+  }
+
   return (
     <div className="h-screen flex w-full bg-background overflow-hidden">
       <DashboardSidebar />
@@ -47,6 +77,12 @@ const DashboardLayoutContent = () => {
         </main>
       </div>
       <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
+      <SessionTimeoutGuard
+        policy={DASHBOARD_SESSION_POLICY}
+        enabled={!!user}
+        serverSessionStartedAt={user.last_sign_in_at}
+        redirectTo="/login"
+      />
     </div>
   );
 };

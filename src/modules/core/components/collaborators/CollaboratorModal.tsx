@@ -62,6 +62,12 @@ import { CollaboratorUniformTab } from "./tabs/CollaboratorUniformTab";
 import { CollaboratorMedicalCertsTab } from "./tabs/CollaboratorMedicalCertsTab";
 import { CollaboratorAlimonyTab } from "./tabs/CollaboratorAlimonyTab";
 
+import {
+  MIN_PASSWORD_LENGTH,
+  PASSWORD_HINT,
+  PASSWORD_TOO_SHORT,
+  isPasswordLongEnough,
+} from "@/lib/security/password-policy";
 // Field configs das sub-abas (Afastamentos, Absenteísmos, Férias, 13º, Planos, PDVs)
 const AFASTAMENTO_FIELDS: FieldDef[] = [
   { name: "reason_code", label: "Código do motivo", type: "number", placeholder: "ex: 1" },
@@ -1004,8 +1010,8 @@ const CollaboratorModal = ({
       }
     }
 
-    if (formData.password && formData.password.length < 6) {
-      toast.error("A senha deve ter no mínimo 6 caracteres");
+    if (formData.password && !isPasswordLongEnough(formData.password)) {
+      toast.error(PASSWORD_TOO_SHORT);
       return;
     }
 
@@ -2082,8 +2088,8 @@ const CollaboratorModal = ({
                         type="password"
                         value={formData.password}
                         onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
-                        placeholder="Mínimo 6 caracteres"
-                        minLength={6}
+                        placeholder={PASSWORD_HINT}
+                        minLength={MIN_PASSWORD_LENGTH}
                       />
                       <p className="text-xs text-muted-foreground">
                         Se preenchida, o colaborador poderá acessar o Portal do Colaborador com este email e senha.

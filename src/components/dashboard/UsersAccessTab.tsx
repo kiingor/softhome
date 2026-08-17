@@ -49,6 +49,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+import {
+  MIN_PASSWORD_LENGTH,
+  PASSWORD_HINT,
+  PASSWORD_TOO_SHORT,
+  isPasswordLongEnough,
+} from "@/lib/security/password-policy";
 type DashboardRole =
   | "admin_gc"
   | "diretoria"
@@ -204,8 +210,10 @@ export const UsersAccessTab = () => {
           body: {
             recipientEmail: data.email,
             recipientName: data.full_name,
-            recipientPassword: data.password,
+            // Senha não trafega pro e-mail: a function só avisa que o acesso
+            // foi liberado e manda pra tela de login.
             companyName: currentCompany!.company_name,
+            company_id: currentCompany!.id,
             inviterName: user?.email || "Administrador",
           },
         });
@@ -219,7 +227,7 @@ export const UsersAccessTab = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["company-users"] });
-      toast.success("Usuário criado com sucesso! Credenciais enviadas por email.");
+      toast.success("Usuário criado. Avisamos por email — combine a senha por um canal seguro.");
       setIsInviteOpen(false);
       setInviteForm({ email: "", full_name: "", password: "", confirmPassword: "" });
     },
@@ -260,8 +268,8 @@ export const UsersAccessTab = () => {
         body: {
           recipientEmail: data.email,
           recipientName: data.fullName,
-          recipientPassword: data.newPassword,
           companyName: currentCompany!.company_name,
+          company_id: currentCompany!.id,
           inviterName: user?.email || "Administrador",
         },
       });
@@ -272,7 +280,7 @@ export const UsersAccessTab = () => {
       }
     },
     onSuccess: () => {
-      toast.success("Dados de acesso reenviados com sucesso!");
+      toast.success("Senha redefinida. Avisamos o colaborador por email.");
       setResendUser(null);
       setResendPassword("");
       setResendConfirmPassword("");
@@ -505,8 +513,8 @@ export const UsersAccessTab = () => {
       toast.error("As senhas não coincidem.");
       return;
     }
-    if (inviteForm.password.length < 6) {
-      toast.error("A senha deve ter pelo menos 6 caracteres.");
+    if (!isPasswordLongEnough(inviteForm.password)) {
+      toast.error(PASSWORD_TOO_SHORT);
       return;
     }
     inviteMutation.mutate({
@@ -525,8 +533,8 @@ export const UsersAccessTab = () => {
       toast.error("As senhas não coincidem.");
       return;
     }
-    if (resendPassword.length < 6) {
-      toast.error("A senha deve ter pelo menos 6 caracteres.");
+    if (!isPasswordLongEnough(resendPassword)) {
+      toast.error(PASSWORD_TOO_SHORT);
       return;
     }
     resendMutation.mutate({
