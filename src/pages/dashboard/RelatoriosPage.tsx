@@ -346,7 +346,6 @@ const RelatoriosPage = () => {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Relatórios</h1>
             <p className="text-muted-foreground">
               Visualize e exporte relatórios da folha de pagamento
             </p>
@@ -439,31 +438,31 @@ const RelatoriosPage = () => {
           <Card>
             <CardContent className="p-4">
               <p className="text-sm text-muted-foreground">Proventos</p>
-              <p className="text-xl font-bold text-green-600">{formatCurrency(grandTotals.earnings)}</p>
+              <p className="mono text-xl font-bold text-success">{formatCurrency(grandTotals.earnings)}</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4">
               <p className="text-sm text-muted-foreground">Descontos</p>
-              <p className="text-xl font-bold text-destructive">{formatCurrency(grandTotals.deductions)}</p>
+              <p className="mono text-xl font-bold text-destructive">{formatCurrency(grandTotals.deductions)}</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4">
               <p className="text-sm text-muted-foreground">Líquido</p>
-              <p className="text-xl font-bold text-foreground">{formatCurrency(grandTotals.net)}</p>
+              <p className="mono text-xl font-bold text-foreground">{formatCurrency(grandTotals.net)}</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4">
               <p className="text-sm text-muted-foreground">FGTS</p>
-              <p className="text-xl font-bold text-foreground">{formatCurrency(grandTotals.fgts)}</p>
+              <p className="mono text-xl font-bold text-foreground">{formatCurrency(grandTotals.fgts)}</p>
             </CardContent>
           </Card>
           <Card className="bg-primary/5 border-primary/20">
             <CardContent className="p-4">
               <p className="text-sm text-primary font-medium">Custo Total Empresa</p>
-              <p className="text-xl font-bold text-primary">{formatCurrency(grandTotals.companyCost)}</p>
+              <p className="mono text-xl font-bold text-primary">{formatCurrency(grandTotals.companyCost)}</p>
             </CardContent>
           </Card>
         </div>
@@ -547,7 +546,7 @@ const RelatoriosPage = () => {
                                   ? "text-muted-foreground"
                                   : deductionTypes.includes(entry.type)
                                   ? "text-destructive"
-                                  : "text-green-600"
+                                  : "text-success"
                               }`}>
                                 {/* FGTS é custo da empresa — sem sinal de desconto */}
                                 {entry.type === "fgts" ? "" : deductionTypes.includes(entry.type) ? "- " : "+ "}
@@ -558,21 +557,21 @@ const RelatoriosPage = () => {
                         </TableBody>
                         <TableFooter>
                           <TableRow>
-                            <TableCell colSpan={3} className="text-right font-medium text-green-600">Proventos:</TableCell>
-                            <TableCell className="text-right font-bold text-green-600">{formatCurrency(collabTotals.earnings)}</TableCell>
+                            <TableCell colSpan={3} className="text-right font-medium text-success">Proventos:</TableCell>
+                            <TableCell className="mono text-right font-bold text-success">{formatCurrency(collabTotals.earnings)}</TableCell>
                           </TableRow>
                           <TableRow>
                             <TableCell colSpan={3} className="text-right font-medium text-destructive">Descontos:</TableCell>
-                            <TableCell className="text-right font-bold text-destructive">{formatCurrency(collabTotals.deductions)}</TableCell>
+                            <TableCell className="mono text-right font-bold text-destructive">{formatCurrency(collabTotals.deductions)}</TableCell>
                           </TableRow>
                           <TableRow>
                             <TableCell colSpan={3} className="text-right font-medium">Líquido:</TableCell>
-                            <TableCell className="text-right font-bold text-primary">{formatCurrency(collabTotals.net)}</TableCell>
+                            <TableCell className="mono text-right font-bold text-primary">{formatCurrency(collabTotals.net)}</TableCell>
                           </TableRow>
                           {collabTotals.fgts > 0 && (
                             <TableRow>
                               <TableCell colSpan={3} className="text-right font-medium text-muted-foreground">FGTS (empresa):</TableCell>
-                              <TableCell className="text-right font-bold text-muted-foreground">{formatCurrency(collabTotals.fgts)}</TableCell>
+                              <TableCell className="mono text-right font-bold text-muted-foreground">{formatCurrency(collabTotals.fgts)}</TableCell>
                             </TableRow>
                           )}
                         </TableFooter>
@@ -598,19 +597,19 @@ const RelatoriosPage = () => {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Proventos</p>
-                  <p className="text-xl font-bold text-green-600">{formatCurrency(grandTotals.earnings)}</p>
+                  <p className="mono text-xl font-bold text-success">{formatCurrency(grandTotals.earnings)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Descontos</p>
-                  <p className="text-xl font-bold text-destructive">{formatCurrency(grandTotals.deductions)}</p>
+                  <p className="mono text-xl font-bold text-destructive">{formatCurrency(grandTotals.deductions)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Líquido Total</p>
-                  <p className="text-xl font-bold">{formatCurrency(grandTotals.net)}</p>
+                  <p className="mono text-xl font-bold">{formatCurrency(grandTotals.net)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Custo Total Empresa</p>
-                  <p className="text-xl font-bold text-primary">{formatCurrency(grandTotals.companyCost)}</p>
+                  <p className="mono text-xl font-bold text-primary">{formatCurrency(grandTotals.companyCost)}</p>
                 </div>
               </div>
             </CardContent>

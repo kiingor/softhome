@@ -91,7 +91,7 @@ export function TestStageView({ token, onAdvancedToStage2 }: TestStageViewProps)
   }
   if (error) {
     return (
-      <div className="text-center py-12 text-sm text-rose-600">{error}</div>
+      <div className="text-center py-12 text-sm text-destructive">{error}</div>
     );
   }
 
@@ -205,11 +205,11 @@ function TestCard({
   const Icon = categoryIcon(test.test.category);
 
   return (
-    <Card className={isCompleted ? "border-emerald-200 bg-emerald-50/30 dark:bg-emerald-950/10" : ""}>
+    <Card className={isCompleted ? "border-success/25 bg-success/15 dark:bg-success/15" : ""}>
       <CardContent className="p-4 flex items-start gap-3">
         <div
           className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-            isCompleted ? "bg-emerald-100 text-emerald-700" : "bg-primary/10 text-primary"
+            isCompleted ? "bg-success/10 text-success" : "bg-primary/10 text-primary"
           }`}
         >
           {isCompleted ? (
@@ -222,7 +222,7 @@ function TestCard({
           <div className="flex items-center gap-2 flex-wrap">
             <h3 className="font-semibold text-foreground">{test.test.name}</h3>
             {isCompleted && (
-              <Badge className="text-[10px] bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-0">
+              <Badge className="text-[10px] bg-success/10 text-success hover:bg-success/15 border-0">
                 Concluído
               </Badge>
             )}

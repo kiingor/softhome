@@ -61,8 +61,8 @@ export function AnticipateDialog({ open, onOpenChange, entry, year }: Props) {
       <DialogContent>
         <DialogHeader>
           <div className="flex items-center gap-3 mb-1">
-            <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
-              <FastForward className="w-5 h-5 text-emerald-700" weight="duotone" />
+            <div className="w-10 h-10 rounded-xl bg-success/10 flex items-center justify-center">
+              <FastForward className="w-5 h-5 text-success" weight="duotone" />
             </div>
             <DialogTitle className="text-lg">Antecipar 13º</DialogTitle>
           </div>
@@ -77,7 +77,7 @@ export function AnticipateDialog({ open, onOpenChange, entry, year }: Props) {
           <div className="rounded-lg border bg-muted/30 p-3 text-sm space-y-1">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Valor a antecipar</span>
-              <span className="font-semibold text-emerald-700">
+              <span className="mono font-semibold text-success">
                 {formatCurrency(entry.gross_value)}
               </span>
             </div>

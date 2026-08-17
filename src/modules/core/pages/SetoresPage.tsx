@@ -220,7 +220,6 @@ export default function SetoresPage() {
       <div className="space-y-6 page-content">
         <div className="flex items-center justify-between animate-fade-in">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Setores</h1>
             <p className="text-muted-foreground">
               Gerencie os setores/departamentos da empresa
             </p>

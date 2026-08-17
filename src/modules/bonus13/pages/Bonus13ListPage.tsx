@@ -27,9 +27,9 @@ import { OpenBonusPeriodDialog } from "../components/OpenBonusPeriodDialog";
 import { BONUS_STATUS_LABELS } from "../lib/bonus-types";
 
 const STATUS_COLORS: Record<string, string> = {
-  aberto: "bg-blue-100 text-blue-700",
-  pagamento: "bg-amber-100 text-amber-700",
-  concluido: "bg-emerald-100 text-emerald-700",
+  aberto: "bg-info/10 text-info",
+  pagamento: "bg-warning/10 text-warning",
+  concluido: "bg-success/10 text-success",
 };
 
 export default function Bonus13ListPage() {
@@ -60,7 +60,6 @@ export default function Bonus13ListPage() {
               <Confetti className="w-6 h-6 text-primary" weight="duotone" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">13º Salário</h1>
               <p className="text-muted-foreground">
                 Campanhas anuais — calcula proporcional, controla parcelas e avisa
                 o colaborador.
@@ -118,7 +117,7 @@ export default function Bonus13ListPage() {
                       <TableCell>
                         <Badge
                           variant="outline"
-                          className={`font-normal border-0 ${STATUS_COLORS[p.status] ?? ""}`}
+                          className={`border-0 ${STATUS_COLORS[p.status] ?? ""}`}
                         >
                           {BONUS_STATUS_LABELS[p.status]}
                         </Badge>

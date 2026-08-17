@@ -96,7 +96,7 @@ export function DiscChart({ counts }: DiscChartProps) {
       {/* Análise interpretativa */}
       <div className="space-y-3">
         <div>
-          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-semibold uppercase tracking-wide">
+          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-success/10 text-success text-[10px] font-semibold uppercase tracking-wide">
             <CheckCircle className="w-3 h-3" weight="fill" />
             Análise Concluída
           </div>
@@ -116,7 +116,7 @@ export function DiscChart({ counts }: DiscChartProps) {
           <ul className="space-y-2 text-sm">
             {analysis.strengths.map((s, i) => (
               <li key={i} className="flex items-start gap-2">
-                <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" weight="fill" />
+                <CheckCircle className="w-4 h-4 text-success shrink-0 mt-0.5" weight="fill" />
                 <span>{s}</span>
               </li>
             ))}
@@ -125,13 +125,13 @@ export function DiscChart({ counts }: DiscChartProps) {
 
         <div className="rounded-xl border border-border bg-card p-5">
           <h3 className="font-display text-base mb-3 flex items-center gap-2">
-            <Warning className="w-4 h-4 text-amber-600" weight="duotone" />
+            <Warning className="w-4 h-4 text-warning" weight="duotone" />
             Pontos de atenção
           </h3>
           <ul className="space-y-2 text-sm">
             {analysis.watchouts.map((s, i) => (
               <li key={i} className="flex items-start gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-600 shrink-0 mt-2" />
+                <span className="w-1.5 h-1.5 rounded-full bg-warning shrink-0 mt-2" />
                 <span>{s}</span>
               </li>
             ))}
@@ -162,8 +162,8 @@ interface BigFiveChartProps {
 
 const LEVEL_BADGE_COLORS = {
   Baixo: "bg-slate-100 text-slate-700",
-  Médio: "bg-blue-100 text-blue-700",
-  Alto: "bg-emerald-100 text-emerald-700",
+  Médio: "bg-info/10 text-info",
+  Alto: "bg-success/10 text-success",
 };
 
 export function BigFiveChart({ scores }: BigFiveChartProps) {

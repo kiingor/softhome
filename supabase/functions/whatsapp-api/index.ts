@@ -43,6 +43,11 @@ Deno.serve(async (req) => {
   const EVOLUTION_API_KEY = Deno.env.get("EVOLUTION_API_KEY");
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+  // A Evolution chama o webhook de fora, então a URL precisa ser a pública.
+  // No self-hosted SUPABASE_URL é o gateway interno (http://api-gw:8000), que a
+  // Evolution não alcança; na Supabase Cloud não existe SUPABASE_PUBLIC_URL e o
+  // fallback devolve o comportamento atual.
+  const SUPABASE_PUBLIC_URL = Deno.env.get("SUPABASE_PUBLIC_URL") || SUPABASE_URL;
 
   if (!EVOLUTION_API_URL || !EVOLUTION_API_KEY) {
     return new Response(
@@ -80,7 +85,7 @@ Deno.serve(async (req) => {
         const instanceName = `meurh_${company_id.replace(/-/g, "").slice(0, 16)}`;
         
         // Get the webhook URL
-        const functionUrl = `${SUPABASE_URL}/functions/v1/whatsapp-webhook`;
+        const functionUrl = `${SUPABASE_PUBLIC_URL}/functions/v1/whatsapp-webhook`;
 
         const res = await fetch(`${baseUrl}/instance/create`, {
           method: "POST",

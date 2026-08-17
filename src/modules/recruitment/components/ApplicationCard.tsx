@@ -76,10 +76,10 @@ export function ApplicationCard({
               variant="outline"
               className={
                 scoreNum >= 80
-                  ? "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300 border-0 text-xs"
+                  ? "bg-primary/10 text-primary dark:bg-primary/15 dark:text-primary border-0 text-xs"
                   : scoreNum >= 50
-                  ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border-0 text-xs"
-                  : "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300 border-0 text-xs"
+                  ? "bg-warning/10 text-warning dark:bg-warning/15 dark:text-warning border-0 text-xs"
+                  : "bg-destructive/10 text-destructive dark:bg-destructive/15 dark:text-destructive border-0 text-xs"
               }
             >
               {scoreNum.toFixed(0)}
@@ -121,7 +121,7 @@ export function ApplicationCard({
         )}
 
         {application.stage === "rejected" && application.rejected_reason && (
-          <p className="text-xs text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-900/20 p-1.5 rounded">
+          <p className="text-xs text-primary dark:text-primary bg-primary/5 dark:bg-primary/15 p-1.5 rounded">
             {application.rejected_reason}
           </p>
         )}
@@ -169,7 +169,7 @@ export function ApplicationCard({
               {application.stage === "accepted" && onStartAdmission && (
                 <>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={onStartAdmission} className="text-orange-700 dark:text-orange-300">
+                  <DropdownMenuItem onClick={onStartAdmission} className="text-primary dark:text-primary">
                     <Trophy className="w-4 h-4 mr-2" />
                     Iniciar admissão
                   </DropdownMenuItem>

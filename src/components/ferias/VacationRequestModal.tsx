@@ -278,7 +278,7 @@ const VacationRequestModal = ({ open, onOpenChange, preSelectedCollaboratorId }:
                   Carregando períodos...
                 </div>
               ) : availablePeriods.length === 0 ? (
-                <div className="flex items-center gap-2 text-sm text-yellow-600 bg-yellow-50 p-3 rounded-lg">
+                <div className="flex items-center gap-2 text-sm text-warning bg-warning/5 p-3 rounded-lg">
                   <AlertTriangle className="w-4 h-4" />
                   Nenhum período aquisitivo disponível. Verifique a data de admissão.
                 </div>
@@ -353,7 +353,7 @@ const VacationRequestModal = ({ open, onOpenChange, preSelectedCollaboratorId }:
                   <HoverCardTrigger asChild>
                     <button
                       type="button"
-                      className="inline-flex items-center justify-center w-5 h-5 rounded-full text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900/30 transition"
+                      className="inline-flex items-center justify-center w-5 h-5 rounded-full text-warning hover:bg-warning/15 dark:hover:bg-warning/15 transition"
                       aria-label="Como o cálculo é feito"
                     >
                       <Info className="w-4 h-4" weight="fill" />
@@ -404,8 +404,8 @@ const VacationRequestModal = ({ open, onOpenChange, preSelectedCollaboratorId }:
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* Proventos */}
-                <div className="rounded border bg-emerald-50/40 dark:bg-emerald-950/10 p-3 space-y-1.5">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+                <div className="rounded border bg-success/15 dark:bg-success/15 p-3 space-y-1.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-success dark:text-success">
                     Proventos
                   </p>
                   <Row
@@ -444,7 +444,7 @@ const VacationRequestModal = ({ open, onOpenChange, preSelectedCollaboratorId }:
                       value={formatCurrency(vacationCalc.valor_bonificacao)}
                     />
                   )}
-                  <div className="border-t border-emerald-200 dark:border-emerald-900/40 pt-1.5 mt-1.5">
+                  <div className="border-t border-success/25 dark:border-success/25 pt-1.5 mt-1.5">
                     <Row
                       label="Bruto"
                       value={formatCurrency(vacationCalc.bruto)}
@@ -454,8 +454,8 @@ const VacationRequestModal = ({ open, onOpenChange, preSelectedCollaboratorId }:
                 </div>
 
                 {/* Descontos + Líquido */}
-                <div className="rounded border bg-rose-50/40 dark:bg-rose-950/10 p-3 space-y-1.5">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-rose-700 dark:text-rose-400">
+                <div className="rounded border bg-destructive/15 dark:bg-destructive/15 p-3 space-y-1.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-destructive dark:text-destructive">
                     Descontos
                   </p>
                   <Row
@@ -468,12 +468,12 @@ const VacationRequestModal = ({ open, onOpenChange, preSelectedCollaboratorId }:
                     sub={`base R$ ${vacationCalc.base_irrf.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
                     value={formatCurrency(vacationCalc.irrf)}
                   />
-                  <div className="border-t border-rose-200 dark:border-rose-900/40 pt-1.5 mt-1.5">
+                  <div className="border-t border-destructive/25 dark:border-destructive/25 pt-1.5 mt-1.5">
                     <Row
                       label="Líquido"
                       value={formatCurrency(vacationCalc.liquido)}
                       bold
-                      className="text-emerald-700 dark:text-emerald-400"
+                      className="text-success dark:text-success"
                     />
                   </div>
                 </div>
@@ -488,7 +488,7 @@ const VacationRequestModal = ({ open, onOpenChange, preSelectedCollaboratorId }:
           )}
 
           {selectedCollab && !vacationCalc && daysCount > 0 && !Number(selectedCollab.current_salary ?? 0) && (
-            <div className="bg-yellow-50 dark:bg-yellow-950/30 rounded-lg p-3 text-xs text-yellow-800 dark:text-yellow-200">
+            <div className="bg-warning/5 dark:bg-warning/15 rounded-lg p-3 text-xs text-warning dark:text-warning">
               ⚠️ Colaborador sem salário cadastrado. O cálculo das férias só aparece quando o salário base estiver preenchido no cadastro.
             </div>
           )}

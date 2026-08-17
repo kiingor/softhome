@@ -11,7 +11,7 @@ export function StageBadge({ stage, className }: StageBadgeProps) {
   return (
     <Badge
       variant="outline"
-      className={cn("font-normal border-0", STAGE_COLORS[stage], className)}
+      className={cn("border-0", STAGE_COLORS[stage], className)}
     >
       {STAGE_LABELS[stage]}
     </Badge>

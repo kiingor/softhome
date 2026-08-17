@@ -62,7 +62,7 @@ export function PayrollValidationButton({ companyId, referenceMonth, canManage }
         {pct != null && (
           <Badge
             variant="secondary"
-            className={`ml-2 ${pct === 100 ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300" : ""}`}
+            className={`ml-2 ${pct === 100 ? "bg-success/10 text-success dark:bg-success/15 dark:text-success" : ""}`}
           >
             {pct}%
           </Badge>

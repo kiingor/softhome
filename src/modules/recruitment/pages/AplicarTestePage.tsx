@@ -201,7 +201,7 @@ export default function AplicarTestePage() {
               </p>
             </div>
             {allDone ? (
-              <Badge className="text-sm bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 border-0">
+              <Badge className="text-sm bg-success/10 text-success dark:bg-success/15 dark:text-success border-0">
                 <CheckCircle className="w-4 h-4 mr-1.5" />
                 Tudo enviado
               </Badge>
@@ -214,9 +214,9 @@ export default function AplicarTestePage() {
         </Card>
 
         {allDone && (
-          <Card className="mb-4 border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/50 dark:bg-emerald-900/10">
+          <Card className="mb-4 border-success/25 dark:border-success/25 bg-success/15 dark:bg-success/15">
             <CardContent className="p-6 text-center">
-              <CheckCircle className="w-12 h-12 text-emerald-600 dark:text-emerald-400 mx-auto mb-3" />
+              <CheckCircle className="w-12 h-12 text-success dark:text-success mx-auto mb-3" />
               <h2 className="text-lg font-bold text-foreground mb-1">
                 Tudo certo, valeu! 🎉
               </h2>
@@ -244,18 +244,18 @@ export default function AplicarTestePage() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-medium text-foreground">{test.name}</p>
                       {test.category && (
-                        <Badge variant="outline" className="text-xs">
+                        <Badge variant="outline" >
                           {test.category}
                         </Badge>
                       )}
                       {isDone && (
-                        <Badge className="text-xs bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 border-0">
+                        <Badge className="bg-success/10 text-success dark:bg-success/15 dark:text-success border-0">
                           <CheckCircle className="w-3 h-3 mr-1" />
                           Concluído
                         </Badge>
                       )}
                       {isInProgress && (
-                        <Badge variant="outline" className="text-xs">
+                        <Badge variant="outline" >
                           <Clock className="w-3 h-3 mr-1" />
                           Em andamento
                         </Badge>

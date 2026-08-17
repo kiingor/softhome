@@ -113,7 +113,6 @@ export default function FeedbackColaboradorPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Feedback Colaborador</h1>
           <p className="text-muted-foreground">
             Acompanhe os feedbacks do time e registre objetivos por colaborador.
           </p>

@@ -234,7 +234,6 @@ export default function EmpresasPage() {
       <div className="space-y-6 page-content">
         <div className="flex items-center justify-between animate-fade-in">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Empresas</h1>
             <p className="text-muted-foreground">
               Gerencie as empresas/filiais do grupo
             </p>

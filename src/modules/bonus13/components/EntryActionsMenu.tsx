@@ -73,11 +73,11 @@ export function EntryActionsMenu({
           <>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => onAnticipate(entry)}>
-              <FastForward className="w-4 h-4 mr-2 text-emerald-600" />
+              <FastForward className="w-4 h-4 mr-2 text-success" />
               Antecipar
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => onRequestIndividual(entry)}>
-              <UserCircle className="w-4 h-4 mr-2 text-amber-600" />
+              <UserCircle className="w-4 h-4 mr-2 text-warning" />
               Solicitar individual
             </DropdownMenuItem>
           </>

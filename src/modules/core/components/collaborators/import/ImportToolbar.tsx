@@ -126,10 +126,10 @@ export function ImportToolbar({
       {/* Stats + Filter */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-4 text-sm">
-          <span className="flex items-center gap-1.5 text-emerald-700">
+          <span className="flex items-center gap-1.5 text-success">
             <CheckCircle className="w-4 h-4" /> {stats.ok} válidos
           </span>
-          <span className="flex items-center gap-1.5 text-amber-600">
+          <span className="flex items-center gap-1.5 text-warning">
             <Warning className="w-4 h-4" /> {stats.warning} com aviso
           </span>
           <span className="flex items-center gap-1.5 text-destructive">

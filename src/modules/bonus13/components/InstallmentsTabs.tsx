@@ -202,7 +202,7 @@ function InstallmentList({
             </div>
             <div className="flex items-center gap-2 text-sm">
               <CheckCircle
-                className={`w-4 h-4 ${paid === total ? "text-emerald-600" : "text-muted-foreground/40"}`}
+                className={`w-4 h-4 ${paid === total ? "text-success" : "text-muted-foreground/40"}`}
                 weight="duotone"
               />
               <span className="tabular-nums font-medium">{Math.round(pct)}%</span>
@@ -240,7 +240,7 @@ function InstallmentList({
                     {entry?.collaborator.name.toLowerCase() ?? "—"}
                   </div>
                   {p.paid_at && (
-                    <div className="text-xs text-emerald-700">
+                    <div className="text-xs text-success">
                       Pago em {new Date(p.paid_at).toLocaleDateString("pt-BR")} às{" "}
                       {new Date(p.paid_at).toLocaleTimeString("pt-BR", {
                         hour: "2-digit",
@@ -256,7 +256,7 @@ function InstallmentList({
                       <HoverCardTrigger asChild>
                         <button
                           type="button"
-                          className="inline-flex items-center justify-center w-4 h-4 rounded-full text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900/30 transition focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                          className="inline-flex items-center justify-center w-4 h-4 rounded-full text-warning hover:bg-warning/15 dark:hover:bg-warning/15 transition focus:outline-none focus:ring-2 focus:ring-warning/30"
                           aria-label="Ver desconto"
                           onClick={(ev) => ev.stopPropagation()}
                         >
@@ -271,7 +271,7 @@ function InstallmentList({
                       </HoverCardContent>
                     </HoverCard>
                   )}
-                  <div className="text-sm font-semibold tabular-nums">
+                  <div className="mono text-sm font-semibold tabular-nums">
                     {formatCurrency(Number(p.amount))}
                   </div>
                 </div>
@@ -312,20 +312,20 @@ function PaymentBreakdown({
         <span className="font-mono">{formatCurrency(bruto / 2)}</span>
       </div>
       {inss > 0 && (
-        <div className="flex items-center justify-between gap-2 text-rose-700 dark:text-rose-300">
+        <div className="flex items-center justify-between gap-2 text-destructive dark:text-destructive">
           <span>− INSS (sobre {formatCurrency(bruto)})</span>
           <span className="font-mono">{formatCurrency(inss)}</span>
         </div>
       )}
       {irpf > 0 && (
-        <div className="flex items-center justify-between gap-2 text-rose-700 dark:text-rose-300">
+        <div className="flex items-center justify-between gap-2 text-destructive dark:text-destructive">
           <span>− IRPF (sobre {formatCurrency(bruto)})</span>
           <span className="font-mono">{formatCurrency(irpf)}</span>
         </div>
       )}
       <div className="border-t border-border pt-1.5 flex items-center justify-between gap-2 font-medium">
         <span>Líquido a pagar</span>
-        <span className="font-mono text-orange-700 dark:text-orange-300">
+        <span className="font-mono text-primary dark:text-primary">
           {formatCurrency(netAmount)}
         </span>
       </div>

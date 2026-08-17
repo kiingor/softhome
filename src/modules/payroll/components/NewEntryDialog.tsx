@@ -186,7 +186,7 @@ export function NewEntryDialog({
               <ToggleGroupItem
                 value="credit"
                 aria-label="Crédito (a receber)"
-                className="data-[state=on]:bg-emerald-50 data-[state=on]:text-emerald-700 data-[state=on]:border-emerald-300 dark:data-[state=on]:bg-emerald-950/40 dark:data-[state=on]:text-emerald-300 dark:data-[state=on]:border-emerald-900/60 border h-auto py-2.5 justify-start gap-2 px-3"
+                className="data-[state=on]:bg-success/5 data-[state=on]:text-success data-[state=on]:border-success/25 dark:data-[state=on]:bg-success/15 dark:data-[state=on]:text-success dark:data-[state=on]:border-success/25 border h-auto py-2.5 justify-start gap-2 px-3"
               >
                 <ArrowUp className="w-4 h-4" weight="bold" />
                 <div className="text-left leading-tight">
@@ -199,7 +199,7 @@ export function NewEntryDialog({
               <ToggleGroupItem
                 value="debit"
                 aria-label="Débito (a descontar)"
-                className="data-[state=on]:bg-rose-50 data-[state=on]:text-rose-700 data-[state=on]:border-rose-300 dark:data-[state=on]:bg-rose-950/40 dark:data-[state=on]:text-rose-300 dark:data-[state=on]:border-rose-900/60 border h-auto py-2.5 justify-start gap-2 px-3"
+                className="data-[state=on]:bg-destructive/5 data-[state=on]:text-destructive data-[state=on]:border-destructive/25 dark:data-[state=on]:bg-destructive/15 dark:data-[state=on]:text-destructive dark:data-[state=on]:border-destructive/25 border h-auto py-2.5 justify-start gap-2 px-3"
               >
                 <ArrowDown className="w-4 h-4" weight="bold" />
                 <div className="text-left leading-tight">

@@ -1,0 +1,36 @@
+# Publicação do frontend do DNA Softcom na VPS (substitui a Vercel).
+#
+# Sobe em docker compose e se pluga na rede overlay `network_public`, onde o
+# Traefik do padrão da casa faz o roteamento. O HTTPS é do Cloudflare (túnel),
+# por isso aqui só existe HTTP.
+#
+# Uso na VPS:
+#   cd /root/dna-app
+#   docker compose -f deploy/frontend.yml --env-file deploy/frontend.env up -d --build
+
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        # Embutidas no bundle em tempo de build — trocar exige rebuild.
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+        VITE_SUPABASE_PUBLISHABLE_KEY: ${VITE_SUPABASE_PUBLISHABLE_KEY}
+        VITE_SUPABASE_PROJECT_ID: ${VITE_SUPABASE_PROJECT_ID:-dnasoftcom}
+    image: dna-frontend:latest
+    container_name: dna-frontend
+    restart: unless-stopped
+    networks:
+      - network_public
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=network_public"
+      - "traefik.http.routers.dna-web.rule=Host(`${APP_HOST}`)"
+      - "traefik.http.routers.dna-web.entrypoints=web"
+      - "traefik.http.services.dna-web.loadbalancer.server.port=80"
+
+networks:
+  network_public:
+    external: true
+    name: network_public

@@ -72,7 +72,7 @@ export function ImportProgressDialog({
 
           {!isRunning && (
             <div className="flex items-center gap-3 text-sm">
-              <Badge className="bg-emerald-100 text-emerald-700 border-0">
+              <Badge className="bg-success/10 text-success border-0">
                 <CheckCircle className="w-3 h-3 mr-1" />
                 {okCount} OK
               </Badge>

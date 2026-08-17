@@ -358,7 +358,7 @@ export function AssignApplicationTestsDialog({
                             <div className="flex items-center gap-2">
                               <p className="text-sm font-medium">{t.name}</p>
                               {t.category && (
-                                <Badge variant="outline" className="text-xs">
+                                <Badge variant="outline" >
                                   {t.category}
                                 </Badge>
                               )}
@@ -399,7 +399,7 @@ export function AssignApplicationTestsDialog({
                 <Button
                   onClick={sendWhatsApp}
                   disabled={isSending || !candidatePhone}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                  className="bg-success hover:bg-success/15 text-white"
                   title={
                     !candidatePhone
                       ? "Candidato sem telefone cadastrado"
@@ -494,7 +494,7 @@ function AssignedRow({
           {def?.name ?? a.test_slug}
         </p>
         {done ? (
-          <Badge className="shrink-0 bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 border-0">
+          <Badge className="shrink-0 bg-success/10 text-success dark:bg-success/15 dark:text-success border-0">
             <CheckCircle className="w-3 h-3 mr-1" weight="fill" />
             {STATUS_LABELS[a.status]}
           </Badge>

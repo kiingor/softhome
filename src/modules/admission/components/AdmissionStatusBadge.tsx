@@ -16,7 +16,7 @@ export function AdmissionStatusBadge({ status, className }: AdmissionStatusBadge
     <Badge
       variant="outline"
       className={cn(
-        "font-normal border-0",
+        "border-0",
         JOURNEY_STATUS_COLORS[status],
         className
       )}

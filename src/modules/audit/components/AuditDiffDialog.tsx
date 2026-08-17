@@ -100,7 +100,7 @@ export function AuditDiffDialog({ row, onOpenChange }: Props) {
               )}
 
               {row.action === "delete" && (
-                <p className="text-sm text-rose-700 dark:text-rose-300">
+                <p className="text-sm text-destructive dark:text-destructive">
                   Registro removido. Veja o estado anterior em "Ver JSON
                   completo".
                 </p>
@@ -122,11 +122,11 @@ export function AuditDiffDialog({ row, onOpenChange }: Props) {
                         {columnLabel(row.table_name, d.column)}
                       </span>
                       <span className="col-span-2 break-words">
-                        <span className="text-rose-700 dark:text-rose-300 line-through decoration-rose-300/60">
+                        <span className="text-destructive dark:text-destructive line-through decoration-destructive">
                           {formatValue(d.column, d.before)}
                         </span>
                         <span className="text-muted-foreground mx-2">→</span>
-                        <span className="text-emerald-700 dark:text-emerald-300 font-medium">
+                        <span className="text-success dark:text-success font-medium">
                           {formatValue(d.column, d.after)}
                         </span>
                       </span>

@@ -178,14 +178,14 @@ export default function CollaboratorValidationTab({ collaboratorId, companyId, c
         {errors.length > 0 && (
           <div className="space-y-2">
             <h4 className="font-medium text-sm flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-500" />
+              <AlertTriangle className="w-4 h-4 text-warning" />
               Sinalizações do Colaborador
             </h4>
             <div className="space-y-2">
               {errors.map((err) => (
-                <div key={err.id} className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
+                <div key={err.id} className="p-3 rounded-lg bg-warning/5 dark:bg-warning/15 border border-warning/25 dark:border-warning/25">
                   <div className="flex items-center gap-2 mb-1">
-                    <Badge variant="outline" className="text-xs">{stepLabels[err.step] || `Step ${err.step}`}</Badge>
+                    <Badge variant="outline" >{stepLabels[err.step] || `Step ${err.step}`}</Badge>
                   </div>
                   <p className="text-sm">{err.description}</p>
                 </div>
@@ -219,7 +219,7 @@ export default function CollaboratorValidationTab({ collaboratorId, companyId, c
                       <Download className="w-3 h-3 mr-1" />Baixar
                     </Button>
                     {doc.status !== "aprovado" && (
-                      <Button variant="outline" size="sm" onClick={() => handleApproveDoc(doc.id)} className="text-green-600">
+                      <Button variant="outline" size="sm" onClick={() => handleApproveDoc(doc.id)} className="text-success">
                         <CheckCircle2 className="w-3 h-3 mr-1" />Aprovar
                       </Button>
                     )}

@@ -37,8 +37,8 @@ type Props = {
 };
 
 const SEVERITY_ICON = {
-  ok: { Icon: CheckCircle, className: "text-emerald-600" },
-  warning: { Icon: Warning, className: "text-amber-500" },
+  ok: { Icon: CheckCircle, className: "text-success" },
+  warning: { Icon: Warning, className: "text-warning" },
   error: { Icon: WarningCircle, className: "text-destructive" },
 } as const;
 
@@ -163,7 +163,7 @@ export function ImportTable({
                   </TableCell>
                   <TableCell className="text-center">
                     {row.benefit_ids.length > 0 ? (
-                      <Badge variant="secondary" className="text-xs">
+                      <Badge variant="secondary" >
                         {row.benefit_ids.length}
                       </Badge>
                     ) : (
