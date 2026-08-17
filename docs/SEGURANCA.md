@@ -219,7 +219,75 @@ no corpo; o lookup para de devolver `payroll_entries` e benefícios.
 
 ---
 
-## 7. Como diagnosticar em produção sem escrever nada
+## 7. Estado na VPS (homologação)
+
+Aplicado em 17/08/2026 em `vm-squad-ia-02`, a partir da branch
+`release/vps-homolog` (redesign + segurança + infra).
+
+| Camada | Estado |
+|---|---|
+| 6 migrations no Postgres self-hosted | aplicadas e registradas em `schema_migrations` |
+| Edge functions alteradas | copiadas pra `/root/supabase/volumes/functions`, container recriado, boot conferido por OPTIONS |
+| `PUBLIC_APP_ORIGIN` e `SUPABASE_PUBLIC_URL` | adicionados a `functions-secrets.env` |
+| Frontend | reconstruído de `git archive` da branch; CSP embutida aponta pro host da VPS |
+| Headers de segurança | 8 headers, conferidos no container **e** pela borda do Cloudflare |
+
+Backups automáticos deste deploy: `/root/dna-app-backup-<ts>` (código),
+`/root/fn-backup-<ts>` (functions), `/root/supabase/functions-secrets.env.bak-<ts>`.
+
+**Acesso:** há uma chave SSH dedicada (`~/.ssh/dna_vps_ed25519`, comentário
+`claude-code-deploy-dna`) em `/root/.ssh/authorized_keys`. Revogue apagando a
+linha se não for mais usar.
+
+### Duas descobertas que só apareceram na VPS
+
+**1. As policies de storage nunca foram versionadas.** Elas foram criadas pelo
+painel do Supabase Cloud, então o restore do dump não as trouxe: a VPS ficou com
+RLS ligada em `storage.objects` e **zero policies** — deny-by-default, nenhum
+documento abria nem pro RH. A migration `20260814100500` reproduz em SQL as
+policies dos buckets que faltavam (admission-docs, candidate-cvs,
+medical-certificates, collaborator-photos) e é idempotente, então roda nos dois
+ambientes. Conferido depois de aplicar: RH vê os 70 documentos de admissão e os
+156 currículos; `colaborador` vê zero.
+
+**2. Existe um bucket `curriculos` público com 830 PDFs.** Não existe na
+produção Cloud, não é referenciado em lugar nenhum do código do DNA, e os
+arquivos são de 12/08/2026 — o dia em que a migração começou. Provavelmente é de
+outro sistema nesta mesma instância self-hosted. **Não foi tocado**, porque
+mexer nele pode quebrar quem o usa. Se for do DNA, é vazamento de currículo por
+URL pública e precisa virar bucket privado com policy.
+
+### O que a VPS ainda não tem
+
+- **Prazos de sessão no servidor.** O guard do navegador está lá, mas o GoTrue
+  self-hosted precisa dos mesmos limites (`JWT_EXP`, rotação de refresh,
+  inactivity/time-box) no compose. Sem isso, um token copiado do `localStorage`
+  segue valendo por fora do navegador. É a mesma pendência da seção 1, só que
+  configurada no `docker-compose` em vez do painel.
+- **Fontes vindas do Google.** `index.css` importa Inter e JetBrains Mono de
+  `fonts.googleapis.com`. Num sistema interno isso é dependência externa e cada
+  navegador de colaborador bate no Google. Hospedar as fontes junto do app
+  resolve e ainda permite apertar a CSP (sai `style-src`/`font-src` externos).
+
+---
+
+## 8. Produção (Vercel + Supabase Cloud) continua com os buracos abertos
+
+O deploy da VPS **não mexeu em produção** — e produção é onde estão os ~300
+colaboradores hoje. Lá seguem valendo:
+
+- os 3 buckets de PII abertos pra qualquer autenticado, com escrita anônima em
+  `collaborator-documents`;
+- o auto-cadastro de empresa com o trigger de papel global;
+- o IDOR do `update-user-password`;
+- e o resto da ONDA 1.
+
+As mesmas migrations e functions resolvem, e já foram ensaiadas contra aquele
+banco. Falta só o aval pra aplicar.
+
+---
+
+## 9. Como diagnosticar em produção sem escrever nada
 
 `POST https://api.supabase.com/v1/projects/<ref>/database/query` executa vários
 statements e honra transação explícita. Dá pra ensaiar uma migration inteira
