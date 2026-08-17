@@ -224,7 +224,7 @@ export function SubResourceTab<TRow extends { id: string; external_id?: string |
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-rose-600"
+                        className="h-8 w-8 text-destructive"
                         onClick={() => setDeleting(row)}
                       >
                         <Trash className="w-4 h-4" />

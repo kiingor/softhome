@@ -67,8 +67,8 @@ export function RequestIndividualDialog({
       <DialogContent>
         <DialogHeader>
           <div className="flex items-center gap-3 mb-1">
-            <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
-              <UserCircle className="w-5 h-5 text-amber-700" weight="duotone" />
+            <div className="w-10 h-10 rounded-xl bg-warning/10 flex items-center justify-center">
+              <UserCircle className="w-5 h-5 text-warning" weight="duotone" />
             </div>
             <DialogTitle className="text-lg">Solicitar pagamento individual</DialogTitle>
           </div>
@@ -83,7 +83,7 @@ export function RequestIndividualDialog({
           <div className="rounded-lg border bg-muted/30 p-3 text-sm space-y-1">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Valor bruto</span>
-              <span className="font-semibold">{formatCurrency(entry.gross_value)}</span>
+              <span className="mono font-semibold">{formatCurrency(entry.gross_value)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Meses computados</span>

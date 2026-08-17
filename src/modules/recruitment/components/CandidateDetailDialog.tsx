@@ -40,14 +40,14 @@ export function CandidateDetailDialog({ candidate, open, onOpenChange }: Props) 
             {candidate.cv_processed_at && (
               <Badge
                 variant="outline"
-                className="bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300 border-0 text-xs font-normal"
+                className="bg-primary/10 text-primary dark:bg-primary/15 dark:text-primary border-0"
               >
                 <CheckCircle className="w-3 h-3 mr-1" />
                 Indexado
               </Badge>
             )}
             {!candidate.is_active && (
-              <Badge variant="outline" className="text-xs font-normal">
+              <Badge variant="outline" >
                 Pediu saída
               </Badge>
             )}

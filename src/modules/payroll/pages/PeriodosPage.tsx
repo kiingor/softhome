@@ -62,7 +62,6 @@ function PeriodosPageContent() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Folha</h1>
           <p className="text-muted-foreground">
             Controle mensal de lançamentos. Não calculamos folha CLT — só
             organizamos pra exportar pro contador.
@@ -118,7 +117,7 @@ function PeriodosPageContent() {
                     <TableCell>
                       <Badge
                         variant="outline"
-                        className={`font-normal border-0 ${PERIOD_STATUS_COLORS[p.status]}`}
+                        className={`border-0 ${PERIOD_STATUS_COLORS[p.status]}`}
                       >
                         {PERIOD_STATUS_LABELS[p.status]}
                       </Badge>

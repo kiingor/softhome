@@ -407,12 +407,12 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
       {/* KPIs desta aba — totais LÍQUIDOS a pagar (sem FGTS, benefícios, estornos) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatBlock label="Pagos" value={`${paidCount}/${total}`} />
-        <StatBlock label="Total a pagar" value={formatCurrency(totalAmount)} accent="emerald" />
-        <StatBlock label="Pago" value={formatCurrency(paidAmount)} accent="emerald" />
+        <StatBlock label="Total a pagar" value={formatCurrency(totalAmount)} tom="positivo" />
+        <StatBlock label="Pago" value={formatCurrency(paidAmount)} tom="positivo" />
         <StatBlock
           label="Pendente"
           value={formatCurrency(totalAmount - paidAmount)}
-          accent={totalAmount - paidAmount > 0 ? "rose" : "emerald"}
+          tom={totalAmount - paidAmount > 0 ? "negativo" : "positivo"}
         />
       </div>
 
@@ -476,7 +476,7 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
             <div
               key={entry.id}
               className={`flex items-center gap-3 px-3 py-2.5 transition-colors ${
-                isPaid ? "bg-emerald-50 dark:bg-emerald-950/20" : "hover:bg-muted/30"
+                isPaid ? "bg-success/5 dark:bg-success/15" : "hover:bg-muted/30"
               }`}
             >
               <Checkbox
@@ -574,7 +574,7 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
                       <HoverCardTrigger asChild>
                         <button
                           type="button"
-                          className="inline-flex items-center justify-center w-4 h-4 rounded-full text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900/30 transition focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                          className="inline-flex items-center justify-center w-4 h-4 rounded-full text-warning hover:bg-warning/15 dark:hover:bg-warning/15 transition focus:outline-none focus:ring-2 focus:ring-warning/30"
                           aria-label="Ver detalhes do líquido"
                           onClick={(ev) => ev.stopPropagation()}
                         >
@@ -606,7 +606,7 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
                             </div>
                           )}
                           {tax.inss > 0 && (
-                            <div className="flex items-center justify-between gap-2 text-rose-700 dark:text-rose-300">
+                            <div className="flex items-center justify-between gap-2 text-destructive dark:text-destructive">
                               <span>− INSS</span>
                               <span className="font-mono">
                                 {formatCurrency(tax.inss)}
@@ -614,7 +614,7 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
                             </div>
                           )}
                           {tax.irpf > 0 && (
-                            <div className="flex items-center justify-between gap-2 text-rose-700 dark:text-rose-300">
+                            <div className="flex items-center justify-between gap-2 text-destructive dark:text-destructive">
                               <span>− IRPF</span>
                               <span className="font-mono">
                                 {formatCurrency(tax.irpf)}
@@ -624,7 +624,7 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
                           {tax.discounts.map((d, i) => (
                             <div
                               key={i}
-                              className="flex items-center justify-between gap-2 text-rose-700 dark:text-rose-300"
+                              className="flex items-center justify-between gap-2 text-destructive dark:text-destructive"
                             >
                               <span className="truncate" title={d.label}>
                                 − {d.label}
@@ -636,7 +636,7 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
                           ))}
                           <div className="border-t border-border pt-1.5 flex items-center justify-between gap-2 font-medium">
                             <span>Líquido</span>
-                            <span className="font-mono text-orange-700 dark:text-orange-300">
+                            <span className="font-mono text-primary dark:text-primary">
                               {formatCurrency(value)}
                             </span>
                           </div>
@@ -652,7 +652,7 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
                 <p
                   className={`font-mono text-sm font-semibold ${
                     isPaid
-                      ? "text-emerald-700 dark:text-emerald-400"
+                      ? "text-success dark:text-success"
                       : "text-foreground"
                   }`}
                 >

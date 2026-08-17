@@ -271,12 +271,12 @@ export default function AdmissaoPublicaPage() {
             <div
               className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 ${
                 isFinal
-                  ? "bg-orange-100 dark:bg-orange-900/30"
+                  ? "bg-primary/10 dark:bg-primary/15"
                   : "bg-muted"
               }`}
             >
               {isFinal ? (
-                <Trophy className="w-8 h-8 text-orange-700 dark:text-orange-300" />
+                <Trophy className="w-8 h-8 text-primary dark:text-primary" />
               ) : (
                 <Warning className="w-8 h-8 text-muted-foreground" />
               )}
@@ -715,11 +715,11 @@ function DocRow({
 
   const statusBadge =
     doc.status === "approved"
-      ? "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300"
+      ? "bg-primary/10 text-primary dark:bg-primary/15 dark:text-primary"
       : doc.status === "needs_adjustment"
-      ? "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300"
+      ? "bg-primary/10 text-primary dark:bg-primary/15 dark:text-primary"
       : doc.status === "submitted" || doc.status === "ai_validating"
-      ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+      ? "bg-info/10 text-info dark:bg-info/15 dark:text-info"
       : "bg-muted text-muted-foreground";
 
   const canEdit =
@@ -730,12 +730,12 @@ function DocRow({
       <div
         className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
           doc.status === "approved"
-            ? "bg-orange-100 dark:bg-orange-900/30"
+            ? "bg-primary/10 dark:bg-primary/15"
             : "bg-muted"
         }`}
       >
         {doc.status === "approved" ? (
-          <CheckCircle className="w-5 h-5 text-orange-700 dark:text-orange-300" />
+          <CheckCircle className="w-5 h-5 text-primary dark:text-primary" />
         ) : (
           <FileText className="w-5 h-5 text-muted-foreground" />
         )}
@@ -747,7 +747,7 @@ function DocRow({
             {docLabel}
             {doc.required && <span className="text-destructive ml-1">*</span>}
           </span>
-          <Badge variant="outline" className={`text-xs font-normal border-0 ${statusBadge}`}>
+          <Badge variant="outline" className={`text-xs border-0 ${statusBadge}`}>
             {statusLabel}
           </Badge>
         </div>
@@ -764,7 +764,7 @@ function DocRow({
         )}
 
         {doc.rejection_reason && doc.status === "needs_adjustment" && (
-          <p className="text-sm text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-900/20 p-2 rounded mt-2">
+          <p className="text-sm text-primary dark:text-primary bg-primary/5 dark:bg-primary/15 p-2 rounded mt-2">
             <strong>Motivo do ajuste:</strong> {doc.rejection_reason}
           </p>
         )}

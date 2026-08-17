@@ -123,7 +123,6 @@ export default function ExamesPage() {
       <div className="space-y-6 page-content">
         <div className="flex items-center justify-between animate-fade-in">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Exames Ocupacionais</h1>
             <p className="text-muted-foreground">Controle de exames ASO e vencimentos</p>
           </div>
           <Button onClick={() => setNewExamOpen(true)}>
@@ -136,7 +135,7 @@ export default function ExamesPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardContent className="p-4 flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-amber-100"><Clock className="w-5 h-5 text-amber-600" /></div>
+              <div className="p-2 rounded-lg bg-warning/10"><Clock className="w-5 h-5 text-warning" /></div>
               <div>
                 <p className="text-2xl font-bold">{pendingCount}</p>
                 <p className="text-xs text-muted-foreground">Pendentes</p>
@@ -145,7 +144,7 @@ export default function ExamesPage() {
           </Card>
           <Card>
             <CardContent className="p-4 flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-red-100"><AlertTriangle className="w-5 h-5 text-red-600" /></div>
+              <div className="p-2 rounded-lg bg-destructive/10"><AlertTriangle className="w-5 h-5 text-destructive" /></div>
               <div>
                 <p className="text-2xl font-bold">{overdueCount}</p>
                 <p className="text-xs text-muted-foreground">Vencidos</p>
@@ -154,7 +153,7 @@ export default function ExamesPage() {
           </Card>
           <Card>
             <CardContent className="p-4 flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-blue-100"><Calendar className="w-5 h-5 text-blue-600" /></div>
+              <div className="p-2 rounded-lg bg-info/10"><Calendar className="w-5 h-5 text-info" /></div>
               <div>
                 <p className="text-2xl font-bold">{next30Count}</p>
                 <p className="text-xs text-muted-foreground">Próx. 30 dias</p>
@@ -163,7 +162,7 @@ export default function ExamesPage() {
           </Card>
           <Card>
             <CardContent className="p-4 flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-green-100"><CheckCircle className="w-5 h-5 text-green-600" /></div>
+              <div className="p-2 rounded-lg bg-success/10"><CheckCircle className="w-5 h-5 text-success" /></div>
               <div>
                 <p className="text-2xl font-bold">{doneThisMonth}</p>
                 <p className="text-xs text-muted-foreground">Realizados (mês)</p>
@@ -262,15 +261,15 @@ export default function ExamesPage() {
                       {filteredExams.map((exam) => {
                         const isOverdue = !["realizado", "cancelado"].includes(exam.status) && isBefore(parseISO(exam.due_date), today);
                         return (
-                          <TableRow key={exam.id} className={isOverdue ? "bg-red-50/50" : ""}>
+                          <TableRow key={exam.id} className={isOverdue ? "bg-destructive/15" : ""}>
                             <TableCell className="font-medium">{exam.collaborator?.name || "-"}</TableCell>
                             <TableCell>
-                              <Badge variant="outline" className="text-xs">
+                              <Badge variant="outline" >
                                 {EXAM_TYPE_LABELS[exam.exam_type] || exam.exam_type}
                               </Badge>
                             </TableCell>
                             <TableCell>
-                              <Badge variant={isOverdue ? "destructive" : EXAM_STATUS_COLORS[exam.status]} className="text-xs">
+                              <Badge variant={isOverdue ? "destructive" : EXAM_STATUS_COLORS[exam.status]} >
                                 {isOverdue ? "Vencido" : (EXAM_STATUS_LABELS[exam.status] || exam.status)}
                               </Badge>
                             </TableCell>
@@ -279,7 +278,7 @@ export default function ExamesPage() {
                             <TableCell>{exam.completed_date ? format(parseISO(exam.completed_date), "dd/MM/yyyy") : "-"}</TableCell>
                             <TableCell>
                               {examDocCounts[exam.id] ? (
-                                <Badge variant="outline" className="text-xs text-green-600"><CheckCircle className="w-3 h-3 mr-1" />Sim</Badge>
+                                <Badge variant="outline" className="text-success"><CheckCircle className="w-3 h-3 mr-1" />Sim</Badge>
                               ) : "-"}
                             </TableCell>
                             <TableCell>
@@ -372,7 +371,7 @@ export default function ExamesPage() {
                             <TableRow key={exam.id}>
                               <TableCell className="font-medium">{exam.collaborator?.name || "-"}</TableCell>
                               <TableCell>
-                                <Badge variant="outline" className="text-xs">
+                                <Badge variant="outline" >
                                   {EXAM_TYPE_LABELS[exam.exam_type] || exam.exam_type}
                                 </Badge>
                               </TableCell>

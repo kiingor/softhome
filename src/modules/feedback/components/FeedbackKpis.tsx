@@ -3,9 +3,9 @@ import { cn } from "@/lib/utils";
 import type { FeedbacksTotais } from "../types";
 
 const TONE: Record<string, string> = {
-  amber: "text-amber-600 dark:text-amber-400",
-  emerald: "text-emerald-600 dark:text-emerald-400",
-  rose: "text-rose-600 dark:text-rose-400",
+  amber: "text-warning dark:text-warning",
+  emerald: "text-success dark:text-success",
+  rose: "text-destructive dark:text-destructive",
   default: "text-foreground",
 };
 

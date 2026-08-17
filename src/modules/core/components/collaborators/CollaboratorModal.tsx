@@ -1853,14 +1853,14 @@ const CollaboratorModal = ({
                       variant="outline"
                       className={
                         formData.status === "ativo"
-                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 border-0 text-xs font-normal h-5 px-2"
+                          ? "bg-success/10 text-success dark:bg-success/15 dark:text-success border-0 text-xs font-normal h-5 px-2"
                           : formData.status === "inativo"
                             ? "bg-muted text-muted-foreground border-0 text-xs font-normal h-5 px-2"
                             : formData.status === "aguardando_documentacao"
-                              ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border-0 text-xs font-normal h-5 px-2"
+                              ? "bg-warning/10 text-warning dark:bg-warning/15 dark:text-warning border-0 text-xs font-normal h-5 px-2"
                               : formData.status === "validacao_pendente"
-                                ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 border-0 text-xs font-normal h-5 px-2"
-                                : "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300 border-0 text-xs font-normal h-5 px-2"
+                                ? "bg-info/10 text-info dark:bg-info/15 dark:text-info border-0 text-xs font-normal h-5 px-2"
+                                : "bg-destructive/10 text-destructive dark:bg-destructive/15 dark:text-destructive border-0 text-xs font-normal h-5 px-2"
                       }
                     >
                       {formData.status === "ativo"
@@ -2079,7 +2079,7 @@ const CollaboratorModal = ({
                         <Label htmlFor="password" className="text-sm font-medium">
                           Senha de Acesso ao Portal
                         </Label>
-                        <Badge variant="secondary" className="text-xs">
+                        <Badge variant="secondary" >
                           Opcional
                         </Badge>
                       </div>
@@ -2306,7 +2306,7 @@ const CollaboratorModal = ({
                           {(() => {
                             const pos = positions.find((p) => p.id === formData.position_id);
                             return pos && pos.salary > 0 ? (
-                              <Badge variant="secondary" className="text-xs">{formatCurrency(pos.salary)}</Badge>
+                              <Badge variant="secondary" >{formatCurrency(pos.salary)}</Badge>
                             ) : null;
                           })()}
                         </div>
@@ -2573,7 +2573,7 @@ const CollaboratorModal = ({
                                     <span className={`font-mono text-xs font-semibold shrink-0 ${
                                       ["inss", "irpf", "despesa", "custo", "fgts", "desconto"].includes(entry.type)
                                         ? "text-destructive"
-                                        : "text-green-600"
+                                        : "text-success"
                                     }`}>
                                       {["inss", "irpf", "despesa", "custo", "fgts", "desconto"].includes(entry.type) ? "- " : "+ "}
                                       {formatCurrency(entry.value)}
@@ -2809,14 +2809,14 @@ const CollaboratorModal = ({
                                   <span className="text-muted-foreground flex-1 min-w-0 truncate">
                                     {new Date(period.start_date).toLocaleDateString("pt-BR")} - {new Date(period.end_date).toLocaleDateString("pt-BR")}
                                     {period.manual_adjustment_at && (
-                                      <span className="ml-1 text-[10px] uppercase tracking-wide text-amber-600">· ajuste manual</span>
+                                      <span className="ml-1 text-[10px] uppercase tracking-wide text-warning">· ajuste manual</span>
                                     )}
                                   </span>
                                   <Badge variant={
                                     period.status === "available" ? "default" :
                                     period.status === "partially_used" ? "secondary" :
                                     period.status === "used" ? "outline" : "destructive"
-                                  } className="text-xs h-5 px-1.5 shrink-0">
+                                  } className="h-5 px-1.5 shrink-0">
                                     {period.days_remaining}d restantes
                                   </Badge>
                                   <Button
@@ -2859,7 +2859,7 @@ const CollaboratorModal = ({
                                     <span className="text-sm font-medium">
                                       {new Date(request.start_date).toLocaleDateString("pt-BR")} - {new Date(request.end_date).toLocaleDateString("pt-BR")}
                                     </span>
-                                    <Badge variant={statusColors[request.status] || "outline"} className="text-xs h-5 px-1.5">
+                                    <Badge variant={statusColors[request.status] || "outline"} className="h-5 px-1.5">
                                       {statusLabels[request.status] || request.status}
                                     </Badge>
                                   </div>
@@ -3071,7 +3071,7 @@ const CollaboratorModal = ({
               {!isNew && canManage && formData.status === "inativo" && (
                 <Button
                   variant="outline"
-                  className="text-emerald-700 border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 dark:text-emerald-300 dark:border-emerald-700/40 dark:hover:bg-emerald-900/20"
+                  className="text-success border-success/25 hover:bg-success/15 hover:text-success dark:text-success dark:border-success/25 dark:hover:bg-success/15"
                   onClick={handleReactivate}
                   disabled={isDeactivating || isDeleting}
                 >

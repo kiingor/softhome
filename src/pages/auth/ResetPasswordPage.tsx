@@ -199,7 +199,7 @@ const ResetPasswordPage = () => {
                   </p>
                 )}
                 {confirm && password === confirm && isPasswordLongEnough(password) && (
-                  <p className="text-xs text-emerald-600 flex items-center gap-1">
+                  <p className="text-xs text-success flex items-center gap-1">
                     <CheckCircle className="w-3 h-3" weight="fill" />
                     Beleza, senhas conferem.
                   </p>

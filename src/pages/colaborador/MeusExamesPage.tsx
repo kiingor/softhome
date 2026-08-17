@@ -73,7 +73,7 @@ const MeusExamesPage = () => {
                     <div>
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-medium">{EXAM_TYPE_LABELS[exam.exam_type] || exam.exam_type}</span>
-                        <Badge variant={isOverdue ? "destructive" : EXAM_STATUS_COLORS[exam.status]} className="text-xs">
+                        <Badge variant={isOverdue ? "destructive" : EXAM_STATUS_COLORS[exam.status]} >
                           {isOverdue ? "Vencido" : (EXAM_STATUS_LABELS[exam.status] || exam.status)}
                         </Badge>
                       </div>

@@ -114,7 +114,6 @@ export default function PrimeiroAcesso() {
       formData.append("collaborator_id", data.collaborator.id);
       formData.append("company_id", data.company.cnpj ? data.collaborator.id : data.session.id);
 
-      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID || "szvskyxczgvfcbucmjjk";
       const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
       // Get company_id from session
@@ -204,7 +203,7 @@ export default function PrimeiroAcesso() {
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <Card className="w-full max-w-md text-center">
           <CardContent className="pt-8 pb-8 space-y-4">
-            <CheckCircle2 className="w-16 h-16 mx-auto text-green-500" />
+            <CheckCircle2 className="w-16 h-16 mx-auto text-success" />
             <h2 className="text-2xl font-bold">Cadastro Pré-Aprovado!</h2>
             <p className="text-muted-foreground">Seus documentos serão validados pela equipe de RH. Você será notificado quando seu acesso for liberado.</p>
             <Link to="/portal/login">
@@ -296,7 +295,7 @@ export default function PrimeiroAcesso() {
                     {data.financialEntries.map((entry) => {
                       const isCredit = entry.type === "salario_base" || entry.type === "hora_extra" || entry.type === "beneficio" || entry.type === "bonificacao" || entry.type === "carro_agregado" || entry.type === "atestado";
                       const sign = isCredit ? "+" : "-";
-                      const colorClass = isCredit ? "text-green-600" : "text-red-600";
+                      const colorClass = isCredit ? "text-success" : "text-destructive";
                       return (
                       <div key={entry.id} className="flex justify-between items-center p-3 rounded-lg bg-muted/50">
                         <span className="text-sm">{ENTRY_TYPE_LABELS[entry.type] || entry.type}{entry.description ? ` - ${entry.description}` : ""}</span>
@@ -363,7 +362,7 @@ export default function PrimeiroAcesso() {
                         <div>
                           <p className="font-medium text-sm">{doc.name}</p>
                           {doc.observation && <p className="text-xs text-muted-foreground">{doc.observation}</p>}
-                          <Badge variant="outline" className="mt-1 text-xs">{doc.file_type.toUpperCase()}</Badge>
+                          <Badge variant="outline" className="mt-1">{doc.file_type.toUpperCase()}</Badge>
                         </div>
                         {uploaded && (
                           <Badge variant={uploaded.status === "aprovado" ? "default" : uploaded.status === "reprovado" ? "destructive" : "secondary"}>

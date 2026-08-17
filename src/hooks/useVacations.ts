@@ -685,10 +685,10 @@ export const vacationRequestStatusLabels: Record<string, string> = {
 };
 
 export const vacationRequestStatusColors: Record<string, string> = {
-  pending: "bg-yellow-100 text-yellow-800 border-yellow-200",
-  approved: "bg-blue-100 text-blue-800 border-blue-200",
-  rejected: "bg-red-100 text-red-800 border-red-200",
-  in_progress: "bg-green-100 text-green-800 border-green-200",
+  pending: "bg-warning/10 text-warning border-warning/25",
+  approved: "bg-info/10 text-info border-info/25",
+  rejected: "bg-destructive/10 text-destructive border-destructive/25",
+  in_progress: "bg-success/10 text-success border-success/25",
   completed: "bg-gray-100 text-gray-800 border-gray-200",
   cancelled: "bg-gray-100 text-gray-500 border-gray-200",
 };
@@ -702,9 +702,9 @@ export const vacationPeriodStatusLabels: Record<string, string> = {
 };
 
 export const vacationPeriodStatusColors: Record<string, string> = {
-  pending: "bg-blue-100 text-blue-800 border-blue-200",
-  available: "bg-green-100 text-green-800 border-green-200",
-  partially_used: "bg-yellow-100 text-yellow-800 border-yellow-200",
+  pending: "bg-info/10 text-info border-info/25",
+  available: "bg-success/10 text-success border-success/25",
+  partially_used: "bg-warning/10 text-warning border-warning/25",
   used: "bg-gray-100 text-gray-800 border-gray-200",
-  expired: "bg-red-100 text-red-800 border-red-200",
+  expired: "bg-destructive/10 text-destructive border-destructive/25",
 };

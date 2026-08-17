@@ -34,11 +34,11 @@ const EVENT_LABELS: Record<string, string> = {
 };
 
 const EVENT_COLORS: Record<string, string> = {
-  admission: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
-  termination: "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300",
-  reactivation: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
-  store_change: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
-  position_change: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+  admission: "bg-success/10 text-success dark:bg-success/15 dark:text-success",
+  termination: "bg-destructive/10 text-destructive dark:bg-destructive/15 dark:text-destructive",
+  reactivation: "bg-success/10 text-success dark:bg-success/15 dark:text-success",
+  store_change: "bg-info/10 text-info dark:bg-info/15 dark:text-info",
+  position_change: "bg-warning/10 text-warning dark:bg-warning/15 dark:text-warning",
   team_change: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
   regime_change: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300",
   migration: "bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-300",

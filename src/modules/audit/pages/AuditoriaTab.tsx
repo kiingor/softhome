@@ -86,7 +86,7 @@ export default function AuditoriaTab() {
             <CardTitle className="text-lg flex items-center gap-2">
               <ShieldCheck className="w-5 h-5 text-primary" />
               Auditoria
-              <Badge variant="secondary" className="font-normal text-xs">
+              <Badge variant="secondary" >
                 {headerCount}
               </Badge>
             </CardTitle>

@@ -85,19 +85,19 @@ export const PositionChangeDialog = ({
                 <div>
                   <p className="text-muted-foreground text-xs">Atual</p>
                   <p className="font-medium">{currentPosition.name}</p>
-                  <p className="text-xs">{formatCurrency(currentPosition.salary)}</p>
-                  <Badge variant="outline" className="text-xs mt-1">{currentPosition.risk_group || "Sem GR"}</Badge>
+                  <p className="mono text-xs">{formatCurrency(currentPosition.salary)}</p>
+                  <Badge variant="outline" className="mt-1">{currentPosition.risk_group || "Sem GR"}</Badge>
                 </div>
                 <ArrowRight className="w-4 h-4 text-muted-foreground" />
                 <div>
                   <p className="text-muted-foreground text-xs">Novo</p>
                   <p className="font-medium">{newPosition.name}</p>
-                  <p className="text-xs">{formatCurrency(newPosition.salary)}</p>
-                  <Badge variant="outline" className="text-xs mt-1">{newPosition.risk_group || "Sem GR"}</Badge>
+                  <p className="mono text-xs">{formatCurrency(newPosition.salary)}</p>
+                  <Badge variant="outline" className="mt-1">{newPosition.risk_group || "Sem GR"}</Badge>
                 </div>
               </div>
               {riskGroupChanged && (
-                <div className="flex items-center gap-2 p-2 rounded bg-amber-50 border border-amber-200 text-amber-800">
+                <div className="flex items-center gap-2 p-2 rounded bg-warning/5 border border-warning/25 text-warning">
                   <AlertTriangle className="w-4 h-4 shrink-0" />
                   <p className="text-xs">Grupo de risco diferente — um exame de Mudança de Função será criado automaticamente.</p>
                 </div>

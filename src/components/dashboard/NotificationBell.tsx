@@ -102,7 +102,7 @@ export function NotificationBell() {
       case "alert":
         return <AlertCircle className="h-4 w-4 text-destructive" />;
       case "warning":
-        return <AlertTriangle className="h-4 w-4 text-yellow-500" />;
+        return <AlertTriangle className="h-4 w-4 text-warning" />;
       default:
         return <Info className="h-4 w-4 text-primary" />;
     }
@@ -113,7 +113,7 @@ export function NotificationBell() {
       case "alert":
         return "bg-destructive/10 border-destructive/20";
       case "warning":
-        return "bg-yellow-50 border-yellow-200";
+        return "bg-warning/5 border-warning/25";
       default:
         return "bg-primary/5 border-primary/10";
     }
@@ -135,7 +135,7 @@ export function NotificationBell() {
             {unreadCount > 0 && (
               <Badge
                 variant="destructive"
-                className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs animate-pulse"
+                className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 animate-pulse"
               >
                 {unreadCount > 9 ? "9+" : unreadCount}
               </Badge>

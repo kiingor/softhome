@@ -47,8 +47,8 @@ const STATUS_LABELS: Record<string, string> = {
 
 const STATUS_COLORS: Record<string, string> = {
   not_started: "bg-muted text-muted-foreground",
-  in_progress: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
-  completed: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
+  in_progress: "bg-info/10 text-info dark:bg-info/15 dark:text-info",
+  completed: "bg-success/10 text-success dark:bg-success/15 dark:text-success",
   reviewed: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300",
 };
 
@@ -196,7 +196,7 @@ export function TestsSection({
                     </div>
                     {jt.completed_at && (
                       <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
-                        <CheckCircle className="w-3 h-3 text-emerald-600" weight="fill" />
+                        <CheckCircle className="w-3 h-3 text-success" weight="fill" />
                         Concluído em {new Date(jt.completed_at).toLocaleString("pt-BR")}
                       </p>
                     )}

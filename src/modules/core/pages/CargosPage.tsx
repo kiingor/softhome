@@ -344,11 +344,11 @@ export default function CargosPage() {
   };
 
   const fileTypeColors: Record<string, string> = {
-    pdf: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900/60',
+    pdf: 'bg-destructive/5 text-destructive border-destructive/25 dark:bg-destructive/15 dark:text-destructive dark:border-destructive/25',
     image: 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-900/60',
-    doc: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900/60',
-    pdf_image: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/60',
-    texto: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/60',
+    doc: 'bg-info/5 text-info border-info/25 dark:bg-info/15 dark:text-info dark:border-info/25',
+    pdf_image: 'bg-warning/5 text-warning border-warning/25 dark:bg-warning/15 dark:text-warning dark:border-warning/25',
+    texto: 'bg-success/5 text-success border-success/25 dark:bg-success/15 dark:text-success dark:border-success/25',
     sim_nao: 'bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-300 dark:border-cyan-900/60',
   };
 
@@ -357,7 +357,6 @@ export default function CargosPage() {
       <div className="space-y-6 page-content">
         <div className="flex items-center justify-between animate-fade-in">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Cargos</h1>
             <p className="text-muted-foreground">Gerencie os cargos, salários e documentos obrigatórios</p>
           </div>
           <div className="flex items-center gap-2">
@@ -449,12 +448,12 @@ export default function CargosPage() {
                       <TableCell className="text-muted-foreground text-sm">{position.teams?.name || '-'}</TableCell>
                       <TableCell>
                         {position.level ? (
-                          <Badge variant="outline" className="text-xs font-mono">N{position.level}</Badge>
+                          <Badge variant="outline" className="font-mono">N{position.level}</Badge>
                         ) : (
                           <span className="text-muted-foreground text-sm">-</span>
                         )}
                       </TableCell>
-                      <TableCell>{formatCurrency(position.salary)}</TableCell>
+                      <TableCell className="mono">{formatCurrency(position.salary)}</TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>

@@ -1,67 +1,71 @@
+import { useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useDashboard } from "@/contexts/DashboardContext";
 import { useSidebarPermissions } from "@/hooks/useSidebarPermissions";
 import { supabase } from "@/integrations/supabase/client";
-import { SquaresFour as LayoutDashboard, Users, Buildings as Building2, Briefcase, Gift, FileText, ChartBar as BarChart3, Gear as Settings, SignOut as LogOut, TreeStructure as FolderTree, CurrencyDollar as DollarSign, CircleNotch as Loader2, Calendar, ClipboardText as ClipboardCheck, Trophy, UserPlus, IdentificationCard, Robot, Confetti, ChatCircleText } from "@phosphor-icons/react";
-import { Button } from "@/components/ui/button";
+import {
+  SignOut as LogOut, CircleNotch as Loader2, MagnifyingGlass, Star,
+} from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { ModuleType } from "@/hooks/usePermissions";
-import { BrandLogo } from "@/components/branding/BrandLogo";
+import { menuCategories, type MenuItem } from "@/components/dashboard/menu";
 
-interface MenuItem {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  href: string;
-  module: ModuleType | null; // null means always visible (like Visão Geral)
+const FAV_KEY = "dna.fav";
+
+function lerFavoritos(): string[] {
+  try {
+    const cru = localStorage.getItem(FAV_KEY);
+    return cru ? (JSON.parse(cru) as string[]) : [];
+  } catch {
+    return [];
+  }
 }
 
-interface MenuCategory {
-  label: string;
-  items: MenuItem[];
-}
+/** Item de navegação. A faixa laranja à esquerda é o único uso de cor de
+ *  marca na sidebar — é o que marca "você está aqui". */
+function ItemNav({
+  item, ativo, favorito, onToggleFav,
+}: {
+  item: MenuItem;
+  ativo: boolean;
+  favorito: boolean;
+  onToggleFav: (href: string) => void;
+}) {
+  return (
+    <div className="group/item relative">
+      <Link
+        to={item.href}
+        className={cn(
+          "relative flex items-center gap-3 rounded-md py-2.5 pl-4 pr-9 text-sm transition-colors",
+          ativo
+            ? "bg-sidebar-accent font-semibold text-sidebar-accent-foreground"
+            : "text-sidebar-foreground hover:bg-[hsl(var(--sidebar-hover))] hover:text-sidebar-accent-foreground",
+        )}
+      >
+        {ativo && (
+          <span
+            aria-hidden
+            className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r bg-sidebar-primary"
+          />
+        )}
+        <item.icon className="h-[18px] w-[18px] shrink-0" weight={ativo ? "fill" : "regular"} />
+        <span className="truncate">{item.label}</span>
+      </Link>
 
-const menuCategories: MenuCategory[] = [
-  {
-    label: "Principal",
-    items: [
-      { icon: LayoutDashboard, label: "Visão Geral", href: "/dashboard", module: null },
-    ],
-  },
-  {
-    label: "Cadastros",
-    items: [
-      { icon: Users, label: "Colaboradores", href: "/dashboard/colaboradores", module: "colaboradores" },
-      { icon: FolderTree, label: "Setores", href: "/dashboard/setores", module: "setores" },
-      { icon: Briefcase, label: "Cargos", href: "/dashboard/cargos", module: "cargos" },
-      { icon: Building2, label: "Empresas", href: "/dashboard/empresas", module: "empresas" },
-      { icon: Gift, label: "Benefícios", href: "/dashboard/beneficios", module: "beneficios" },
-    ],
-  },
-  {
-    label: "Recrutamento",
-    items: [
-      { icon: Briefcase, label: "Vagas", href: "/dashboard/vagas", module: "vagas" },
-      { icon: IdentificationCard, label: "Banco de Talentos", href: "/dashboard/candidatos", module: "candidatos" },
-      { icon: Robot, label: "Recrutador (IA)", href: "/dashboard/recrutador", module: "recrutador" },
-    ],
-  },
-  {
-    label: "Gestão",
-    items: [
-      { icon: UserPlus, label: "Admissões", href: "/dashboard/admissoes", module: "admissoes" },
-      { icon: Trophy, label: "Jornada", href: "/dashboard/jornada", module: "jornada" },
-      { icon: ChatCircleText, label: "Feedback Colaborador", href: "/dashboard/feedback", module: "feedback" },
-      { icon: DollarSign, label: "Folha", href: "/dashboard/folha", module: "folha" },
-      { icon: Confetti, label: "13º Salário", href: "/dashboard/decimo-terceiro", module: "decimo_terceiro" },
-      { icon: Calendar, label: "Férias", href: "/dashboard/ferias", module: "ferias" },
-      { icon: ClipboardCheck, label: "Exames", href: "/dashboard/exames", module: "exames" },
-      { icon: BarChart3, label: "Relatórios", href: "/dashboard/relatorios", module: "relatorios" },
-      { icon: FileText, label: "Contabilidade", href: "/dashboard/contabilidade", module: "contabilidade" },
-      { icon: Robot, label: "Analista (IA)", href: "/dashboard/analista", module: "relatorios" },
-    ],
-  },
-];
+      <button
+        type="button"
+        aria-label={favorito ? `Desafixar ${item.label}` : `Fixar ${item.label} no topo`}
+        onClick={() => onToggleFav(item.href)}
+        className={cn(
+          "absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded transition-opacity",
+          "text-[hsl(var(--sidebar-faint))] hover:text-sidebar-primary",
+          favorito ? "opacity-100" : "opacity-0 focus-visible:opacity-100 group-hover/item:opacity-100",
+        )}
+      >
+        <Star className="h-3.5 w-3.5" weight={favorito ? "fill" : "regular"} />
+      </button>
+    </div>
+  );
+}
 
 export default function DashboardSidebar() {
   const { canViewModule, isAdmin, isLoading } = useSidebarPermissions();
@@ -69,103 +73,157 @@ export default function DashboardSidebar() {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Filter categories and items based on module permissions
-  const visibleCategories = menuCategories
-    .map(category => ({
-      ...category,
-      items: category.items.filter(item => {
-        // Always show items without a module requirement (like Visão Geral)
-        if (item.module === null) return true;
-        // Admin sees all
-        if (isAdmin) return true;
-        // Check specific module permission
-        return canViewModule(item.module);
-      }),
-    }))
-    .filter(category => category.items.length > 0);
+  const [busca, setBusca] = useState("");
+  const [favoritos, setFavoritos] = useState<string[]>(lerFavoritos);
+
+  function alternarFavorito(href: string) {
+    setFavoritos((atual) => {
+      const proximo = atual.includes(href) ? atual.filter((h) => h !== href) : [...atual, href];
+      try {
+        localStorage.setItem(FAV_KEY, JSON.stringify(proximo));
+      } catch {
+        /* localStorage indisponível não pode derrubar a navegação */
+      }
+      return proximo;
+    });
+  }
+
+  const estaAtivo = (href: string) =>
+    location.pathname === href || (href !== "/dashboard" && location.pathname.startsWith(href));
+
+  // Permissão primeiro, busca depois: o filtro de texto nunca revela um item
+  // que o usuário não poderia ver.
+  const categoriasVisiveis = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    return menuCategories
+      .map((categoria) => ({
+        ...categoria,
+        items: categoria.items.filter((item) => {
+          const permitido = item.module === null || isAdmin || canViewModule(item.module);
+          if (!permitido) return false;
+          return termo === "" || item.label.toLowerCase().includes(termo);
+        }),
+      }))
+      .filter((categoria) => categoria.items.length > 0);
+  }, [busca, isAdmin, canViewModule]);
+
+  const itensFavoritos = useMemo(() => {
+    if (busca.trim() !== "") return [];
+    return categoriasVisiveis.flatMap((c) => c.items).filter((i) => favoritos.includes(i.href));
+  }, [categoriasVisiveis, favoritos, busca]);
 
   async function handleLogout() {
     await supabase.auth.signOut();
-    toast({ title: "Logout realizado com sucesso" });
+    toast({ title: "Até logo!" });
     navigate("/login");
   }
 
   return (
-    <aside className="w-64 border-r border-border bg-card flex flex-col">
-      {/* Header com logo */}
-      <div className="h-16 px-6 border-b border-border flex items-center">
-        <div className="flex items-center gap-3">
-          <BrandLogo size="md" />
-          <div>
-            <h1 className="font-extrabold text-foreground tracking-tight">DNA Softcom</h1>
-            <p className="text-xs text-muted-foreground">Gente & Cultura</p>
-          </div>
+    <aside className="flex w-[264px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
+      {/* marca */}
+      <div className="flex items-center gap-3 px-5 py-5">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary">
+          <span className="text-[15px] font-extrabold leading-none text-sidebar-primary-foreground">D</span>
+        </div>
+        <div className="min-w-0">
+          <p className="truncate text-[15px] font-extrabold leading-tight text-sidebar-accent-foreground">
+            DNA Softcom
+          </p>
+          <p className="mono truncate text-[10px] uppercase tracking-[0.12em] text-[hsl(var(--sidebar-faint))]">
+            Gente &amp; Cultura
+          </p>
         </div>
       </div>
 
-      {/* Menu de navegação */}
-      <nav className="flex-1 p-4 overflow-auto">
+      {/* busca no menu */}
+      <div className="px-4 pb-3">
+        <div className="relative">
+          <MagnifyingGlass className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[hsl(var(--sidebar-faint))]" />
+          <input
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar no menu..."
+            aria-label="Buscar no menu"
+            className={cn(
+              "h-10 w-full rounded-md border border-sidebar-border bg-[hsl(var(--sidebar-hover))] pl-9 pr-3",
+              "text-sm text-sidebar-accent-foreground placeholder:text-[hsl(var(--sidebar-faint))]",
+              "outline-none transition-colors focus:border-sidebar-primary",
+            )}
+          />
+        </div>
+      </div>
+
+      {/* navegação */}
+      <nav className="scroll flex-1 overflow-y-auto px-4 pb-4">
         {isLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+          <div className="flex items-center justify-center py-10">
+            <Loader2 className="h-5 w-5 animate-spin text-[hsl(var(--sidebar-faint))]" />
           </div>
         ) : (
-          visibleCategories.map((category, categoryIndex) => (
-            <div key={category.label}>
-              {categoryIndex > 0 && (
-                <div className="my-3 border-t border-border" />
-              )}
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 px-4">
-                {category.label}
-              </p>
-              <div className="space-y-1">
-                {category.items.map((item) => {
-                  const isActive = location.pathname === item.href || 
-                    (item.href !== "/dashboard" && location.pathname.startsWith(item.href));
-                  return (
-                    <Link
-                      key={item.href}
-                      to={item.href}
-                      className={cn(
-                        "flex items-center gap-3 px-4 py-3 rounded-lg transition-colors",
-                        isActive
-                          ? "bg-primary/10 text-primary font-medium"
-                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                      )}
-                    >
-                      <item.icon className="w-5 h-5" />
-                      {item.label}
-                    </Link>
-                  );
-                })}
+          <>
+            {itensFavoritos.length > 0 && (
+              <div className="mb-4">
+                <p className="mb-1.5 px-4 text-[11px] font-semibold uppercase tracking-[0.08em] text-[hsl(var(--sidebar-faint))]">
+                  Favoritos
+                </p>
+                <div className="space-y-0.5">
+                  {itensFavoritos.map((item) => (
+                    <ItemNav
+                      key={`fav-${item.href}`}
+                      item={item}
+                      ativo={estaAtivo(item.href)}
+                      favorito
+                      onToggleFav={alternarFavorito}
+                    />
+                  ))}
+                </div>
               </div>
-            </div>
-          ))
+            )}
+
+            {categoriasVisiveis.map((categoria) => (
+              <div key={categoria.label} className="mb-4">
+                <p className="mb-1.5 px-4 text-[11px] font-semibold uppercase tracking-[0.08em] text-[hsl(var(--sidebar-faint))]">
+                  {categoria.label}
+                </p>
+                <div className="space-y-0.5">
+                  {categoria.items.map((item) => (
+                    <ItemNav
+                      key={item.href}
+                      item={item}
+                      ativo={estaAtivo(item.href)}
+                      favorito={favoritos.includes(item.href)}
+                      onToggleFav={alternarFavorito}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+
+            {categoriasVisiveis.length === 0 && (
+              <p className="px-4 py-6 text-sm text-[hsl(var(--sidebar-faint))]">
+                Nada encontrado para “{busca}”.
+              </p>
+            )}
+          </>
         )}
       </nav>
 
-      {/* Footer */}
-      <div className="p-4 border-t border-border space-y-1">
-        <Link
-          to="/dashboard/configuracoes"
+      {/* rodapé */}
+      <div className="border-t border-sidebar-border px-4 py-3">
+        <button
+          type="button"
+          onClick={handleLogout}
           className={cn(
-            "flex items-center gap-3 px-4 py-3 rounded-lg transition-colors w-full",
-            location.pathname === "/dashboard/configuracoes"
-              ? "bg-primary/10 text-primary font-medium"
-              : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            "flex w-full items-center gap-3 rounded-md px-4 py-2.5 text-sm transition-colors",
+            "text-sidebar-foreground hover:bg-[hsl(var(--sidebar-hover))] hover:text-sidebar-accent-foreground",
           )}
         >
-          <Settings className="w-5 h-5" />
-          Configurações
-        </Link>
-        <Button
-          variant="ghost"
-          className="w-full justify-start gap-3 text-muted-foreground px-4 py-3 h-auto"
-          onClick={handleLogout}
-        >
-          <LogOut className="w-5 h-5" />
+          <LogOut className="h-[18px] w-[18px]" />
           Sair
-        </Button>
+        </button>
+        <p className="mono mt-2 px-4 pb-1 text-[10px] leading-relaxed text-[hsl(var(--sidebar-faint))]">
+          Toque na estrela para fixar no topo.
+        </p>
       </div>
     </aside>
   );

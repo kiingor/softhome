@@ -89,16 +89,16 @@ export function DocumentList({
                 className={cn(
                   "w-9 h-9 rounded-lg flex items-center justify-center shrink-0",
                   doc.status === "approved"
-                    ? "bg-orange-100 dark:bg-orange-900/30"
+                    ? "bg-primary/10 dark:bg-primary/15"
                     : doc.status === "needs_adjustment"
-                    ? "bg-orange-100 dark:bg-orange-900/30"
+                    ? "bg-primary/10 dark:bg-primary/15"
                     : "bg-muted"
                 )}
               >
                 {doc.status === "approved" ? (
-                  <Check className="w-4 h-4 text-orange-700 dark:text-orange-300" />
+                  <Check className="w-4 h-4 text-primary dark:text-primary" />
                 ) : doc.status === "needs_adjustment" ? (
-                  <Warning className="w-4 h-4 text-orange-700 dark:text-orange-300" />
+                  <Warning className="w-4 h-4 text-primary dark:text-primary" />
                 ) : (
                   <FileText className="w-4 h-4 text-muted-foreground" />
                 )}
@@ -123,7 +123,7 @@ export function DocumentList({
                         {(doc as { text_response: string }).text_response}
                       </p>
                     )}
-                    <Badge variant="outline" className="text-xs mt-1 font-normal">
+                    <Badge variant="outline" className="mt-1">
                       {DOCUMENT_STATUS_LABELS[doc.status]}
                     </Badge>
                   </div>
@@ -157,7 +157,7 @@ export function DocumentList({
                           variant="outline"
                           size="sm"
                           onClick={() => setRejectingDoc(doc)}
-                          className="text-orange-700 border-orange-200 hover:bg-orange-50 dark:text-orange-300 dark:border-orange-800"
+                          className="text-primary border-primary/25 hover:bg-primary/15 dark:text-primary dark:border-primary/25"
                         >
                           Pedir ajuste
                         </Button>
@@ -167,7 +167,7 @@ export function DocumentList({
                 </div>
 
                 {doc.rejection_reason && doc.status === "needs_adjustment" && (
-                  <p className="text-sm text-orange-700 dark:text-orange-300 mt-2 bg-orange-50 dark:bg-orange-900/20 p-2 rounded">
+                  <p className="text-sm text-primary dark:text-primary mt-2 bg-primary/5 dark:bg-primary/15 p-2 rounded">
                     <strong>Motivo:</strong> {doc.rejection_reason}
                   </p>
                 )}

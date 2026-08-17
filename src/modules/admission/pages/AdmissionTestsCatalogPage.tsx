@@ -45,7 +45,6 @@ export default function AdmissionTestsCatalogPage() {
             Admissões
           </Link>
         </Button>
-        <h1 className="text-2xl font-bold text-foreground">Catálogo de Testes</h1>
         <p className="text-muted-foreground text-sm">
           Ative os testes que vão aparecer pra escolher na criação da admissão.
           Cada teste pode ter limite de tempo e permitir pausa ou não.
@@ -108,7 +107,7 @@ function TestRow({
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="font-semibold text-foreground truncate">{test.name}</h3>
               {test.is_active ? (
-                <Badge variant="default" className="text-[10px] bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-0">
+                <Badge variant="default" className="text-[10px] bg-success/10 text-success hover:bg-success/15 border-0">
                   Ativo
                 </Badge>
               ) : (

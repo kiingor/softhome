@@ -11,7 +11,7 @@ export function JobStatusBadge({ status, className }: JobStatusBadgeProps) {
   return (
     <Badge
       variant="outline"
-      className={cn("font-normal border-0", JOB_STATUS_COLORS[status], className)}
+      className={cn("border-0", JOB_STATUS_COLORS[status], className)}
     >
       {JOB_STATUS_LABELS[status]}
     </Badge>

@@ -126,7 +126,7 @@ const MeusBeneficiosPage = () => {
                 {/* Valor do benefício */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-2xl font-bold text-primary">
+                    <span className="mono text-2xl font-bold text-primary">
                       {formatCurrency(getMonthlyValue(item.benefit))}
                     </span>
                     <Badge variant="outline">

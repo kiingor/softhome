@@ -126,14 +126,14 @@ export function SyncProgressDialog({ open, onOpenChange, jobId, onFinished }: Pr
     if (!job) return null;
     if (job.status === "completed") {
       return (
-        <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 border-0">
+        <Badge className="bg-success/10 text-success dark:bg-success/15 dark:text-success border-0">
           <CheckCircle className="w-3 h-3 mr-1" weight="fill" /> Concluído
         </Badge>
       );
     }
     if (job.status === "failed") {
       return (
-        <Badge className="bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300 border-0">
+        <Badge className="bg-destructive/10 text-destructive dark:bg-destructive/15 dark:text-destructive border-0">
           <XCircle className="w-3 h-3 mr-1" weight="fill" /> Falhou
         </Badge>
       );
@@ -146,7 +146,7 @@ export function SyncProgressDialog({ open, onOpenChange, jobId, onFinished }: Pr
       );
     }
     return (
-      <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 border-0">
+      <Badge className="bg-info/10 text-info dark:bg-info/15 dark:text-info border-0">
         <Loader2 className="w-3 h-3 mr-1 animate-spin" /> Em andamento
       </Badge>
     );
@@ -194,11 +194,11 @@ export function SyncProgressDialog({ open, onOpenChange, jobId, onFinished }: Pr
 
           {/* Erros */}
           {(job?.errors?.length ?? 0) > 0 && (
-            <div className="rounded border border-amber-200 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/20 p-3">
+            <div className="rounded border border-warning/25 dark:border-warning/25 bg-warning/15 dark:bg-warning/15 p-3">
               <button
                 type="button"
                 onClick={() => setErrorsExpanded(!errorsExpanded)}
-                className="flex items-center justify-between w-full text-sm font-medium text-amber-800 dark:text-amber-200"
+                className="flex items-center justify-between w-full text-sm font-medium text-warning dark:text-warning"
               >
                 <span className="flex items-center gap-1.5">
                   {errorsExpanded ? <CaretDown className="w-3.5 h-3.5" /> : <CaretRight className="w-3.5 h-3.5" />}
@@ -206,10 +206,10 @@ export function SyncProgressDialog({ open, onOpenChange, jobId, onFinished }: Pr
                 </span>
               </button>
               {errorsExpanded && (
-                <ul className="mt-2 space-y-1 max-h-40 overflow-auto text-xs text-amber-900 dark:text-amber-100">
+                <ul className="mt-2 space-y-1 max-h-40 overflow-auto text-xs text-warning dark:text-warning">
                   {job!.errors.map((e, i) => (
                     <li key={i} className="flex items-start gap-1.5">
-                      <span className="font-mono shrink-0 text-amber-700 dark:text-amber-300">
+                      <span className="font-mono shrink-0 text-warning dark:text-warning">
                         {e.external_id ?? "—"}
                       </span>
                       <span className="truncate">
@@ -224,7 +224,7 @@ export function SyncProgressDialog({ open, onOpenChange, jobId, onFinished }: Pr
 
           {/* Erro fatal */}
           {job?.status === "failed" && job.error_message && (
-            <div className="rounded border border-rose-200 dark:border-rose-900/40 bg-rose-50/50 dark:bg-rose-950/20 p-3 text-sm text-rose-800 dark:text-rose-200">
+            <div className="rounded border border-destructive/25 dark:border-destructive/25 bg-destructive/15 dark:bg-destructive/15 p-3 text-sm text-destructive dark:text-destructive">
               <strong>Falha fatal:</strong> {job.error_message}
             </div>
           )}
@@ -253,10 +253,10 @@ export function SyncProgressDialog({ open, onOpenChange, jobId, onFinished }: Pr
 
 function Stat({ label, value, color }: { label: string; value: number; color: "emerald" | "blue" | "amber" | "rose" }) {
   const colorMap = {
-    emerald: "text-emerald-700 dark:text-emerald-300",
-    blue: "text-blue-700 dark:text-blue-300",
-    amber: "text-amber-700 dark:text-amber-300",
-    rose: "text-rose-700 dark:text-rose-300",
+    emerald: "text-success dark:text-success",
+    blue: "text-info dark:text-info",
+    amber: "text-warning dark:text-warning",
+    rose: "text-destructive dark:text-destructive",
   };
   return (
     <div className="rounded border bg-card p-2 text-center">
@@ -275,24 +275,24 @@ function FinalSummary({ result }: { result: Record<string, unknown> }) {
   const details = result.details as { processed?: number; errors?: number } | null | undefined;
   const skippedNoSalary = Number(result.skipped_no_salary ?? 0);
   return (
-    <div className="rounded border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/50 dark:bg-emerald-950/20 p-3 text-xs space-y-1">
-      <p className="font-medium text-emerald-800 dark:text-emerald-200">Resumo final</p>
-      <p className="text-emerald-900 dark:text-emerald-100">
+    <div className="rounded border border-success/25 dark:border-success/25 bg-success/15 dark:bg-success/15 p-3 text-xs space-y-1">
+      <p className="font-medium text-success dark:text-success">Resumo final</p>
+      <p className="text-success dark:text-success">
         {String(result.fetched ?? 0)} colaboradores buscados da agenda.
       </p>
       {skippedNoSalary > 0 && (
-        <p className="text-amber-800 dark:text-amber-200">
+        <p className="text-warning dark:text-warning">
           {skippedNoSalary} sem salário na agenda — sincronizado{skippedNoSalary === 1 ? "" : "s"}, mas fic{skippedNoSalary === 1 ? "a" : "am"} fora da folha.
         </p>
       )}
       {financials && (
-        <p className="text-emerald-900 dark:text-emerald-100">
+        <p className="text-success dark:text-success">
           Financeiros aplicados em {financials.processed ?? 0} colab{financials.processed === 1 ? "" : "s"}
           {financials.errors ? ` (${financials.errors} com erro)` : ""}.
         </p>
       )}
       {details && (
-        <p className="text-emerald-900 dark:text-emerald-100">
+        <p className="text-success dark:text-success">
           Detalhes sincronizados em {details.processed ?? 0} colab{details.processed === 1 ? "" : "s"}
           {details.errors ? ` (${details.errors} com erro)` : ""}.
         </p>

@@ -177,11 +177,11 @@ const WhatsAppConfigTab = () => {
             <div className="flex items-center gap-4">
               <div
                 className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                  isConnected ? "bg-green-100 dark:bg-green-900/30" : "bg-muted"
+                  isConnected ? "bg-success/10 dark:bg-success/15" : "bg-muted"
                 }`}
               >
                 {isConnected ? (
-                  <Wifi className="w-6 h-6 text-green-600" />
+                  <Wifi className="w-6 h-6 text-success" />
                 ) : (
                   <WifiOff className="w-6 h-6 text-muted-foreground" />
                 )}

@@ -105,7 +105,7 @@ const MeusContracheques = () => {
               <Calendar className="w-5 h-5 text-muted-foreground" />
               <p className="font-semibold text-xl tabular-nums">{selectedYear}</p>
               {!isLoading && availableCount > 0 && (
-                <Badge variant="secondary" className="font-normal">
+                <Badge variant="secondary" >
                   {availableCount}{" "}
                   {availableCount === 1 ? "disponível" : "disponíveis"}
                 </Badge>

@@ -39,9 +39,9 @@ import {
 import { toast } from "sonner";
 
 const STATUS_COLORS: Record<string, string> = {
-  aberto: "bg-blue-100 text-blue-700",
-  pagamento: "bg-amber-100 text-amber-700",
-  concluido: "bg-emerald-100 text-emerald-700",
+  aberto: "bg-info/10 text-info",
+  pagamento: "bg-warning/10 text-warning",
+  concluido: "bg-success/10 text-success",
 };
 
 export default function Bonus13DetailPage() {
@@ -127,7 +127,7 @@ export default function Bonus13DetailPage() {
                 </h1>
                 <Badge
                   variant="outline"
-                  className={`font-normal border-0 ${STATUS_COLORS[period.status] ?? ""}`}
+                  className={`border-0 ${STATUS_COLORS[period.status] ?? ""}`}
                 >
                   {BONUS_STATUS_LABELS[period.status]}
                 </Badge>
@@ -167,17 +167,17 @@ export default function Bonus13DetailPage() {
           <StatCard
             label="No lote"
             value={stats.batch}
-            color="text-blue-700"
+            color="text-info"
           />
           <StatCard
             label="Antecipados"
             value={stats.anticipated}
-            color="text-emerald-700"
+            color="text-success"
           />
           <StatCard
             label="Avulsos"
             value={stats.individual}
-            color="text-amber-700"
+            color="text-warning"
           />
           <StatCard
             label="Total bruto"

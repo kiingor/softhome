@@ -309,30 +309,30 @@ const STATUS_TONES: Record<
   },
   due: {
     icon: Calendar,
-    iconColor: "text-amber-700 dark:text-amber-300",
-    iconBg: "bg-amber-100 dark:bg-amber-900/30",
-    bg: "bg-amber-50 dark:bg-amber-900/10",
-    border: "border-amber-200 dark:border-amber-800",
+    iconColor: "text-warning dark:text-warning",
+    iconBg: "bg-warning/10 dark:bg-warning/15",
+    bg: "bg-warning/5 dark:bg-warning/15",
+    border: "border-warning/25 dark:border-warning/25",
     badgeClass:
-      "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800",
+      "bg-warning/10 text-warning border-warning/25 dark:bg-warning/15 dark:text-warning dark:border-warning/25",
   },
   completed: {
     icon: CheckCircle,
-    iconColor: "text-orange-700 dark:text-orange-300",
-    iconBg: "bg-orange-100 dark:bg-orange-900/30",
-    bg: "bg-orange-50 dark:bg-orange-900/10",
-    border: "border-orange-200 dark:border-orange-800",
+    iconColor: "text-primary dark:text-primary",
+    iconBg: "bg-primary/10 dark:bg-primary/15",
+    bg: "bg-primary/5 dark:bg-primary/15",
+    border: "border-primary/25 dark:border-primary/25",
     badgeClass:
-      "bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800",
+      "bg-primary/10 text-primary border-primary/25 dark:bg-primary/15 dark:text-primary dark:border-primary/25",
   },
   overdue: {
     icon: Warning,
-    iconColor: "text-rose-700 dark:text-rose-300",
-    iconBg: "bg-rose-100 dark:bg-rose-900/30",
-    bg: "bg-rose-50 dark:bg-rose-900/10",
-    border: "border-rose-200 dark:border-rose-800",
+    iconColor: "text-destructive dark:text-destructive",
+    iconBg: "bg-destructive/10 dark:bg-destructive/15",
+    bg: "bg-destructive/5 dark:bg-destructive/15",
+    border: "border-destructive/25 dark:border-destructive/25",
     badgeClass:
-      "bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800",
+      "bg-destructive/10 text-destructive border-destructive/25 dark:bg-destructive/15 dark:text-destructive dark:border-destructive/25",
   },
 };
 
@@ -348,9 +348,9 @@ function StatCard({
   tone?: "warning" | "danger";
 }) {
   const valueClass = tone === "danger"
-    ? "text-rose-700 dark:text-rose-300"
+    ? "text-destructive dark:text-destructive"
     : tone === "warning"
-    ? "text-amber-700 dark:text-amber-300"
+    ? "text-warning dark:text-warning"
     : "text-foreground";
   return (
     <Card>

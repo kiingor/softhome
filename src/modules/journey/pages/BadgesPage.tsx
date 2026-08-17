@@ -52,7 +52,6 @@ export default function BadgesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Catálogo de Insígnias</h1>
           <p className="text-muted-foreground">
             Conquistas que os colaboradores podem ganhar na Jornada.
           </p>
