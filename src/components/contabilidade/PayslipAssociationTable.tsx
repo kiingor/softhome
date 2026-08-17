@@ -85,21 +85,21 @@ const PayslipAssociationTable = ({
     switch (confidence) {
       case "high":
         return (
-          <Badge className="bg-green-100 text-green-700">
+          <Badge className="bg-success/10 text-success">
             <CheckCircle className="w-3 h-3 mr-1" />
             Alta ({matchType === "cpf" ? "CPF" : "Nome"})
           </Badge>
         );
       case "medium":
         return (
-          <Badge className="bg-yellow-100 text-yellow-700">
+          <Badge className="bg-warning/10 text-warning">
             <HelpCircle className="w-3 h-3 mr-1" />
             Média
           </Badge>
         );
       case "low":
         return (
-          <Badge className="bg-orange-100 text-orange-700">
+          <Badge className="bg-primary/10 text-primary">
             <AlertCircle className="w-3 h-3 mr-1" />
             Baixa
           </Badge>
@@ -179,7 +179,7 @@ const PayslipAssociationTable = ({
               </TableCell>
               <TableCell className="text-center">
                 {row.selectedCollaboratorId ? (
-                  <CheckCircle className="w-5 h-5 text-green-600 mx-auto" />
+                  <CheckCircle className="w-5 h-5 text-success mx-auto" />
                 ) : (
                   <AlertCircle className="w-5 h-5 text-destructive mx-auto" />
                 )}

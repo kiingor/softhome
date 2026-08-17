@@ -106,7 +106,7 @@ export function ObjetivosSheet({ colaborador, guardiao, perms, onOpenChange }: P
 
           <div className="px-6 py-3 border-b">
             {perms.canCreate && !guardiao && (
-              <p className="text-xs text-amber-600 dark:text-amber-400 mb-2">
+              <p className="text-xs text-warning dark:text-warning mb-2">
                 Selecione o Guardião(ã) da Cultura no topo pra poder registrar.
               </p>
             )}
@@ -179,7 +179,7 @@ export function ObjetivosSheet({ colaborador, guardiao, perms, onOpenChange }: P
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8 text-rose-600"
+                          className="h-8 w-8 text-destructive"
                           onClick={() => setDeleting(o)}
                           title="Remover"
                         >
@@ -228,7 +228,7 @@ export function ObjetivosSheet({ colaborador, guardiao, perms, onOpenChange }: P
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-rose-600 hover:bg-rose-700"
+              className="bg-destructive hover:bg-destructive/15"
               onClick={async () => {
                 if (deleting) {
                   await remove.mutateAsync(deleting.id);

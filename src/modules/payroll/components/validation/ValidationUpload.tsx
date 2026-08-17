@@ -83,7 +83,7 @@ export function ValidationUpload({ companyId, referenceMonth, onDone }: Props) {
               key={f.name}
               className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm"
             >
-              <FilePdf className="w-4 h-4 text-rose-500 shrink-0" weight="fill" />
+              <FilePdf className="w-4 h-4 text-destructive shrink-0" weight="fill" />
               <span className="flex-1 truncate">{f.name}</span>
               <span className="text-xs text-muted-foreground">{(f.size / 1024).toFixed(0)} KB</span>
               <button
@@ -102,7 +102,7 @@ export function ValidationUpload({ companyId, referenceMonth, onDone }: Props) {
         </ul>
       )}
 
-      <div className="flex items-center gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+      <div className="flex items-center gap-2 rounded-lg bg-warning/5 dark:bg-warning/15 px-3 py-2 text-xs text-warning dark:text-warning">
         <Warning className="w-4 h-4 shrink-0" weight="fill" />
         Os PDFs são lidos no seu navegador — nada é enviado pra fora. Só as divergências ficam salvas.
       </div>

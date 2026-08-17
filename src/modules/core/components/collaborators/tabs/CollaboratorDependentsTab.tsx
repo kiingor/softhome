@@ -326,21 +326,21 @@ export function CollaboratorDependentsTab({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="font-medium text-sm">{d.name}</p>
-                    <Badge variant="outline" className="text-xs font-normal">
+                    <Badge variant="outline" >
                       {KINSHIP_LABELS[d.kinship] ?? d.kinship}
                     </Badge>
                     {d.is_irpf_dependent && (
-                      <Badge className="text-xs bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 border-0">
+                      <Badge className="bg-success/10 text-success dark:bg-success/15 dark:text-success border-0">
                         IRPF
                       </Badge>
                     )}
                     {d.is_health_plan_dependent && (
-                      <Badge className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 border-0">
+                      <Badge className="bg-info/10 text-info dark:bg-info/15 dark:text-info border-0">
                         Plano de Saúde
                       </Badge>
                     )}
                     {d.is_invalid && (
-                      <Badge className="text-xs bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border-0">
+                      <Badge className="bg-warning/10 text-warning dark:bg-warning/15 dark:text-warning border-0">
                         Inválido
                       </Badge>
                     )}

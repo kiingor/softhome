@@ -22,10 +22,10 @@ export function CandidateMatchCard({
   const score = Math.round(candidate.similarity * 100);
   const scoreClass =
     score >= 70
-      ? "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300"
+      ? "bg-primary/10 text-primary dark:bg-primary/15 dark:text-primary"
       : score >= 50
-      ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
-      : "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300";
+      ? "bg-warning/10 text-warning dark:bg-warning/15 dark:text-warning"
+      : "bg-destructive/10 text-destructive dark:bg-destructive/15 dark:text-destructive";
 
   const { openCv, isOpening } = useCvViewer();
 
@@ -42,7 +42,7 @@ export function CandidateMatchCard({
                 {candidate.name}
               </h3>
               {!candidate.is_active && (
-                <Badge variant="outline" className="text-xs font-normal">
+                <Badge variant="outline" >
                   Pediu saída
                 </Badge>
               )}

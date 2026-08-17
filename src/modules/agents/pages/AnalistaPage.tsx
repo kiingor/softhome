@@ -258,7 +258,7 @@ function ToolCallsBadges({
   return (
     <div className="flex flex-wrap gap-1.5 mt-1">
       {uniqueTools.map((tool) => (
-        <Badge key={tool} variant="outline" className="text-xs font-normal gap-1">
+        <Badge key={tool} variant="outline" className="gap-1">
           <Sparkle className="w-3 h-3" />
           {TOOL_LABELS[tool] ?? tool}
         </Badge>

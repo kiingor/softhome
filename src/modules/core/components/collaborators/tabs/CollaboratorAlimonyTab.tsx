@@ -64,8 +64,8 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  active: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
-  suspended: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+  active: "bg-success/10 text-success dark:bg-success/15 dark:text-success",
+  suspended: "bg-warning/10 text-warning dark:bg-warning/15 dark:text-warning",
   ended: "bg-muted text-muted-foreground",
 };
 

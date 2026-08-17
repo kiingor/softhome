@@ -197,7 +197,7 @@ export default function AdmissionDetailPage() {
                 journey.status !== "cancelled" && (
                   <Button
                     onClick={() => setApproveOpen(true)}
-                    className="bg-orange-600 hover:bg-orange-700"
+                    className="bg-primary hover:bg-primary/15"
                     disabled={
                       !(
                         docsStats.approved === docsStats.total &&
@@ -323,14 +323,14 @@ export default function AdmissionDetailPage() {
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-muted text-muted-foreground">
           <strong className="text-foreground">{docsStats.total}</strong> docs
         </span>
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-success/5 text-success dark:bg-success/15 dark:text-success">
           <strong>{docsStats.approved}</strong> aprovados
         </span>
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-info/5 text-info dark:bg-info/15 dark:text-info">
           <strong>{docsStats.pending}</strong> pendentes
         </span>
         {docsStats.needsAdjustment > 0 && (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-warning/5 text-warning dark:bg-warning/15 dark:text-warning">
             <strong>{docsStats.needsAdjustment}</strong> precisam ajuste
           </span>
         )}
@@ -545,7 +545,7 @@ export default function AdmissionDetailPage() {
               className={
                 confirmAction === "cancel"
                   ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  : "bg-orange-600 hover:bg-orange-700"
+                  : "bg-primary hover:bg-primary/15"
               }
             >
               {confirmAction === "cancel" ? "Cancelar admissão" : "Admitir"}
@@ -873,11 +873,11 @@ function ExamRow({
 
   const statusColor =
     status === "approved"
-      ? "text-emerald-700 dark:text-emerald-300"
+      ? "text-success dark:text-success"
       : status === "needs_adjustment"
-      ? "text-amber-700 dark:text-amber-300"
+      ? "text-warning dark:text-warning"
       : status === "submitted"
-      ? "text-blue-700 dark:text-blue-300"
+      ? "text-info dark:text-info"
       : "text-muted-foreground";
 
   const isSubmittedOrAdjust =
@@ -933,7 +933,7 @@ function ExamRow({
             variant="outline"
             size="sm"
             onClick={onReject}
-            className="text-orange-700 border-orange-200 hover:bg-orange-50 dark:text-orange-300 dark:border-orange-800"
+            className="text-primary border-primary/25 hover:bg-primary/15 dark:text-primary dark:border-primary/25"
           >
             Pedir ajuste
           </Button>
@@ -961,9 +961,9 @@ function StatBlock({
         <p
           className={`text-2xl font-light mt-1 ${
             accent === "emerald"
-              ? "text-orange-700 dark:text-orange-400"
+              ? "text-primary dark:text-primary"
               : accent === "orange"
-              ? "text-orange-700 dark:text-orange-400"
+              ? "text-primary dark:text-primary"
               : "text-foreground"
           }`}
         >

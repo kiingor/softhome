@@ -51,15 +51,15 @@ const fmtVal = (group: string, v: number | null) =>
   v == null ? "—" : COUNT_GROUPS.has(group) ? String(v) : formatCurrency(v);
 
 const SEVERITY_BADGE: Record<string, { label: string; cls: string }> = {
-  divergence: { label: "Divergência", cls: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300" },
-  missing_system: { label: "Sem correspondência na folha", cls: "bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300" },
+  divergence: { label: "Divergência", cls: "bg-warning/10 text-warning dark:bg-warning/15 dark:text-warning" },
+  missing_system: { label: "Sem correspondência na folha", cls: "bg-destructive/10 text-destructive dark:bg-destructive/15 dark:text-destructive" },
   missing_pdf: { label: "Sem correspondência no PDF", cls: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300" },
-  info: { label: "Info", cls: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300" },
+  info: { label: "Info", cls: "bg-info/10 text-info dark:bg-info/15 dark:text-info" },
 };
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   pending: { label: "Pendente", cls: "bg-muted text-muted-foreground" },
-  corrected: { label: "Corrigido", cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300" },
+  corrected: { label: "Corrigido", cls: "bg-success/10 text-success dark:bg-success/15 dark:text-success" },
   ignored: { label: "Ignorado", cls: "bg-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400" },
 };
 
@@ -162,7 +162,7 @@ export function ValidationResults({ validation, companyId, referenceMonth, canMa
         </div>
         <Progress value={pct} />
         {validation.items_total === 0 && (
-          <p className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">
+          <p className="text-sm text-success dark:text-success font-medium">
             Nenhuma divergência — folha bate com a contabilidade. 🎉
           </p>
         )}
@@ -265,7 +265,7 @@ export function ValidationResults({ validation, companyId, referenceMonth, canMa
                     >
                       {isCollapsed ? <CaretRight className="w-4 h-4" /> : <CaretDown className="w-4 h-4" />}
                       <span className="font-medium text-sm flex-1 truncate">{name}</span>
-                      <Badge variant="secondary" className="text-xs">{its.length}</Badge>
+                      <Badge variant="secondary" >{its.length}</Badge>
                     </button>
                     {!isCollapsed && (
                       <div className="divide-y border-t">
@@ -355,7 +355,7 @@ function ItemRow({
             <span>Contabilidade: <b className="text-foreground">{fmtVal(item.check_group, item.expected_value)}</b></span>
             <span>Folha: <b className="text-foreground">{fmtVal(item.check_group, item.actual_value)}</b></span>
             {item.diff != null && item.diff !== 0 && (
-              <span className={`inline-flex items-center gap-1 font-medium ${item.direction === "a_mais" ? "text-rose-600 dark:text-rose-400" : "text-amber-600 dark:text-amber-400"}`}>
+              <span className={`inline-flex items-center gap-1 font-medium ${item.direction === "a_mais" ? "text-destructive dark:text-destructive" : "text-warning dark:text-warning"}`}>
                 {item.direction === "a_mais" ? <TrendUp className="w-3.5 h-3.5" /> : <TrendDown className="w-3.5 h-3.5" />}
                 {COUNT_GROUPS.has(item.check_group)
                   ? `${Math.abs(item.diff)} ${item.direction === "a_mais" ? "a mais" : "a menos"}`
@@ -371,7 +371,7 @@ function ItemRow({
       {canManage && (
         <div className="flex items-center gap-1 shrink-0">
           {item.status !== "corrected" && (
-            <Button size="icon" variant="ghost" className="h-7 w-7 text-emerald-600" title="Corrigido" onClick={() => onResolve("corrected")}>
+            <Button size="icon" variant="ghost" className="h-7 w-7 text-success" title="Corrigido" onClick={() => onResolve("corrected")}>
               <Check className="w-4 h-4" />
             </Button>
           )}

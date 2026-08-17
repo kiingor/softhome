@@ -506,7 +506,6 @@ const ColaboradoresPage = () => {
       <div className="space-y-6 page-content">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 animate-fade-in">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Colaboradores</h1>
             <p className="text-muted-foreground">
               {totalCount} colaborador{totalCount !== 1 ? "es" : ""} cadastrado{totalCount !== 1 ? "s" : ""}
             </p>
@@ -613,19 +612,19 @@ const ColaboradoresPage = () => {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <div className="rounded-lg border p-3">
                     <div className="text-xs text-muted-foreground">Novos</div>
-                    <div className="text-2xl font-bold text-emerald-600">{syncResult.inserted}</div>
+                    <div className="text-2xl font-bold text-success">{syncResult.inserted}</div>
                   </div>
                   <div className="rounded-lg border p-3">
                     <div className="text-xs text-muted-foreground">Atualizados</div>
-                    <div className="text-2xl font-bold text-blue-600">{syncResult.updated}</div>
+                    <div className="text-2xl font-bold text-info">{syncResult.updated}</div>
                   </div>
                   <div className="rounded-lg border p-3">
                     <div className="text-xs text-muted-foreground">Desativados</div>
-                    <div className="text-2xl font-bold text-amber-600">{syncResult.deactivated}</div>
+                    <div className="text-2xl font-bold text-warning">{syncResult.deactivated}</div>
                   </div>
                   <div className="rounded-lg border p-3">
                     <div className="text-xs text-muted-foreground">Com erro</div>
-                    <div className="text-2xl font-bold text-rose-600">{syncResult.errors.length}</div>
+                    <div className="text-2xl font-bold text-destructive">{syncResult.errors.length}</div>
                   </div>
                 </div>
 
@@ -668,13 +667,13 @@ const ColaboradoresPage = () => {
                         </div>
                         <div>
                           <span className="text-muted-foreground">Erros financeiros:</span>{" "}
-                          <strong className={syncResult.financials.errors > 0 ? "text-rose-600" : ""}>{syncResult.financials.errors}</strong>
+                          <strong className={syncResult.financials.errors > 0 ? "text-destructive" : ""}>{syncResult.financials.errors}</strong>
                         </div>
                       </div>
                     </div>
 
                     {syncResult.financials.errorDetails && syncResult.financials.errorDetails.length > 0 && (
-                      <details open className="rounded border bg-rose-50 dark:bg-rose-950/30">
+                      <details open className="rounded border bg-destructive/5 dark:bg-destructive/15">
                         <summary className="cursor-pointer p-2 font-medium text-sm select-none">
                           Erros financeiros ({syncResult.financials.errorDetails.length})
                         </summary>
@@ -682,7 +681,7 @@ const ColaboradoresPage = () => {
                           {syncResult.financials.errorDetails.map((e, idx) => (
                             <div key={idx} className="p-2">
                               <div className="font-medium">{e.collaboratorName} <span className="text-muted-foreground">· {e.tipo}</span></div>
-                              <div className="text-rose-600">{e.error}</div>
+                              <div className="text-destructive">{e.error}</div>
                             </div>
                           ))}
                         </div>
@@ -720,7 +719,7 @@ const ColaboradoresPage = () => {
                     </div>
 
                     {syncResult.details.errorDetails && syncResult.details.errorDetails.length > 0 && (
-                      <details open className="rounded border bg-rose-50 dark:bg-rose-950/30">
+                      <details open className="rounded border bg-destructive/5 dark:bg-destructive/15">
                         <summary className="cursor-pointer p-2 font-medium text-sm select-none">
                           Erros nos detalhes ({syncResult.details.errorDetails.length})
                         </summary>
@@ -728,7 +727,7 @@ const ColaboradoresPage = () => {
                           {syncResult.details.errorDetails.map((e, idx) => (
                             <div key={idx} className="p-2">
                               <div className="font-medium">{e.collaboratorName} <span className="text-muted-foreground">· {e.kind}</span></div>
-                              <div className="text-rose-600">{e.error}</div>
+                              <div className="text-destructive">{e.error}</div>
                             </div>
                           ))}
                         </div>
@@ -739,7 +738,7 @@ const ColaboradoresPage = () => {
 
                 {syncResult.errors.length > 0 && (
                   <details open className="rounded-lg border">
-                    <summary className="cursor-pointer p-3 font-medium select-none bg-rose-50 dark:bg-rose-950/30 rounded-t-lg">
+                    <summary className="cursor-pointer p-3 font-medium select-none bg-destructive/5 dark:bg-destructive/15 rounded-t-lg">
                       Erros ({syncResult.errors.length})
                     </summary>
                     <div className="divide-y">
@@ -752,7 +751,7 @@ const ColaboradoresPage = () => {
                               {e.cpf ? ` · CPF: ${e.cpf}` : ''}
                             </span>
                           </div>
-                          <div className="text-rose-600 text-xs">{e.error}</div>
+                          <div className="text-destructive text-xs">{e.error}</div>
                         </div>
                       ))}
                     </div>
@@ -761,7 +760,7 @@ const ColaboradoresPage = () => {
 
                 {syncResult.successes.length > 0 && (
                   <details className="rounded-lg border">
-                    <summary className="cursor-pointer p-3 font-medium select-none bg-emerald-50 dark:bg-emerald-950/30 rounded-t-lg">
+                    <summary className="cursor-pointer p-3 font-medium select-none bg-success/5 dark:bg-success/15 rounded-t-lg">
                       Sincronizados com sucesso ({syncResult.successes.length})
                     </summary>
                     <div className="divide-y max-h-64 overflow-y-auto">
@@ -769,7 +768,7 @@ const ColaboradoresPage = () => {
                         <div key={s.external_id} className="p-2 text-sm flex items-center justify-between gap-2">
                           <span>{s.name}</span>
                           <span className="text-xs">
-                            <span className={s.action === 'inserted' ? 'text-emerald-600' : 'text-blue-600'}>
+                            <span className={s.action === 'inserted' ? 'text-success' : 'text-info'}>
                               {s.action === 'inserted' ? 'novo' : 'atualizado'}
                             </span>
                             <span className="text-muted-foreground ml-2">#{s.external_id}</span>
@@ -920,11 +919,11 @@ const ColaboradoresPage = () => {
                 <TableBody className="stagger-animation">
                   {collaborators.map((collaborator) => {
                     const statusConfig: Record<string, { label: string; className: string }> = {
-                      ativo: { label: "Ativo", className: "bg-green-100 text-green-700 hover:bg-green-100" },
+                      ativo: { label: "Ativo", className: "bg-success/10 text-success hover:bg-success/15" },
                       inativo: { label: "Inativo", className: "bg-muted text-muted-foreground" },
-                      aguardando_documentacao: { label: "Aguardando Docs", className: "bg-yellow-100 text-yellow-700 hover:bg-yellow-100" },
-                      validacao_pendente: { label: "Validação Pendente", className: "bg-blue-100 text-blue-700 hover:bg-blue-100" },
-                      reprovado: { label: "Reprovado", className: "bg-red-100 text-red-700 hover:bg-red-100" },
+                      aguardando_documentacao: { label: "Aguardando Docs", className: "bg-warning/10 text-warning hover:bg-warning/15" },
+                      validacao_pendente: { label: "Validação Pendente", className: "bg-info/10 text-info hover:bg-info/15" },
+                      reprovado: { label: "Reprovado", className: "bg-destructive/10 text-destructive hover:bg-destructive/15" },
                     };
                     const sc = statusConfig[collaborator.status] || statusConfig.inativo;
 

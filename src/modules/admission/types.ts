@@ -40,15 +40,15 @@ export const JOURNEY_STATUS_COLORS: Record<AdmissionJourneyStatus, string> = {
   created: "bg-muted text-muted-foreground",
   tests_pending: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
   tests_in_review: "bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-900/30 dark:text-fuchsia-300",
-  docs_pending: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
-  docs_in_review: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
-  docs_needs_adjustment: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
-  docs_approved: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
-  exam_scheduled: "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300",
+  docs_pending: "bg-info/10 text-info dark:bg-info/15 dark:text-info",
+  docs_in_review: "bg-warning/10 text-warning dark:bg-warning/15 dark:text-warning",
+  docs_needs_adjustment: "bg-primary/10 text-primary dark:bg-primary/15 dark:text-primary",
+  docs_approved: "bg-primary/10 text-primary dark:bg-primary/15 dark:text-primary",
+  exam_scheduled: "bg-info/10 text-info dark:bg-info/15 dark:text-info",
   exam_done: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300",
   contract_signed: "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300",
-  admitted: "bg-orange-600 text-white dark:bg-orange-700",
-  cancelled: "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300",
+  admitted: "bg-primary text-white dark:bg-primary",
+  cancelled: "bg-destructive/10 text-destructive dark:bg-destructive/15 dark:text-destructive",
 };
 
 export const DOCUMENT_STATUS_LABELS: Record<AdmissionDocumentStatus, string> = {

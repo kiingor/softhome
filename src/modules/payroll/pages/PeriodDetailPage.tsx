@@ -577,7 +577,7 @@ export default function PeriodDetailPage() {
             <div className="flex items-center gap-3 mt-2 flex-wrap">
               <Badge
                 variant="outline"
-                className={`font-normal border-0 ${PERIOD_STATUS_COLORS[period.status]}`}
+                className={`border-0 ${PERIOD_STATUS_COLORS[period.status]}`}
               >
                 {PERIOD_STATUS_LABELS[period.status]}
               </Badge>
@@ -594,11 +594,11 @@ export default function PeriodDetailPage() {
               <Button
                 variant="outline"
                 onClick={() => setAlertsOpen(true)}
-                className="border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800 dark:border-amber-800 dark:text-amber-400"
+                className="border-warning/25 text-warning hover:bg-warning/15 hover:text-warning dark:border-warning/25 dark:text-warning"
               >
                 <AlertTriangle className="w-4 h-4 mr-2" weight="fill" />
                 Alertas
-                <span className="ml-2 inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold dark:bg-amber-900/50 dark:text-amber-300">
+                <span className="ml-2 inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-warning/10 text-warning text-xs font-semibold dark:bg-warning/15 dark:text-warning">
                   {alerts.length}
                 </span>
               </Button>
@@ -772,7 +772,7 @@ export default function PeriodDetailPage() {
                 <p className="text-sm text-muted-foreground">
                   Valores líquidos (com INSS e IRPF já descontados conforme a
                   tabela 2026). Benefícios, FGTS e lançamentos estornados ficam
-                  fora. Passa o mouse no ícone <Info className="inline w-3 h-3 mx-0.5 text-amber-600" weight="fill" /> pra ver bruto/desconto/líquido.
+                  fora. Passa o mouse no ícone <Info className="inline w-3 h-3 mx-0.5 text-warning" weight="fill" /> pra ver bruto/desconto/líquido.
                 </p>
               </CardHeader>
               <CardContent>
@@ -799,17 +799,17 @@ export default function PeriodDetailPage() {
                 <StatBlock
                   label="Proventos"
                   value={formatCurrency(lancamentoStats.main.earnings)}
-                  accent="emerald"
+                  tom="positivo"
                 />
                 <StatBlock
                   label="Descontos"
                   value={formatCurrency(lancamentoStats.main.deductions)}
-                  accent="rose"
+                  tom="negativo"
                 />
                 <StatBlock
                   label="Líquido"
                   value={formatCurrency(lancamentoStats.main.net)}
-                  accent={lancamentoStats.main.net >= 0 ? "emerald" : "rose"}
+                  tom={lancamentoStats.main.net >= 0 ? "positivo" : "negativo"}
                 />
               </div>
             </div>
@@ -824,17 +824,17 @@ export default function PeriodDetailPage() {
                   <StatBlock
                     label="Proventos"
                     value={formatCurrency(lancamentoStats.intern.earnings)}
-                    accent="emerald"
+                    tom="positivo"
                   />
                   <StatBlock
                     label="Descontos"
                     value={formatCurrency(lancamentoStats.intern.deductions)}
-                    accent="rose"
+                    tom="negativo"
                   />
                   <StatBlock
                     label="Líquido"
                     value={formatCurrency(lancamentoStats.intern.net)}
-                    accent={lancamentoStats.intern.net >= 0 ? "emerald" : "rose"}
+                    tom={lancamentoStats.intern.net >= 0 ? "positivo" : "negativo"}
                   />
                 </div>
               </div>
@@ -1107,7 +1107,7 @@ export default function PeriodDetailPage() {
                         <TableRow
                           className={`hover:bg-muted/50 cursor-pointer ${
                             isReviewed(g.id)
-                              ? "bg-emerald-50 dark:bg-emerald-950/20"
+                              ? "bg-success/5 dark:bg-success/15"
                               : "bg-muted/20"
                           }`}
                           onClick={() => toggleCollab(g.id)}
@@ -1183,8 +1183,8 @@ export default function PeriodDetailPage() {
                           <TableCell
                             className={`text-right text-sm font-mono font-semibold whitespace-nowrap ${
                               g.net >= 0
-                                ? "text-orange-700 dark:text-orange-300"
-                                : "text-rose-700 dark:text-rose-300"
+                                ? "text-primary dark:text-primary"
+                                : "text-destructive dark:text-destructive"
                             }`}
                           >
                             {g.net >= 0 ? "+ " : "- "}
@@ -1259,7 +1259,7 @@ export default function PeriodDetailPage() {
                                         <HoverCardTrigger asChild>
                                           <button
                                             type="button"
-                                            className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-full text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900/30 transition focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                                            className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-full text-warning hover:bg-warning/15 dark:hover:bg-warning/15 transition focus:outline-none focus:ring-2 focus:ring-warning/30"
                                             aria-label="Ver detalhes do líquido"
                                             onClick={(ev) => ev.stopPropagation()}
                                           >
@@ -1282,7 +1282,7 @@ export default function PeriodDetailPage() {
                                             {deductions.map((d) => (
                                               <div
                                                 key={d.label}
-                                                className="flex items-center justify-between gap-2 text-rose-700 dark:text-rose-300"
+                                                className="flex items-center justify-between gap-2 text-destructive dark:text-destructive"
                                               >
                                                 <span>− {d.label}</span>
                                                 <span className="font-mono">
@@ -1292,7 +1292,7 @@ export default function PeriodDetailPage() {
                                             ))}
                                             <div className="border-t border-border pt-1.5 flex items-center justify-between gap-2 font-medium">
                                               <span>Líquido</span>
-                                              <span className="font-mono text-orange-700 dark:text-orange-300">
+                                              <span className="font-mono text-primary dark:text-primary">
                                                 {formatCurrency(value)}
                                               </span>
                                             </div>
@@ -1317,9 +1317,9 @@ export default function PeriodDetailPage() {
                                 <TableCell
                                   className={`text-right text-sm font-mono whitespace-nowrap ${
                                     value < 0
-                                      ? "text-rose-700 dark:text-rose-300"
+                                      ? "text-destructive dark:text-destructive"
                                       : earning
-                                      ? "text-orange-700 dark:text-orange-300"
+                                      ? "text-primary dark:text-primary"
                                       : "text-foreground"
                                   }`}
                                 >
@@ -1368,7 +1368,7 @@ export default function PeriodDetailPage() {
         <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-amber-600" weight="fill" />
+              <AlertTriangle className="w-5 h-5 text-warning" weight="fill" />
               Alertas pendentes ({alerts.length})
             </DialogTitle>
           </DialogHeader>
@@ -1380,7 +1380,7 @@ export default function PeriodDetailPage() {
               >
                 <Badge
                   variant="outline"
-                  className={`font-normal border-0 shrink-0 ${ALERT_SEVERITY_COLORS[a.severity]}`}
+                  className={`border-0 shrink-0 ${ALERT_SEVERITY_COLORS[a.severity]}`}
                 >
                   {ALERT_SEVERITY_LABELS[a.severity] ?? a.severity}
                 </Badge>
@@ -1695,7 +1695,7 @@ function ReviewObsButton({
           type="button"
           size="icon"
           variant="ghost"
-          className={`h-7 w-7 ${hasObs ? "text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30" : "text-muted-foreground/40 hover:text-foreground"}`}
+          className={`h-7 w-7 ${hasObs ? "text-warning hover:text-warning hover:bg-warning/15 dark:hover:bg-warning/15" : "text-muted-foreground/40 hover:text-foreground"}`}
           title={hasObs ? `Observação: ${observation}` : "Adicionar observação"}
           onClick={(e) => e.stopPropagation()}
         >

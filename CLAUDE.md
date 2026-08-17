@@ -14,9 +14,10 @@ Forkado a partir do `kiingor/meurh` (produto SaaS comercial), em processo de tra
 - **Backend:** Supabase (Postgres + Auth + Storage + Realtime + Edge Functions Deno)
 - **Hospedagem dados:** Supabase Cloud Pro, sa-east-1 (LGPD — dado em território nacional)
 - **IA produção:** Claude (paga) v1 → modelo local em fase posterior
-- **Tipografia:** Manrope (interface + títulos)
+- **Tipografia:** Inter (interface) + JetBrains Mono (dados/números, classe `.mono` com `tnum`)
 - **Ícones:** Phosphor Icons
-- **Cor accent:** emerald (#F97316)
+- **Cor accent:** laranja Softcom `#F97316` — usado com parcimônia (ação primária, item ativo, marca)
+- **Design system:** herdado do handoff Agenda Softcom (AgendaV3), com identidade ink quente + laranja. Ver [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md)
 - **Forms:** react-hook-form + zod
 - **Tabelas:** TanStack Table
 
@@ -215,6 +216,7 @@ Cada fase é PR(s) próprias com merge em `main` quando estável.
 - Migration sem bloco de rollback
 - Commitar `.env` (já no `.gitignore`, mas vale lembrar)
 - Usar `console.log` em código de produção (use logger estruturado)
+- Pintar status com classe literal de paleta (`text-emerald-700`, `bg-amber-100`) — use os tokens (`text-success`, `bg-warning/10`), senão a tela fura o design system e não acompanha troca de tema nem de paleta. Paleta literal só quando a cor é **categórica** (calendário de férias, fatores DISC), nunca quando é **status**.
 
 ## Pendências conhecidas
 

@@ -328,7 +328,7 @@ export default function VagaDetailPage() {
         <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-semibold text-foreground">Pipeline</h2>
-            <Badge variant="secondary" className="font-normal">
+            <Badge variant="secondary" >
               {applications.length}{" "}
               {applications.length === 1 ? "candidato" : "candidatos"}
             </Badge>

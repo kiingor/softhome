@@ -708,11 +708,11 @@ export const UsersAccessTab = () => {
                       <TableCell>{companyUser.email}</TableCell>
                       <TableCell>
                         {isOwner ? (
-                          <Badge variant="default" className="bg-orange-500">
+                          <Badge variant="default" className="bg-primary">
                             Admin
                           </Badge>
                         ) : companyUser.accepted_at ? (
-                          <Badge variant="default" className="bg-green-500">
+                          <Badge variant="default" className="bg-success">
                             Ativo
                           </Badge>
                         ) : (

@@ -169,9 +169,9 @@ export const ACTION_LABELS: Record<string, string> = {
 };
 
 export const ACTION_COLORS: Record<string, string> = {
-  insert: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
-  update: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
-  delete: "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300",
+  insert: "bg-success/10 text-success dark:bg-success/15 dark:text-success",
+  update: "bg-warning/10 text-warning dark:bg-warning/15 dark:text-warning",
+  delete: "bg-destructive/10 text-destructive dark:bg-destructive/15 dark:text-destructive",
 };
 
 // Lista de colunas que mudaram entre `before` e `after`. Filtra ruído

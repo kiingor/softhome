@@ -45,16 +45,16 @@ export function celebrate({ title, body, durationMs }: CelebrationOptions) {
   fireConfetti(durationMs);
   toast.custom(
     (t) => (
-      <div className="rounded-xl shadow-xl border border-orange-200 bg-gradient-to-br from-orange-50 via-amber-50 to-orange-100 p-4 min-w-[320px] max-w-[400px] flex items-start gap-3 animate-in slide-in-from-top-4 fade-in">
+      <div className="rounded-xl shadow-xl border border-primary/25 bg-gradient-to-br from-orange-50 via-amber-50 to-orange-100 p-4 min-w-[320px] max-w-[400px] flex items-start gap-3 animate-in slide-in-from-top-4 fade-in">
         <div className="text-2xl shrink-0 leading-none">🎉</div>
         <div className="flex-1 min-w-0">
-          <p className="font-bold text-orange-900 text-sm">{title}</p>
-          {body && <p className="text-orange-800/90 text-xs mt-0.5">{body}</p>}
+          <p className="font-bold text-primary text-sm">{title}</p>
+          {body && <p className="text-primary text-xs mt-0.5">{body}</p>}
         </div>
         <button
           type="button"
           onClick={() => toast.dismiss(t)}
-          className="text-orange-700/70 hover:text-orange-900 text-xs"
+          className="text-primary hover:text-primary text-xs"
           aria-label="Fechar"
         >
           ✕

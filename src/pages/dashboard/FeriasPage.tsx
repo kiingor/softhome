@@ -128,22 +128,22 @@ const FeriasPage = () => {
         let situationClass = "bg-muted text-muted-foreground";
         if (activeRequest?.status === "in_progress") {
           situationLabel = "Em Gozo";
-          situationClass = "bg-green-100 text-green-800 border-green-200";
+          situationClass = "bg-success/10 text-success border-success/25";
         } else if (activeRequest?.status === "approved") {
           situationLabel = "Férias Agendadas";
-          situationClass = "bg-blue-100 text-blue-800 border-blue-200";
+          situationClass = "bg-info/10 text-info border-info/25";
         } else if (isOverdue) {
           situationLabel = "Vencido!";
-          situationClass = "bg-red-100 text-red-800 border-red-200";
+          situationClass = "bg-destructive/10 text-destructive border-destructive/25";
         } else if (isExpiring) {
           situationLabel = "Vencendo";
-          situationClass = "bg-yellow-100 text-yellow-800 border-yellow-200";
+          situationClass = "bg-warning/10 text-warning border-warning/25";
         } else if (currentPeriod?.status === "pending") {
           situationLabel = "Adquirindo";
-          situationClass = "bg-blue-50 text-blue-700 border-blue-200";
+          situationClass = "bg-info/5 text-info border-info/25";
         } else if (currentPeriod?.status === "available") {
           situationLabel = "Disponível";
-          situationClass = "bg-green-50 text-green-700 border-green-200";
+          situationClass = "bg-success/5 text-success border-success/25";
         }
 
         return {
@@ -211,7 +211,6 @@ const FeriasPage = () => {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Férias e Ausências</h1>
             <p className="text-muted-foreground">
               {canManage ? "Gerencie solicitações de férias dos colaboradores" : "Acompanhe suas férias e ausências"}
             </p>
@@ -234,8 +233,8 @@ const FeriasPage = () => {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <Card>
             <CardContent className="p-4 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-yellow-100 flex items-center justify-center">
-                <Clock className="w-5 h-5 text-yellow-600" />
+              <div className="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center">
+                <Clock className="w-5 h-5 text-warning" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{pendingCount}</p>
@@ -245,8 +244,8 @@ const FeriasPage = () => {
           </Card>
           <Card>
             <CardContent className="p-4 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
-                <Users className="w-5 h-5 text-green-600" />
+              <div className="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center">
+                <Users className="w-5 h-5 text-success" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{inProgressCount}</p>
@@ -256,8 +255,8 @@ const FeriasPage = () => {
           </Card>
           <Card>
             <CardContent className="p-4 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                <CalendarCheck className="w-5 h-5 text-blue-600" />
+              <div className="w-10 h-10 rounded-lg bg-info/10 flex items-center justify-center">
+                <CalendarCheck className="w-5 h-5 text-info" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{approvedCount}</p>
@@ -267,8 +266,8 @@ const FeriasPage = () => {
           </Card>
           <Card>
             <CardContent className="p-4 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center">
-                <AlertTriangle className="w-5 h-5 text-red-600" />
+              <div className="w-10 h-10 rounded-lg bg-destructive/10 flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5 text-destructive" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{expiringPeriods}</p>
@@ -351,7 +350,7 @@ const FeriasPage = () => {
                           <TableCell className="text-center font-bold">{c.totalRemaining}</TableCell>
                           <TableCell>
                             {c.concessiveDeadline ? (
-                              <span className={c.isOverdue ? "text-destructive font-semibold" : c.isExpiring ? "text-yellow-600 font-semibold" : ""}>
+                              <span className={c.isOverdue ? "text-destructive font-semibold" : c.isExpiring ? "text-warning font-semibold" : ""}>
                                 {format(c.concessiveDeadline, "dd/MM/yyyy")}
                               </span>
                             ) : "—"}
@@ -474,10 +473,10 @@ const FeriasPage = () => {
                               </Button>
                               {r.status === "pending" && (
                                 <>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600 hover:text-green-700" onClick={() => handleApprove(r)}>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-success hover:text-success" onClick={() => handleApprove(r)}>
                                     <Check className="w-4 h-4" />
                                   </Button>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600 hover:text-red-700" onClick={() => { setRejectingRequest(r); setRejectionReason(""); }}>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => { setRejectingRequest(r); setRejectionReason(""); }}>
                                     <X className="w-4 h-4" />
                                   </Button>
                                 </>

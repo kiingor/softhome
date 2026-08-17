@@ -90,40 +90,40 @@ export function entryTypeNature(type: ActiveEntryType): ManualEntryNature | null
 // visualmente, sem competir com os valores numéricos.
 export const ENTRY_TYPE_COLORS: Record<string, string> = {
   salario_base:
-    "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900/60",
+    "bg-info/5 text-info border-info/25 dark:bg-info/15 dark:text-info dark:border-info/25",
   salario_retroativo:
     "bg-lime-50 text-lime-700 border-lime-200 dark:bg-lime-950/40 dark:text-lime-300 dark:border-lime-900/60",
   hora_extra:
-    "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/60",
+    "bg-warning/5 text-warning border-warning/25 dark:bg-warning/15 dark:text-warning dark:border-warning/25",
   beneficio:
-    "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/60",
+    "bg-success/5 text-success border-success/25 dark:bg-success/15 dark:text-success dark:border-success/25",
   bonificacao:
-    "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-900/60",
+    "bg-info/5 text-info border-info/25 dark:bg-info/15 dark:text-info dark:border-info/25",
   gratificacao:
     "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-900/60",
   carro_agregado:
-    "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-900/60",
+    "bg-info/5 text-info border-info/25 dark:bg-info/15 dark:text-info dark:border-info/25",
   periculosidade:
     "bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200 dark:bg-fuchsia-950/40 dark:text-fuchsia-300 dark:border-fuchsia-900/60",
   auxilio_vale_transporte:
-    "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/60",
+    "bg-success/5 text-success border-success/25 dark:bg-success/15 dark:text-success dark:border-success/25",
   atestado:
     "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-900/60 dark:text-slate-300 dark:border-slate-700",
   adiantamento:
-    "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-900/60",
+    "bg-primary/5 text-primary border-primary/25 dark:bg-primary/15 dark:text-primary dark:border-primary/25",
   falta:
-    "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900/60",
+    "bg-destructive/5 text-destructive border-destructive/25 dark:bg-destructive/15 dark:text-destructive dark:border-destructive/25",
   desconto:
-    "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900/60",
+    "bg-destructive/5 text-destructive border-destructive/25 dark:bg-destructive/15 dark:text-destructive dark:border-destructive/25",
   emprestimo:
-    "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900/60",
+    "bg-destructive/5 text-destructive border-destructive/25 dark:bg-destructive/15 dark:text-destructive dark:border-destructive/25",
   ferias:
     "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-900/60",
   salario_familia:
     "bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-300 dark:border-cyan-900/60",
-  inss: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/60",
-  irpf: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/60",
-  fgts: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/60",
+  inss: "bg-destructive/5 text-destructive border-destructive/25 dark:bg-destructive/15 dark:text-destructive dark:border-destructive/25",
+  irpf: "bg-destructive/5 text-destructive border-destructive/25 dark:bg-destructive/15 dark:text-destructive dark:border-destructive/25",
+  fgts: "bg-destructive/5 text-destructive border-destructive/25 dark:bg-destructive/15 dark:text-destructive dark:border-destructive/25",
 };
 
 export const ENTRY_TYPE_LABELS: Record<string, string> = {
@@ -248,13 +248,13 @@ export const PERIOD_STATUS_LABELS: Record<PayrollPeriodStatus, string> = {
 export const PERIOD_STATUS_COLORS: Record<PayrollPeriodStatus, string> = {
   open: "bg-slate-100 text-slate-800 dark:bg-slate-800/60 dark:text-slate-300",
   aprovado_rh:
-    "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+    "bg-info/10 text-info dark:bg-info/15 dark:text-info",
   aprovado_diretoria:
-    "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
+    "bg-success/10 text-success dark:bg-success/15 dark:text-success",
   closed:
-    "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+    "bg-warning/10 text-warning dark:bg-warning/15 dark:text-warning",
   exported:
-    "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
+    "bg-primary/10 text-primary dark:bg-primary/15 dark:text-primary",
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -341,11 +341,11 @@ export const ALERT_KIND_LABELS: Record<PayrollAlertKind, string> = {
 };
 
 export const ALERT_SEVERITY_COLORS: Record<PayrollAlertSeverity, string> = {
-  info: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+  info: "bg-info/10 text-info dark:bg-info/15 dark:text-info",
   warning:
-    "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+    "bg-warning/10 text-warning dark:bg-warning/15 dark:text-warning",
   critical:
-    "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300",
+    "bg-destructive/10 text-destructive dark:bg-destructive/15 dark:text-destructive",
 };
 
 export const ALERT_SEVERITY_LABELS: Record<PayrollAlertSeverity, string> = {

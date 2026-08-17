@@ -108,8 +108,8 @@ const QRCodeModal = ({ open, onOpenChange, instanceName }: QRCodeModalProps) => 
         <div className="flex flex-col items-center py-6">
           {connected ? (
             <div className="text-center space-y-4">
-              <div className="w-20 h-20 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mx-auto">
-                <CheckCircle className="w-10 h-10 text-green-600" />
+              <div className="w-20 h-20 rounded-full bg-success/10 dark:bg-success/15 flex items-center justify-center mx-auto">
+                <CheckCircle className="w-10 h-10 text-success" />
               </div>
               <div>
                 <p className="font-semibold text-lg">Conectado!</p>
