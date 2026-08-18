@@ -111,7 +111,7 @@ type Row = any;
 
 interface PayBody {
   entry_id: string;
-  action: "challenge" | "execute";
+  action: "challenge" | "execute" | "check" | "cancel";
   challenge_id?: string;
   code?: string;
 }
@@ -182,15 +182,18 @@ serve(async (req) => {
   let body: PayBody;
   try {
     const raw = await req.json();
+    const validActions = ["challenge", "execute", "check", "cancel"];
     body = {
       entry_id: String(raw.entry_id ?? "").trim(),
-      action: raw.action === "execute" ? "execute" : "challenge",
+      action: validActions.includes(String(raw.action))
+        ? (String(raw.action) as PayBody["action"])
+        : "challenge",
       challenge_id: raw.challenge_id ? String(raw.challenge_id) : undefined,
       code: raw.code != null ? String(raw.code) : undefined,
     };
     if (!body.entry_id) throw new Error("entry_id obrigatório");
-    if (!["challenge", "execute"].includes(String(raw.action))) {
-      throw new Error("action precisa ser 'challenge' ou 'execute'");
+    if (!validActions.includes(String(raw.action))) {
+      throw new Error("action precisa ser 'challenge', 'execute', 'check' ou 'cancel'");
     }
   } catch (e) {
     return jsonResponse(
@@ -211,21 +214,132 @@ serve(async (req) => {
     );
   }
 
-  // ── 4. Gate triplo ─────────────────────────────────────────────────────────
-  const gate = await checkPaymentGate(sbUser, sbAdmin, user.id, companyId);
+  // ── 4. Gate ────────────────────────────────────────────────────────────────
+  // Pagar (challenge/execute) exige papel + módulo + aparelho de 2FA. Conferir /
+  // cancelar exige só papel + módulo: não movem dinheiro.
+  const paying = body.action === "challenge" || body.action === "execute";
+  const gate = await checkPaymentGate(sbUser, sbAdmin, user.id, companyId, paying);
   if (!gate.ok) {
     await logEvent(sbAdmin, {
       company_id: companyId,
       user_id: user.id,
       kind: "payment_denied",
-      metadata: { reason: gate.error, entry_id: body.entry_id },
+      metadata: { reason: gate.error, entry_id: body.entry_id, action: body.action },
       ip,
     });
     return jsonResponse({ error: gate.error, message: gate.message }, 403);
   }
   const device = gate.device;
 
-  // ── 5. Ação ────────────────────────────────────────────────────────────────
+  // ── 5. Conferir agora ──────────────────────────────────────────────────────
+  // Pergunta ao banco o estado da transferência em voo desse lançamento SEM
+  // esperar o cron. Não decide nada sozinho: zera o next_check_at pra a linha
+  // entrar na fila e dispara o reconciliador, que só liquida/recusa em resultado
+  // terminal e provado. No sandbox o mock devolve PENDING_VALIDATION — então
+  // "conferir" mostra honestamente que o banco-fake ainda não finalizou.
+  if (body.action === "check") {
+    const { data: tr } = await sbAdmin
+      .from("payroll_pix_transfers")
+      .select("id, status")
+      .eq("entry_id", body.entry_id)
+      .in("status", ["sent", "confirmed", "unknown"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!tr) {
+      return jsonResponse(
+        { error: "NADA_A_CONFERIR", message: "Não há transferência aguardando o banco pra conferir." },
+        404,
+      );
+    }
+    // Fura o backoff: a linha passa a ser elegível pra fila agora.
+    await sbAdmin
+      .from("payroll_pix_transfers")
+      .update({ next_check_at: new Date().toISOString() })
+      .eq("id", tr.id);
+
+    const reconcileSecret = Deno.env.get("PIX_RECONCILE_SECRET") ?? "";
+    let summary: unknown = null;
+    try {
+      const r = await fetch(`${supabaseUrl}/functions/v1/payroll-pix-reconcile`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${serviceKey}`,
+          apikey: serviceKey,
+          "x-reconcile-secret": reconcileSecret,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({}),
+      });
+      summary = await r.json().catch(() => null);
+    } catch (_e) {
+      return jsonResponse(
+        { error: "CHECK_FALHOU", message: "Não deu pra conferir agora. Tenta de novo em instantes." },
+        502,
+      );
+    }
+    await logEvent(sbAdmin, {
+      company_id: companyId,
+      user_id: user.id,
+      kind: "payment_checked",
+      metadata: { entry_id: body.entry_id, transfer_id: tr.id },
+      ip,
+    });
+    return jsonResponse({ ok: true, action: "check", summary }, 200);
+  }
+
+  // ── 6. Cancelar transferência travada ──────────────────────────────────────
+  // Em produção só 'created' (nunca saiu ao banco) pode ser cancelado direto —
+  // 'sent'/'confirmed' ainda podem liquidar, então a saída de lá é a resolução
+  // humana da conferência. No sandbox libera 'sent'/'confirmed' também, porque o
+  // mock nunca finaliza e a linha ficaria travada pra sempre no teste.
+  if (body.action === "cancel") {
+    const { data: tr } = await sbAdmin
+      .from("payroll_pix_transfers")
+      .select("id, status, environment")
+      .eq("entry_id", body.entry_id)
+      .in("status", ["created", "sent", "confirmed"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!tr) {
+      return jsonResponse(
+        { error: "NADA_A_CANCELAR", message: "Não há transferência em voo pra cancelar." },
+        404,
+      );
+    }
+    const cancellable = tr.status === "created" || tr.environment === "sandbox";
+    if (!cancellable) {
+      return jsonResponse(
+        {
+          error: "NAO_CANCELAVEL",
+          message: "Essa transferência já saiu ao banco. Confira o estado — se ficar em dúvida, resolva pela conferência.",
+        },
+        409,
+      );
+    }
+    const { error: failErr } = await sbAdmin.rpc("payroll_pix_fail", {
+      p_id: tr.id,
+      p_code: "CANCELADO_OPERADOR",
+      p_msg: `Cancelado pelo operador${tr.environment === "sandbox" ? " (sandbox)" : ""}.`,
+    });
+    if (failErr) {
+      return jsonResponse(
+        { error: "CANCEL_FALHOU", message: failErr.message },
+        400,
+      );
+    }
+    await logEvent(sbAdmin, {
+      company_id: companyId,
+      user_id: user.id,
+      kind: "payment_cancelled",
+      metadata: { entry_id: body.entry_id, transfer_id: tr.id, status_before: tr.status },
+      ip,
+    });
+    return jsonResponse({ ok: true, action: "cancel", status: "failed" }, 200);
+  }
+
+  // ── 7. Ação de pagamento ───────────────────────────────────────────────────
   if (body.action === "challenge") {
     // Sem WhatsApp não há como provar posse do aparelho — e pagamento sem
     // segundo fator não acontece neste sistema. Conferido antes de abrir a
@@ -947,6 +1061,7 @@ async function checkPaymentGate(
   sbAdmin: Sb,
   userId: string,
   companyId: string,
+  requireDevice = true,
 ): Promise<GateResult> {
   // 1. PAPEL. Bem mais estreito que o resto da folha: rh e gestor_gc montam e
   //    conferem a folha, mas quem manda dinheiro embora é admin_gc ou diretoria.
@@ -985,6 +1100,14 @@ async function checkPaymentGate(
       error: "FORBIDDEN_MODULE",
       message: "Você não tem permissão de executar pagamento nessa empresa.",
     };
+  }
+
+  // Conferir estado ou cancelar uma transferência travada não move dinheiro —
+  // exige o mesmo papel+módulo de quem paga, mas NÃO o aparelho de 2FA. Sem essa
+  // saída, o operador não conseguiria destravar um sandbox sem antes cadastrar o
+  // celular de aprovação, que nada tem a ver com conferir/cancelar.
+  if (!requireDevice) {
+    return { ok: true };
   }
 
   // 3. APARELHO. O dispositivo é por PESSOA e global (uq_payment_2fa_devices_

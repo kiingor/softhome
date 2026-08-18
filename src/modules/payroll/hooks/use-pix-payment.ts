@@ -149,5 +149,34 @@ export function usePixPayment(periodId: string | undefined) {
     onSettled: invalidar,
   });
 
-  return { challenge, execute };
+  /**
+   * "Conferir agora": pergunta ao banco o estado da transferência em voo desse
+   * lançamento, sem esperar o cron. Não move dinheiro — só consulta.
+   */
+  const checkNow = useMutation({
+    mutationFn: async (entryId: string) => {
+      const { data, error } = await supabase.functions.invoke("payroll-pix-pay", {
+        body: { entry_id: entryId, action: "check" },
+      });
+      return unwrap<{ ok: boolean; summary?: unknown }>(error, data);
+    },
+    onSettled: invalidar,
+  });
+
+  /**
+   * Cancela uma transferência travada (libera o lançamento). Em produção só vale
+   * pra quem nunca saiu ao banco ('created'); no sandbox libera as intermediárias
+   * porque o mock nunca finaliza.
+   */
+  const cancel = useMutation({
+    mutationFn: async (entryId: string) => {
+      const { data, error } = await supabase.functions.invoke("payroll-pix-pay", {
+        body: { entry_id: entryId, action: "cancel" },
+      });
+      return unwrap<{ ok: boolean; status: string }>(error, data);
+    },
+    onSettled: invalidar,
+  });
+
+  return { challenge, execute, checkNow, cancel };
 }

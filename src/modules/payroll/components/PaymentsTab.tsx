@@ -32,7 +32,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PixPaymentDialog } from "./PixPaymentDialog";
-import { usePixTransfers, type PixTransfer } from "../hooks/use-pix-payment";
+import { usePixTransfers, usePixPayment, type PixTransfer } from "../hooks/use-pix-payment";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useDashboard } from "@/contexts/DashboardContext";
 
@@ -81,6 +81,26 @@ export function PaymentsTab({
     periodStatus === "exported";
 
   const { data: pixTransfers = [] } = usePixTransfers(periodId);
+  const { checkNow, cancel } = usePixPayment(periodId);
+
+  const handleCheckNow = async (entryId: string) => {
+    try {
+      await checkNow.mutateAsync(entryId);
+      toast.info("Conferido com o banco. Se ainda estiver validando, o estado atualiza sozinho.");
+    } catch (err) {
+      toast.error((err as Error).message ?? "Não deu pra conferir agora.");
+    }
+  };
+
+  const handleCancel = async (entryId: string) => {
+    try {
+      await cancel.mutateAsync(entryId);
+      toast.success("Transferência cancelada. O lançamento voltou a ficar disponível pra pagar.");
+    } catch (err) {
+      toast.error((err as Error).message ?? "Não deu pra cancelar.");
+    }
+  };
+
   const transferByEntry = useMemo(() => {
     const m = new Map<string, PixTransfer>();
     // A query já vem por created_at DESC: a primeira de cada lançamento é a
@@ -536,6 +556,47 @@ export function PaymentsTab({
                         ? "Em conferência"
                         : "Enviando…"}
                   </Badge>
+                )}
+
+                {/* Transferência travada em voo: dá ao operador como conferir
+                    agora (sem esperar o cron) e como cancelar pra destravar o
+                    lançamento. No sandbox o banco-fake nunca finaliza, então é
+                    por aqui que o teste sai do "Enviando…". */}
+                {podePagar && emVoo && (
+                  <div className="flex items-center gap-1.5">
+                    {tx && tx.status !== "created" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5"
+                        disabled={checkNow.isPending || cancel.isPending}
+                        onClick={() => void handleCheckNow(entry.id)}
+                        title="Perguntar ao banco o estado agora"
+                      >
+                        {checkNow.isPending ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <MagnifyingGlass className="w-4 h-4" />
+                        )}
+                        Conferir
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="gap-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                      disabled={checkNow.isPending || cancel.isPending}
+                      onClick={() => void handleCancel(entry.id)}
+                      title="Cancelar e liberar o lançamento"
+                    >
+                      {cancel.isPending ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <XIcon className="w-4 h-4" />
+                      )}
+                      Cancelar
+                    </Button>
+                  </div>
                 )}
 
                 {/* Botão Pagar. Só aparece pra quem pode pagar, em folha
