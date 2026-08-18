@@ -781,6 +781,7 @@ function PeriodDetailPageContent() {
                   periodId={period.id}
                   entries={filteredEntries}
                   canManage={canManagePayments}
+                  periodStatus={period.status}
                 />
               </CardContent>
             </Card>
@@ -790,8 +791,11 @@ function PeriodDetailPageContent() {
         <TabsContent value="lancamentos">
           {/* KPIs desta aba — totais dos lançamentos (exclui bonificação/custo-setor).
               Estagiários (por cargo) saem dos totais principais e ganham bloco à parte. */}
-          <div className="flex flex-col lg:flex-row gap-4 mb-4">
-            <div className="lg:flex-[3] min-w-0 space-y-1.5">
+          {/* Empilhado, não lado a lado: 8 cards de moeda numa linha só (o antigo
+              flex-[3]/flex-[2]) espremia os valores e cortava dígitos. Cada
+              grupo ocupa a largura cheia, então cada card tem folga pro número. */}
+          <div className="flex flex-col gap-4 mb-4">
+            <div className="min-w-0 space-y-1.5">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">
                 {lancamentoStats.intern.collaborators > 0 ? "Folha — sem estagiários" : "Folha"}
               </p>
@@ -816,7 +820,7 @@ function PeriodDetailPageContent() {
             </div>
 
             {lancamentoStats.intern.collaborators > 0 && (
-              <div className="lg:flex-[2] min-w-0 space-y-1.5 lg:border-l lg:border-border lg:pl-4">
+              <div className="min-w-0 space-y-1.5 border-t border-border pt-4">
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">
                   Estagiários
                 </p>

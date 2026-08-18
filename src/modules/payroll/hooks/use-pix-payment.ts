@@ -1,0 +1,153 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pagamento PIX de uma linha da folha.
+//
+// O fluxo tem DOIS passos e eles são separados de propósito:
+//
+//   1. `challenge` — abre a transferência no servidor (que valida período
+//      aprovado, pensão, chave PIX, já-pago e já-em-voo) e dispara o código no
+//      WhatsApp do pagador, com o nome do favorecido e o valor na mensagem.
+//   2. `execute` — consome o código e manda o PIX.
+//
+// O cliente manda `entry_id` e o código. **Nunca** o valor nem a chave: quem
+// decide quanto e para quem é a linha congelada na aprovação da diretoria. Isso
+// é o que impede que mexer no DevTools mude o destinatário de um pagamento.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type PixTransferStatus =
+  | "created"
+  | "sent"
+  | "confirmed"
+  | "settled"
+  | "failed"
+  | "unknown";
+
+export interface PixTransfer {
+  id: string;
+  entry_id: string;
+  collaborator_id: string;
+  amount: number;
+  status: PixTransferStatus;
+  payee_name: string;
+  end_to_end_id: string | null;
+  error_message: string | null;
+  created_at: string;
+  settled_at: string | null;
+  environment: string;
+}
+
+export interface PixChallenge {
+  transfer_id: string;
+  challenge_id?: string;
+  /** Últimos 4 dígitos do celular que recebeu o código. Nunca o número inteiro. */
+  last4: string;
+  expires_at: string;
+  amount: number;
+  payee_name: string;
+  payee_pix_key_masked: string;
+}
+
+export interface PixExecuteResult {
+  status: PixTransferStatus;
+  end_to_end_id?: string | null;
+  message?: string;
+  /** Motivo do banco na recusa (ex.: "chave inexistente"). Só em failed. */
+  detail?: string | null;
+  error_code?: string | null;
+}
+
+/**
+ * O supabase-js mascara o corpo em resposta non-2xx, então o erro precisa ser
+ * lido em duas camadas — mesma armadilha tratada em useCoreResourceMutation.
+ */
+function unwrap<T>(error: unknown, data: unknown): T {
+  // A payroll-pix-pay responde { error: <CÓDIGO>, message: <frase em pt-BR> }.
+  // Preferimos `message`: `error` é código de máquina (FORBIDDEN_ROLE,
+  // PAYMENT_2FA_REQUIRED…) e jogar isso num toast não ajuda ninguém.
+  const corpo = data as { error?: unknown; message?: unknown } | null;
+  const frase =
+    corpo && typeof corpo === "object"
+      ? (corpo.message ? String(corpo.message) : null) ??
+        (corpo.error ? String(corpo.error) : null)
+      : null;
+
+  if (error) {
+    throw new Error(frase ?? (error as Error).message ?? "Falha na chamada");
+  }
+  if (corpo && typeof corpo === "object" && "error" in corpo) {
+    throw new Error(frase ?? "Falha na chamada");
+  }
+  return data as T;
+}
+
+/** Transferências PIX do período — alimenta o estado de cada linha na tela. */
+export function usePixTransfers(periodId: string | undefined) {
+  return useQuery({
+    queryKey: ["pix-transfers", periodId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("payroll_pix_transfers")
+        .select(
+          "id, entry_id, collaborator_id, amount, status, payee_name, end_to_end_id, error_message, created_at, settled_at, environment",
+        )
+        .eq("period_id", periodId!)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as unknown as PixTransfer[];
+    },
+    enabled: !!periodId,
+    // Enquanto houver transferência em voo a tela precisa acompanhar sozinha:
+    // o reconciliador roda a cada 2 min e o RH não deve ficar apertando F5.
+    refetchInterval: (query) => {
+      const rows = (query.state.data ?? []) as PixTransfer[];
+      const emVoo = rows.some((t) =>
+        ["created", "sent", "confirmed", "unknown"].includes(t.status),
+      );
+      return emVoo ? 15_000 : false;
+    },
+  });
+}
+
+export function usePixPayment(periodId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  const invalidar = () => {
+    queryClient.invalidateQueries({ queryKey: ["pix-transfers", periodId] });
+    queryClient.invalidateQueries({ queryKey: ["payroll-payments", periodId] });
+  };
+
+  /** Passo 1: abre a transferência e dispara o código no WhatsApp. */
+  const challenge = useMutation({
+    mutationFn: async (entryId: string) => {
+      const { data, error } = await supabase.functions.invoke("payroll-pix-pay", {
+        body: { entry_id: entryId, action: "challenge" },
+      });
+      return unwrap<PixChallenge>(error, data);
+    },
+    onSettled: invalidar,
+  });
+
+  /** Passo 2: consome o código e manda o PIX. */
+  const execute = useMutation({
+    mutationFn: async (vars: {
+      entryId: string;
+      code: string;
+      challengeId?: string;
+    }) => {
+      const { data, error } = await supabase.functions.invoke("payroll-pix-pay", {
+        body: {
+          entry_id: vars.entryId,
+          action: "execute",
+          code: vars.code,
+          challenge_id: vars.challengeId,
+        },
+      });
+      return unwrap<PixExecuteResult>(error, data);
+    },
+    onSettled: invalidar,
+  });
+
+  return { challenge, execute };
+}

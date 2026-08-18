@@ -9,9 +9,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Buildings as Building2, CircleNotch as Loader2, FloppyDisk as Save, Users, Upload, Trash as Trash2, Image as ImageIcon, ChatCircle as MessageSquare, ShieldCheck } from "@phosphor-icons/react";
+import { Buildings as Building2, CircleNotch as Loader2, FloppyDisk as Save, Users, Upload, Trash as Trash2, Image as ImageIcon, ChatCircle as MessageSquare, ShieldCheck, LockKey } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { UsersAccessTab } from "@/components/dashboard/UsersAccessTab";
+import { SecurityTab } from "@/components/dashboard/SecurityTab";
 import { useIsCompanyAdmin, usePermissions } from "@/hooks/usePermissions";
 import WhatsAppConfigTab from "@/components/whatsapp/WhatsAppConfigTab";
 import AuditoriaTab from "@/modules/audit/pages/AuditoriaTab";
@@ -22,6 +23,12 @@ const ConfiguracoesPage = () => {
   const { isAdmin } = useIsCompanyAdmin();
   const { canView: canViewPermissoes } = usePermissions("permissoes");
   const canAccessUsersTab = isAdmin || canViewPermissoes;
+  // Aba Segurança = cadastro do celular de confirmação de PAGAMENTO. Só quem
+  // executa pagamento (can_create em folha_pagamento_exec) tem o que fazer lá —
+  // pra todo mundo mais seria uma tela que não faz nada e um convite a
+  // engenharia social. `isAdmin` entra porque admin já tem tudo liberado.
+  const { canCreate: canExecutePayment } = usePermissions("folha_pagamento_exec");
+  const canAccessSecurityTab = isAdmin || canExecutePayment;
   const [searchParams] = useSearchParams();
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState("conta");
@@ -34,7 +41,13 @@ const ConfiguracoesPage = () => {
     if (tab && ["conta", "usuarios", "whatsapp", "auditoria"].includes(tab)) {
       setActiveTab(tab);
     }
-  }, [searchParams]);
+    // 'seguranca' só entra se a pessoa puder ver: a permissão chega assíncrona,
+    // então sem essa guarda um link direto abriria a aba antes da checagem e
+    // deixaria o conteúdo em branco pra quem não paga.
+    if (tab === "seguranca" && canAccessSecurityTab) {
+      setActiveTab(tab);
+    }
+  }, [searchParams, canAccessSecurityTab]);
 
   // Form state for company data
   const [formData, setFormData] = useState({
@@ -236,6 +249,12 @@ const ConfiguracoesPage = () => {
               <MessageSquare className="w-4 h-4" />
               Notificações WhatsApp
             </TabsTrigger>
+            {canAccessSecurityTab && (
+              <TabsTrigger value="seguranca" className="gap-2">
+                <LockKey className="w-4 h-4" />
+                Segurança
+              </TabsTrigger>
+            )}
             {isAdmin && (
               <TabsTrigger value="auditoria" className="gap-2">
                 <ShieldCheck className="w-4 h-4" />
@@ -444,6 +463,13 @@ const ConfiguracoesPage = () => {
           <TabsContent value="whatsapp">
             <WhatsAppConfigTab />
           </TabsContent>
+
+          {/* Tab: Segurança (só quem executa pagamento) */}
+          {canAccessSecurityTab && (
+            <TabsContent value="seguranca">
+              <SecurityTab />
+            </TabsContent>
+          )}
 
           {/* Tab: Auditoria (admin-only) */}
           {isAdmin && (

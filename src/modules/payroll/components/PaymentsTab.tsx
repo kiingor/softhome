@@ -20,49 +20,28 @@ import { toast } from "sonner";
 import { formatCurrency } from "@/lib/formatters";
 import { StatBlock } from "./StatBlock";
 import {
-  isEarning,
-  MANUAL_DEBIT_TYPES,
   ENTRY_TYPE_LABELS,
   ENTRY_TYPE_COLORS,
   type PayrollEntryWithCollaborator,
 } from "../types";
+import {
+  buildPaymentLines,
+  type PaymentLineComponent,
+  type PaymentLineDiscount,
+} from "../lib/buildPaymentLines";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { PixPaymentDialog } from "./PixPaymentDialog";
+import { usePixTransfers, type PixTransfer } from "../hooks/use-pix-payment";
+import { usePermissions } from "@/hooks/usePermissions";
+import { useDashboard } from "@/contexts/DashboardContext";
 
 interface PaymentsTabProps {
   periodId: string;
   entries: PayrollEntryWithCollaborator[];
   canManage: boolean;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Pagamento mensal — o que entra na MESMA linha (mesmo PIX)
-//
-// Regra de produto: o colaborador recebe UM pagamento com salário base,
-// gratificações, hora extra, periculosidade e salário-família juntos.
-//
-// É também o recorte correto pro líquido: o INSS/IRPF do mês incide sobre essa
-// base (hora extra e periculosidade integram a base — ver
-// INSS_TAXABLE_EARNING_TYPES em ../types), então o imposto descontado aqui bate
-// com o contracheque em vez de sair todo do salário base.
-//
-// FORA daqui, cada um em sua linha: bonificação (custo de setor) e carro
-// agregado — a diretoria confere esses à parte. Benefício pagável, atestado,
-// VT e salário retroativo também seguem em linha própria.
-//
-// A ordem do array é a ordem de exibição no popup de detalhe.
-// ─────────────────────────────────────────────────────────────────────────────
-const MONTHLY_MERGED_TYPES = [
-  "salario_base",
-  "gratificacao",
-  "hora_extra",
-  "periculosidade",
-  "salario_familia",
-] as const;
-
-const MONTHLY_MERGED_SET = new Set<string>(MONTHLY_MERGED_TYPES);
-
-/** Tipos distintos que compõem a linha, na ordem de exibição — viram as tags. */
-function mergedTypes(merged: PayrollEntryWithCollaborator[]): string[] {
-  return MONTHLY_MERGED_TYPES.filter((t) => merged.some((e) => e.type === t));
+  /** Status da folha. PIX só existe a partir de 'aprovado_diretoria'. */
+  periodStatus?: string;
 }
 
 interface PaymentRecord {
@@ -72,219 +51,92 @@ interface PaymentRecord {
   amount: number;
   paid_at: string | null;
   paid_by: string | null;
+  /** 'manual' = marcado na mão; 'pix_santander' = saiu por PIX e não se desmarca. */
+  method?: string | null;
 }
 
-export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) {
+export function PaymentsTab({
+  periodId,
+  entries,
+  canManage,
+  periodStatus,
+}: PaymentsTabProps) {
   const queryClient = useQueryClient();
 
-  // Lista flat de lançamentos pagáveis, com valores LÍQUIDOS após impostos
-  // e descontos.
-  // Regras:
-  // - só proventos (`isEarning`)
-  // - benefícios entram só se is_payable=true (categoria 'adicional');
-  //   demais benefícios são vouchers/serviços, pagos por outro fluxo
-  // - FGTS fora: é encargo do empregador, não desconta do colaborador
-  // - **Pagamento Mensal**: 1 linha só com salário base, gratificações, hora
-  //   extra, periculosidade e salário-família (MONTHLY_MERGED_TYPES).
-  //   INSS/IRPF regulares + descontos manuais incidem sobre essa base (já
-  //   contabilizados no mesmo período mas SEM o prefixo ferias-).
-  // - **Pagamento de Férias** (entries com external_id LIKE 'ferias-%'):
-  //   linha SEPARADA. Mescla ferias + 1/3 + grat s/Férias + bon s/Férias,
-  //   menos INSS s/Férias e IRRF s/Férias (também com prefixo ferias-).
-  //   É um cheque distinto (CLT art. 145: D-2 do gozo).
-  // - Outros proventos mensais (bonificação/custo de setor, carro agregado,
-  //   benefício pagável) continuam como linhas separadas.
-  // - estornos: par positivo+negativo do mesmo (collab,tipo) somam ≤ 0 → some
+  // Gate do PIX: papel restrito E módulo. É o padrão registrado em
+  // PeriodDetailPage.tsx:131-134 — o toggle "Acesso total" da tela de
+  // Permissões liga todos os módulos de uma vez, então módulo sozinho
+  // transformaria qualquer acesso total em pagador. O terceiro fator
+  // (dispositivo 2FA ativo) é validado no servidor, onde não dá pra burlar.
+  const { hasAnyRole } = useDashboard();
+  const execPermission = usePermissions("folha_pagamento_exec");
+  const podePagar =
+    hasAnyRole(["admin_gc", "diretoria"]) &&
+    (execPermission.canCreate || execPermission.isAdmin);
+  // A folha congela em 'aprovado_diretoria': antes disso o valor ainda muda, e
+  // pagar um número que pode mudar é assinar cheque em branco.
+  const folhaLiberada =
+    periodStatus === "aprovado_diretoria" ||
+    periodStatus === "closed" ||
+    periodStatus === "exported";
+
+  const { data: pixTransfers = [] } = usePixTransfers(periodId);
+  const transferByEntry = useMemo(() => {
+    const m = new Map<string, PixTransfer>();
+    // A query já vem por created_at DESC: a primeira de cada lançamento é a
+    // tentativa mais recente, que é a que a linha deve refletir.
+    for (const t of pixTransfers) if (!m.has(t.entry_id)) m.set(t.entry_id, t);
+    return m;
+  }, [pixTransfers]);
+
+  const [pagando, setPagando] = useState<string | null>(null);
+
+  // A fórmula do líquido vive em ../lib/buildPaymentLines.ts — extraída daqui
+  // porque o servidor precisa da MESMA conta pra mandar o valor ao banco, e
+  // porque as regras (estorno, partição de férias, mescla, clamp) só existiam
+  // como comentário, sem teste. Aqui sobrou só a adaptação para as formas que
+  // este componente já renderiza.
   const { payableEntries, taxBreakdownByEntry } = useMemo(() => {
-    const earningOnly = entries.filter(
-      (e) =>
-        isEarning(e.type) &&
-        (e.type !== "beneficio" || e.is_payable === true),
-    );
+    const lines = buildPaymentLines(entries);
+    const sourceById = new Map(entries.map((e) => [e.id, e]));
 
-    // Detecta pares estornados (positivo + negativo cancelam)
-    const groupSum = new Map<string, number>();
-    for (const e of earningOnly) {
-      const key = `${e.collaborator_id}::${e.type}`;
-      groupSum.set(key, (groupSum.get(key) ?? 0) + Number(e.value));
-    }
-
-    const survivors = earningOnly.filter((e) => {
-      const sum = groupSum.get(`${e.collaborator_id}::${e.type}`) ?? 0;
-      if (sum <= 0) return false;
-      return Number(e.value) > 0;
-    });
-
-    // Helper: entry vem do fluxo de férias? (external_id 'ferias-<reqId>-<kind>')
-    const isVacEntry = (e: PayrollEntryWithCollaborator) =>
-      (e.external_id ?? "").startsWith("ferias-");
-
-    // INSS/IRPF agregados por colab, SEPARANDO regular (mensal) de férias
-    type CollabTaxes = { inss: number; irpf: number };
-    const monthlyTaxes = new Map<string, CollabTaxes>();
-    const vacationTaxes = new Map<string, CollabTaxes>();
-    for (const e of entries) {
-      if (e.type !== "inss" && e.type !== "irpf") continue;
-      const cid = e.collaborator_id;
-      const target = isVacEntry(e) ? vacationTaxes : monthlyTaxes;
-      const cur = target.get(cid) ?? { inss: 0, irpf: 0 };
-      if (e.type === "inss") cur.inss += Number(e.value);
-      else cur.irpf += Number(e.value);
-      target.set(cid, cur);
-    }
-
-    // Débitos manuais que reduzem o líquido: desconto (plano de saúde, VT),
-    // adiantamento, falta e empréstimo. INSS/IRPF entram à parte; FGTS é encargo
-    // do empregador (fora). Só aplicam ao pagamento mensal.
-    type Discount = { label: string; value: number };
-    const discountsByCollab = new Map<string, Discount[]>();
-    const MANUAL_DEBIT_SET = new Set<string>(MANUAL_DEBIT_TYPES);
-    for (const e of entries) {
-      if (!MANUAL_DEBIT_SET.has(e.type)) continue;
-      if (isVacEntry(e)) continue; // defensivo: férias não tem débito manual
-      const v = Number(e.value);
-      if (!(v > 0)) continue;
-      const arr = discountsByCollab.get(e.collaborator_id) ?? [];
-      arr.push({
-        label: e.description ?? ENTRY_TYPE_LABELS[e.type] ?? "Desconto",
-        value: v,
-      });
-      discountsByCollab.set(e.collaborator_id, arr);
-    }
-
-    type Component = { label: string; value: number };
-    type EntryBreakdown = {
+    interface EntryBreakdown {
       inss: number;
       irpf: number;
-      discounts: Discount[];
-      components: Component[];
+      discounts: PaymentLineDiscount[];
+      components: PaymentLineComponent[];
       /** Tipos que a linha somou — viram as tags na listagem. */
       types: string[];
-    };
-    const breakdownByEntry = new Map<string, EntryBreakdown>();
+    }
+
     const adjustedEntries: PayrollEntryWithCollaborator[] = [];
+    const breakdownByEntry = new Map<string, EntryBreakdown>();
 
-    // Agrupa survivors por colaborador
-    const byCollab = new Map<string, PayrollEntryWithCollaborator[]>();
-    for (const e of survivors) {
-      const arr = byCollab.get(e.collaborator_id) ?? [];
-      arr.push(e);
-      byCollab.set(e.collaborator_id, arr);
+    for (const line of lines) {
+      const source = sourceById.get(line.entryId);
+      if (!source) continue;
+
+      if (line.kind === "avulso") {
+        // Linha própria (bonificação, carro agregado, benefício pagável…):
+        // vai como está, sem imposto nem desconto aplicados.
+        adjustedEntries.push(source);
+      } else {
+        adjustedEntries.push({
+          ...source,
+          ...(line.kind === "ferias" ? { type: "ferias" } : {}),
+          description: line.description,
+          value: line.amount,
+        } as PayrollEntryWithCollaborator);
+      }
+
+      breakdownByEntry.set(line.entryId, {
+        inss: line.inss,
+        irpf: line.irpf,
+        discounts: line.discounts,
+        components: line.components,
+        types: line.types,
+      });
     }
-
-    for (const [collabId, list] of byCollab) {
-      // Particiona: vacation vs monthly
-      const vacEntries = list.filter(isVacEntry);
-      const monthlyList = list.filter((e) => !isVacEntry(e));
-
-      // ╔══════════════════════════════════════════════════════════════╗
-      // ║ MONTHLY: salário + grats merge, outros separados             ║
-      // ╚══════════════════════════════════════════════════════════════╝
-      const taxes = monthlyTaxes.get(collabId) ?? { inss: 0, irpf: 0 };
-      const collabDiscounts = discountsByCollab.get(collabId) ?? [];
-      const totalDiscount = collabDiscounts.reduce((s, d) => s + d.value, 0);
-
-      // Ordena pela ordem de MONTHLY_MERGED_TYPES pra o popup sair sempre na
-      // mesma sequência (salário primeiro, depois os adicionais).
-      const merged = MONTHLY_MERGED_TYPES.flatMap((t) =>
-        monthlyList.filter((e) => e.type === t),
-      );
-      const others = monthlyList.filter((e) => !MONTHLY_MERGED_SET.has(e.type));
-
-      if (merged.length > 0) {
-        // Âncora do pagamento: o salário base quando existe — o id dele é o mais
-        // estável entre recálculos, então a marcação de "pago" sobrevive.
-        const primary =
-          merged.find((e) => e.type === "salario_base") ?? merged[0];
-        const components: Component[] = merged.map((e) => ({
-          // Salário base mantém rótulo fixo; os adicionais mostram a descrição
-          // do lançamento (é onde o RH escreve o motivo).
-          label:
-            e.type === "salario_base"
-              ? "Salário Base"
-              : e.description ?? ENTRY_TYPE_LABELS[e.type] ?? e.type,
-          value: Number(e.value),
-        }));
-        const gross = components.reduce((s, c) => s + c.value, 0);
-        const adjusted = gross - taxes.inss - taxes.irpf - totalDiscount;
-        if (adjusted > 0) {
-          adjustedEntries.push({
-            ...primary,
-            // As tags dizem O QUE somou; aqui vai o detalhe de cada lançamento.
-            description: components.map((c) => c.label).join(" · "),
-            value: adjusted,
-          } as PayrollEntryWithCollaborator);
-          breakdownByEntry.set(primary.id, {
-            inss: taxes.inss,
-            irpf: taxes.irpf,
-            discounts: collabDiscounts,
-            components,
-            types: mergedTypes(merged),
-          });
-        }
-      }
-
-      // Fora da mescla (bonificação/custo de setor, carro agregado, benefício
-      // pagável, atestado, VT, salário retroativo): cada um em sua linha.
-      for (const e of others) {
-        adjustedEntries.push(e as PayrollEntryWithCollaborator);
-        breakdownByEntry.set(e.id, {
-          inss: 0,
-          irpf: 0,
-          discounts: [],
-          components: [{
-            label: e.description ?? ENTRY_TYPE_LABELS[e.type] ?? e.type,
-            value: Number(e.value),
-          }],
-          types: [e.type],
-        });
-      }
-
-      // ╔══════════════════════════════════════════════════════════════╗
-      // ║ VACATION: todos os entries 'ferias-*' juntos em 1 linha     ║
-      // ╚══════════════════════════════════════════════════════════════╝
-      if (vacEntries.length > 0) {
-        // Âncora: prefere a entry type='ferias' (provento principal),
-        // senão pega a primeira disponível.
-        const primary = vacEntries.find((e) => e.type === "ferias") ?? vacEntries[0];
-        const vacTax = vacationTaxes.get(collabId) ?? { inss: 0, irpf: 0 };
-
-        const components: Component[] = vacEntries.map((e) => ({
-          label: e.description ?? ENTRY_TYPE_LABELS[e.type] ?? e.type,
-          value: Number(e.value),
-        }));
-        const gross = components.reduce((s, c) => s + c.value, 0);
-        const adjusted = gross - vacTax.inss - vacTax.irpf;
-
-        if (adjusted > 0) {
-          adjustedEntries.push({
-            ...primary,
-            type: "ferias",
-            description: "Pagamento de Férias",
-            value: adjusted,
-          } as PayrollEntryWithCollaborator);
-          breakdownByEntry.set(primary.id, {
-            inss: vacTax.inss,
-            irpf: vacTax.irpf,
-            discounts: [],
-            components,
-            // Férias já se apresenta como um pagamento próprio: 1 tag só, o
-            // detalhe (1/3, grat s/férias) fica no popup.
-            types: ["ferias"],
-          });
-        }
-      }
-    }
-
-    adjustedEntries.sort((a, b) => {
-      const an = a.collaborator?.name ?? "";
-      const bn = b.collaborator?.name ?? "";
-      const cmp = an.localeCompare(bn, "pt-BR");
-      if (cmp !== 0) return cmp;
-      const ad = a.description ?? ENTRY_TYPE_LABELS[a.type] ?? a.type;
-      const bd = b.description ?? ENTRY_TYPE_LABELS[b.type] ?? b.type;
-      return ad.localeCompare(bd, "pt-BR");
-    });
 
     return { payableEntries: adjustedEntries, taxBreakdownByEntry: breakdownByEntry };
   }, [entries]);
@@ -327,28 +179,18 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
       amount: number;
       newPaid: boolean;
     }) => {
-      const existing = paymentByEntry.get(entryId);
-      const { data: userData } = await supabase.auth.getUser();
-      if (existing) {
-        const { error } = await supabase
-          .from("payroll_payments")
-          .update({
-            paid_at: newPaid ? new Date().toISOString() : null,
-            paid_by: newPaid ? userData?.user?.id ?? null : null,
-            amount,
-          })
-          .eq("id", existing.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("payroll_payments").insert({
-          period_id: periodId,
-          entry_id: entryId,
-          amount,
-          paid_at: newPaid ? new Date().toISOString() : null,
-          paid_by: newPaid ? userData?.user?.id ?? null : null,
-        });
-        if (error) throw error;
-      }
+      // Escrita direta em payroll_payments foi revogada na migration
+      // 20260818120400: enquanto o navegador pudesse gravar ali, o 2FA do
+      // pagamento seria contornável com três linhas no console. Agora a
+      // marcação passa por uma função no servidor, que carimba quem marcou e
+      // quando — antes esses dois campos vinham do relógio e da palavra do
+      // cliente.
+      const { error } = await supabase.rpc("payroll_payment_set_manual_paid", {
+        p_entry_id: entryId,
+        p_paid: newPaid,
+        p_amount: amount,
+      });
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payroll-payments", periodId] });
@@ -472,6 +314,9 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
           const isPaid = !!rec?.paid_at;
           const value = Number(entry.value);
           const pixKey = entry.collaborator?.pix_key ?? null;
+          const tx = transferByEntry.get(entry.id);
+          const emVoo =
+            !!tx && ["created", "sent", "confirmed", "unknown"].includes(tx.status);
           return (
             <div
               key={entry.id}
@@ -479,9 +324,22 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
                 isPaid ? "bg-success/5 dark:bg-success/15" : "hover:bg-muted/30"
               }`}
             >
+              {/* Pagamento liquidado por PIX não se desmarca: o dinheiro saiu.
+                  O servidor recusa de qualquer forma — desabilitar aqui é pra o
+                  RH entender antes de clicar, em vez de receber um toast de
+                  erro. */}
               <Checkbox
                 checked={isPaid}
-                disabled={!canManage || togglePayment.isPending}
+                disabled={
+                  !canManage ||
+                  togglePayment.isPending ||
+                  (rec?.method === "pix_santander" && !!rec?.paid_at)
+                }
+                title={
+                  rec?.method === "pix_santander" && rec?.paid_at
+                    ? "Pago por PIX — não dá pra desmarcar"
+                    : undefined
+                }
                 onCheckedChange={(checked) =>
                   togglePayment.mutate({
                     entryId: entry.id,
@@ -658,12 +516,73 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
                 >
                   {formatCurrency(value)}
                 </p>
+
+                {/* Estado do PIX, quando existe tentativa pra esta linha. */}
+                {tx && tx.status !== "settled" && (
+                  <Badge
+                    variant="outline"
+                    className={
+                      tx.status === "failed"
+                        ? "border-destructive/40 text-destructive"
+                        : tx.status === "unknown"
+                          ? "border-warning/40 text-warning"
+                          : "border-info/40 text-info"
+                    }
+                    title={tx.error_message ?? undefined}
+                  >
+                    {tx.status === "failed"
+                      ? "Recusado"
+                      : tx.status === "unknown"
+                        ? "Em conferência"
+                        : "Enviando…"}
+                  </Badge>
+                )}
+
+                {/* Botão Pagar. Só aparece pra quem pode pagar, em folha
+                    aprovada, e some quando o pagamento já foi feito ou já tem
+                    tentativa em voo — abrir uma segunda o servidor recusaria de
+                    qualquer forma. */}
+                {podePagar && folhaLiberada && !isPaid && !emVoo && (
+                  <Button
+                    size="sm"
+                    variant={tx?.status === "failed" ? "outline" : "default"}
+                    disabled={!pixKey}
+                    title={pixKey ? undefined : "Colaborador sem chave PIX cadastrada"}
+                    onClick={() => setPagando(entry.id)}
+                  >
+                    {tx?.status === "failed" ? "Tentar de novo" : "Pagar"}
+                  </Button>
+                )}
               </div>
             </div>
           );
         })}
       </div>
       )}
+
+      {/* Diálogo de pagamento — montado fora da lista pra não remontar a cada
+          re-render das linhas. */}
+      {pagando && (() => {
+        const entry = filteredEntries.find((e) => e.id === pagando);
+        if (!entry) return null;
+        const bd = taxBreakdownByEntry.get(entry.id);
+        return (
+          <PixPaymentDialog
+            open
+            onOpenChange={(o) => !o && setPagando(null)}
+            periodId={periodId}
+            entryId={entry.id}
+            collaboratorName={entry.collaborator?.name ?? ""}
+            pixKey={entry.collaborator?.pix_key ?? null}
+            amount={Number(entry.value)}
+            gross={(bd?.components ?? []).reduce((s, c) => s + c.value, 0)}
+            inss={bd?.inss ?? 0}
+            irpf={bd?.irpf ?? 0}
+            components={bd?.components ?? []}
+            discounts={bd?.discounts ?? []}
+          />
+        );
+      })()}
     </div>
   );
 }
