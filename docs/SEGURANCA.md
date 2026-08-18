@@ -181,7 +181,17 @@ Priorizado, com correção concreta, no relatório da auditoria. Resumo:
 
 ---
 
-## 6. Decisão pendente: `/portal/primeiro-acesso`
+## 6. `/portal/primeiro-acesso` — RESOLVIDO (opção A, 18/08/2026)
+
+> **Fechado.** Escolhida a opção A (desligar). Confirmado 0 colaboradores em
+> `aguardando_documentacao`/`reprovado`. Removidos do repo: as 3 functions
+> `onboarding-*`, a rota `/portal/primeiro-acesso`, o import em `App.tsx`, o
+> botão em `PortalLogin` e os blocos do `config.toml`. Na VPS: as 3 pastas
+> saíram de `volumes/functions` (backup em `/root/dna-app/_removed_onboarding_20260818`),
+> o dispatcher `main` foi limpo e o edge-runtime reiniciado — `onboarding-lookup`
+> agora responde erro de boot, não mais PII. **Produção Cloud ainda tem o trio
+> vivo** (ver seção 8). Se um dia o self-service voltar, renasce token-gated
+> (link por-contratado), nunca por CPF. O texto original abaixo fica de registro.
 
 `onboarding-lookup` roda com `verify_jwt = false` e service_role, aceita **só o
 CPF** e devolve nome, e-mail, telefone, cargo, CNPJ, lançamentos de folha com
@@ -259,11 +269,9 @@ URL pública e precisa virar bucket privado com policy.
 
 ### O que a VPS ainda não tem
 
-- **Prazos de sessão no servidor.** O guard do navegador está lá, mas o GoTrue
-  self-hosted precisa dos mesmos limites (`JWT_EXP`, rotação de refresh,
-  inactivity/time-box) no compose. Sem isso, um token copiado do `localStorage`
-  segue valendo por fora do navegador. É a mesma pendência da seção 1, só que
-  configurada no `docker-compose` em vez do painel.
+- ~~**Prazos de sessão no servidor.**~~ **FEITO em 18/08/2026** (ver seção 10):
+  `GOTRUE_SESSIONS_TIMEBOX=12h`, `GOTRUE_SESSIONS_INACTIVITY_TIMEOUT=2h`, rotação
+  de refresh token com detecção de reuso e senha mínima 10, no compose do auth.
 - **Fontes vindas do Google.** `index.css` importa Inter e JetBrains Mono de
   `fonts.googleapis.com`. Num sistema interno isso é dependência externa e cada
   navegador de colaborador bate no Google. Hospedar as fontes junto do app
@@ -297,3 +305,118 @@ Postgres, então `CREATE POLICY` e `CREATE FUNCTION` também voltam atrás.
 
 Sempre inclua `SET LOCAL lock_timeout` — mexer em `storage.objects` pega
 `ACCESS EXCLUSIVE` e você não quer isso preso em produção.
+
+---
+
+## 10. Onda 2 — anti-invasão (18/08/2026, VPS)
+
+Foco em três vetores: **estranho da internet**, **conta de funcionário
+comprometida** e **vazamento de dados**. Tudo aplicado e conferido na VPS de
+homologação; branch `security/anti-invasao-onda2`.
+
+### 10.1. Vazamento anônimo por CPF — FECHADO
+
+O trio `onboarding-*` foi removido (ver seção 6). Era o buraco aberto mais grave:
+endpoint anônimo que devolvia PII + salário a quem soubesse um CPF.
+
+### 10.2. Endurecimento do GoTrue (sessão + senha)
+
+No `docker-compose.yml` do auth, container recriado e conferido saudável:
+
+| Variável | Valor | Protege |
+|---|---|---|
+| `GOTRUE_SESSIONS_TIMEBOX` | `12h` | teto absoluto da sessão |
+| `GOTRUE_SESSIONS_INACTIVITY_TIMEOUT` | `2h` | refresh token roubado e ocioso morre |
+| `GOTRUE_SECURITY_REFRESH_TOKEN_ROTATION_ENABLED` | `true` | rotação de refresh token |
+| `GOTRUE_SECURITY_REFRESH_TOKEN_REUSE_INTERVAL` | `10` | reuso de token rotacionado revoga a família |
+| `GOTRUE_PASSWORD_MIN_LENGTH` | `10` | senha mínima (só afeta novas senhas) |
+
+Inatividade ficou em **2h** (não 30 min) de propósito: o supabase-js só renova o
+token a cada ~50 min, então um valor menor derrubaria usuário ativo. O guard de
+30 min continua no navegador (seção 1); os 2h são a rede server-side pro token
+roubado. **HIBP (senha vazada) ficou de fora** — risco de fail-closed na troca de
+senha; é opcional e fácil de ligar depois.
+
+### 10.3. MFA de login forte (AAL2 via WhatsApp) — papéis admin_gc/diretoria
+
+Escolha do usuário: código no WhatsApp MAS com garantia dura (não é só tela).
+
+- **MFA nativo do GoTrue (fator telefone)** — `GOTRUE_MFA_PHONE_ENROLL/VERIFY_ENABLED`.
+  Verificar o fator eleva o JWT a **AAL2**.
+- **Entrega pela Evolution** — `GOTRUE_HOOK_SEND_SMS_ENABLED` aponta pro edge
+  function `mfa-send-whatsapp`, que verifica a assinatura standardwebhooks (HMAC)
+  do GoTrue e manda o código pela instância de WhatsApp da empresa. **Nunca loga o
+  OTP.** O segredo do hook vive em `functions-secrets.env`
+  (`MFA_SEND_SMS_HOOK_SECRET`) e no compose do auth (`GOTRUE_HOOK_SEND_SMS_SECRETS`).
+  - Armadilha resolvida: GoTrue recusa `http://` pra host não-local, então a URI
+    do hook é a **URL HTTPS externa** (`…/functions/v1/mfa-send-whatsapp`), que
+    passa pelo envoy sem apikey porque a função está no set `FUNCTIONS_PUBLICAS`
+    do dispatcher `main` (autenticação é o HMAC, não JWT).
+- **RLS exige AAL2** (migration `20260818130000_mfa_aal2_rls.sql`): helper
+  `public.mfa_satisfied()` = *(JWT é aal2)* **OU** *(usuário sem fator
+  verificado)*, aplicado como policy **RESTRICTIVE** (ANDa com as permissivas, sem
+  reescrever nenhuma) em `collaborators`, `payroll_entries`, `payroll_payments`,
+  `payroll_pix_transfers`, `payroll_payable_lines`, `collaborator_documents`.
+  - **Anti-lockout:** o ramo "sem fator" deixa rh/gestor/colaborador e admins
+    ainda-não-enrolados entrarem em aal1 normalmente. Com **0 fatores hoje**, a
+    migration nasce inócua e só passa a exigir aal2 para cada usuário DEPOIS que
+    ele enrola. Provado em dry-run: sem fator+aal1→passa, com fator+aal1→bloqueia,
+    com fator+aal2→passa.
+- **Frontend** (`src/components/security/Mfa*`, `src/hooks/useLoginMfa.ts`):
+  enroll na aba Configurações→Segurança, step-up bloqueante no `DashboardLayout`
+  quando a sessão está em aal1 com fator verificado, e um nudge dispensável pra
+  papel admin sem fator. Build Vite ok.
+
+**Garantia e limites, honestos:**
+- É parede de verdade contra "estranho com a senha" e "conta comprometida":
+  sem o código no WhatsApp, o JWT não chega a AAL2 e a RLS barra os dados
+  sensíveis — inclusive batendo direto na REST com a anon key.
+- **Depende da Evolution no login.** Se o WhatsApp cair, um admin já enrolado não
+  passa no 2º fator e fica em aal1 (vê o shell, não os dados sensíveis). Não é
+  lockout total; break-glass = remover o fator via `service_role`
+  (`delete from auth.mfa_factors where user_id=…`).
+- **v1 não tranca quem não enrolou** (nudge, não bloqueio) pra não arriscar
+  deixar todo admin de fora num dia de rollout. Enquanto um admin não enrola, ele
+  não tem proteção — por isso o empurrão pra enrolar é forte. Virar
+  obrigatório é um passo pequeno depois que todos estiverem enrolados.
+
+### 10.4. Rate-limit de IA (endpoints públicos) — `/aplicar` e triagem
+
+Migration `20260818140000_rate_limit.sql`: tabela `rate_limit_events` + função
+`rate_limit_take(bucket, identifier, max, window)` (SECURITY DEFINER, só
+service_role). Helper `_shared/rate-limit.ts` (fail-open). Ligado em:
+
+- `recruitment-apply` — 5/10min por CPF + teto global 60/min. Provado: 6ª
+  chamada com o mesmo CPF → **429**.
+- `cv-process` — 10/10min por candidato + global 90/min.
+
+Por identificador (não por IP) de propósito: atrás do proxy o IP real do cliente
+se perde (todos chegam como `172.19.0.1`).
+
+### 10.5. Rate-limit de login por IP — NÃO feito (inviável hoje)
+
+Mesmo motivo do IP perdido: apertar o limite do GoTrue viraria balde global
+compartilhado = DoS. Fazer certo exige consertar a cadeia de forwarded-IP na
+borda (Traefik `forwardedHeaders`/`trustedIPs` + envoy + o terminador TLS da
+hostsoftcom) — mudança de plataforma. O risco que ele cobre (força bruta de
+senha) é coberto pelo MFA (10.3) + rotação de token (10.2). **Follow-up de
+infra**, não de aplicação.
+
+### 10.6. Pendências desta onda
+
+- **Deploy do frontend na VPS** após validação no localhost (o backend do MFA já
+  está lá; o `.env` local aponta pra VPS, então dá pra testar o fluxo inteiro).
+- **Produção Cloud segue com tudo aberto** (seção 8) — inclusive o trio
+  `onboarding-*`. Nada desta onda tocou produção.
+- **Rotacionar segredos que passaram em chat** (comprometidos): senha do root da
+  VPS, senha do certificado Santander, key da Evolution. E a chave SSH
+  `dna_vps_ed25519` quando não for mais usar.
+- **Lacunas de reprodutibilidade na VPS** (config que só existe no servidor, não
+  no repo): o dispatcher `main/index.ts` (set `FUNCTIONS_PUBLICAS`) e os blocos
+  GoTrue/MFA/hook do `docker-compose.yml` base. Um rebuild da VPS a partir do
+  repo não os recria. Versionar num override é dívida a pagar.
+- **Storage AAL2 e mais tabelas** no gate `mfa_satisfied()` são extensões
+  triviais (uma policy RESTRICTIVE a mais por alvo) quando quiserem ampliar.
+- **Unificar os dois cadastros de telefone**: o 2FA de pagamento (app-layer) e o
+  MFA de login (GoTrue nativo) são fatores separados hoje; o pagador enrola duas
+  vezes. Unificar é backlog.
