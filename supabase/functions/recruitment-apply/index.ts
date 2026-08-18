@@ -27,6 +27,7 @@ import {
   extractTextFromResponse,
 } from "../_shared/claude.ts";
 import { embedText, EMBED_MODEL_LABEL } from "../_shared/embeddings.ts";
+import { rateLimitTake } from "../_shared/rate-limit.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -136,6 +137,21 @@ serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const sbAdmin = createClient(supabaseUrl, serviceKey);
+
+  // Rate-limit: cada aplicação dispara triagem por IA (custo). Por CPF (5 a cada
+  // 10 min — recandidatar é normal, spam não) e um teto global por minuto contra
+  // flood distribuído. Fail-open: se o limitador cair, a aplicação segue.
+  const underPerCpf = await rateLimitTake(sbAdmin, "recruitment-apply", cleanCpf, 5, 600);
+  const underGlobal = await rateLimitTake(sbAdmin, "recruitment-apply:global", "all", 60, 60);
+  if (!underPerCpf || !underGlobal) {
+    return jsonResponse(
+      {
+        error:
+          "Muitas aplicações em pouco tempo. Espera alguns minutos e tenta de novo.",
+      },
+      429,
+    );
+  }
 
   // 1. Vaga existe + status='open'
   const { data: job, error: jobErr } = await sbAdmin
