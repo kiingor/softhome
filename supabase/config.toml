@@ -12,13 +12,7 @@ verify_jwt = false
 [functions.update-user-password]
 verify_jwt = false
 
-[functions.onboarding-lookup]
-verify_jwt = false
-
-[functions.onboarding-action]
-verify_jwt = false
-
-[functions.onboarding-upload]
+[functions.mfa-send-whatsapp]
 verify_jwt = false
 
 [functions.whatsapp-api]

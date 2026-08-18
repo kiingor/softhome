@@ -7,6 +7,9 @@ import GlobalSearch from "@/components/GlobalSearch";
 import { BrandLogo } from "@/components/branding/BrandLogo";
 import SessionTimeoutGuard from "@/components/security/SessionTimeoutGuard";
 import { DASHBOARD_SESSION_POLICY } from "@/lib/security/session-policy";
+import { useMfaGate } from "@/hooks/useLoginMfa";
+import MfaLoginChallenge from "@/components/security/MfaLoginChallenge";
+import MfaEnrollNudge from "@/components/security/MfaEnrollNudge";
 
 // Papéis que enxergam o painel interno. `colaborador` não está aqui de
 // propósito: o lugar dele é o Portal.
@@ -21,8 +24,12 @@ const DASHBOARD_ROLES = [
 ] as const;
 
 const DashboardLayoutContent = () => {
-  const { user, roles, isLoading } = useDashboard();
+  const { user, roles, isLoading, signOut } = useDashboard();
   const [searchOpen, setSearchOpen] = useState(false);
+  // Guard do 2º fator: só consulta quando já há usuário. `stepUpPassed` evita
+  // qualquer flash da tela de código depois que a sessão vira AAL2.
+  const { data: mfaGate, isLoading: mfaLoading } = useMfaGate(!!user);
+  const [stepUpPassed, setStepUpPassed] = useState(false);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -67,6 +74,32 @@ const DashboardLayoutContent = () => {
     return <Navigate to="/colaborador" replace />;
   }
 
+  // 2º fator no login: enquanto o estado do MFA carrega, segura a tela (evita
+  // pintar páginas que a RLS vai bloquear em AAL1). Se o usuário tem fator
+  // verificado e a sessão está em AAL1, exige o código antes de qualquer coisa.
+  // Erro/indisponibilidade da consulta não tranca ninguém — a RLS é a barreira
+  // dura; esta tela é só a experiência.
+  if (mfaLoading && !mfaGate) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <BrandLogo size="lg" pulse className="mx-auto mb-4" />
+          <p className="text-muted-foreground">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (mfaGate?.needsStepUp && mfaGate.verifiedPhone && !stepUpPassed) {
+    return (
+      <MfaLoginChallenge
+        factor={mfaGate.verifiedPhone}
+        onVerified={() => setStepUpPassed(true)}
+        onCancel={() => void signOut()}
+      />
+    );
+  }
+
   return (
     <div className="h-screen flex w-full bg-background overflow-hidden">
       <DashboardSidebar />
@@ -83,6 +116,7 @@ const DashboardLayoutContent = () => {
         serverSessionStartedAt={user.last_sign_in_at}
         redirectTo="/login"
       />
+      <MfaEnrollNudge />
     </div>
   );
 };

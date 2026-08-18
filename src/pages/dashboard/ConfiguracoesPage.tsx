@@ -16,19 +16,21 @@ import { SecurityTab } from "@/components/dashboard/SecurityTab";
 import { useIsCompanyAdmin, usePermissions } from "@/hooks/usePermissions";
 import WhatsAppConfigTab from "@/components/whatsapp/WhatsAppConfigTab";
 import AuditoriaTab from "@/modules/audit/pages/AuditoriaTab";
+import { MfaLoginCard } from "@/components/security/MfaLoginCard";
 
 const ConfiguracoesPage = () => {
-  const { currentCompany } = useDashboard();
+  const { currentCompany, hasAnyRole } = useDashboard();
   const queryClient = useQueryClient();
   const { isAdmin } = useIsCompanyAdmin();
   const { canView: canViewPermissoes } = usePermissions("permissoes");
   const canAccessUsersTab = isAdmin || canViewPermissoes;
-  // Aba Segurança = cadastro do celular de confirmação de PAGAMENTO. Só quem
-  // executa pagamento (can_create em folha_pagamento_exec) tem o que fazer lá —
-  // pra todo mundo mais seria uma tela que não faz nada e um convite a
-  // engenharia social. `isAdmin` entra porque admin já tem tudo liberado.
+  // Aba Segurança hospeda DOIS controles: o 2º fator de LOGIN (todo papel
+  // administrativo pode/deve ativar) e o celular de confirmação de PAGAMENTO (só
+  // quem executa pagamento). Por isso o acesso à aba abre para admin, executores
+  // de pagamento e os papéis que precisam de MFA de login (admin_gc/diretoria).
   const { canCreate: canExecutePayment } = usePermissions("folha_pagamento_exec");
-  const canAccessSecurityTab = isAdmin || canExecutePayment;
+  const canAccessSecurityTab =
+    isAdmin || canExecutePayment || hasAnyRole(["admin_gc", "diretoria"]);
   const [searchParams] = useSearchParams();
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState("conta");
@@ -464,10 +466,12 @@ const ConfiguracoesPage = () => {
             <WhatsAppConfigTab />
           </TabsContent>
 
-          {/* Tab: Segurança (só quem executa pagamento) */}
+          {/* Tab: Segurança — 2º fator de login (papéis admin) + celular de
+              confirmação de pagamento (só executores de pagamento). */}
           {canAccessSecurityTab && (
-            <TabsContent value="seguranca">
-              <SecurityTab />
+            <TabsContent value="seguranca" className="space-y-6">
+              <MfaLoginCard />
+              {(isAdmin || canExecutePayment) && <SecurityTab />}
             </TabsContent>
           )}
 
