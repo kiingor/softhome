@@ -218,15 +218,10 @@ const PortalLogin = () => {
             </Button>
           </form>
 
-          <div className="mt-6 pt-6 border-t text-center space-y-3">
+          <div className="mt-6 pt-6 border-t text-center">
             <p className="text-sm text-muted-foreground">
               Não possui acesso? Solicite ao seu RH para cadastrar sua senha.
             </p>
-            <Link to="/portal/primeiro-acesso">
-              <Button variant="outline" className="w-full">
-                Primeiro Acesso
-              </Button>
-            </Link>
           </div>
         </div>
       </div>
