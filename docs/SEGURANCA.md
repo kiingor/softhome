@@ -404,8 +404,22 @@ infra**, não de aplicação.
 
 ### 10.6. Pendências desta onda
 
-- **Deploy do frontend na VPS** após validação no localhost (o backend do MFA já
-  está lá; o `.env` local aponta pra VPS, então dá pra testar o fluxo inteiro).
+- ~~**Deploy do frontend na VPS**~~ **FEITO em 19/08/2026.** Rebuild da imagem
+  `dna-frontend` (Dockerfile bun→nginx) a partir de um `git archive` da branch,
+  `frontend.env` apontando pra API da VPS (`api-dna-squad-ia-02.hostsoftcom.cloud`).
+  Serve em `dna-squad-ia-02.hostsoftcom.cloud`; bundle sem `onboarding-*`, com MFA
+  e botões PIX, headers de segurança conferidos. **Ainda é a URL de homologação** —
+  o frontend está buildado pra ela, não pro domínio final (ver "virada de domínio"
+  abaixo).
+- **Virada de domínio (`dnasoftcom.com`) é um passo coordenado, NÃO só apagar a
+  Vercel.** Hoje o frontend da VPS responde só em `*-squad-ia-02.hostsoftcom.cloud`.
+  Apontar `dnasoftcom.com` pra VPS exige, num passo só: (a) rebuild do frontend com
+  `VITE_SUPABASE_URL=https://api.dnasoftcom.com` + `APP_HOST=<domínio>`; (b) router
+  do Traefik do frontend e do envoy passando a casar o domínio novo; (c)
+  `GOTRUE_SITE_URL`, `GOTRUE_URI_ALLOW_LIST` e a **URI do hook de MFA** (fixa em
+  `api-dna-squad-ia-02.hostsoftcom.cloud`) atualizadas pro domínio novo — senão o
+  login com MFA quebra; (d) CSP acompanha sozinha (deriva de `VITE_SUPABASE_URL`).
+  Desativar a Vercel ANTES disso derruba `dnasoftcom.com` até a virada.
 - **Produção Cloud segue com tudo aberto** (seção 8) — inclusive o trio
   `onboarding-*`. Nada desta onda tocou produção.
 - **Rotacionar segredos que passaram em chat** (comprometidos): senha do root da
