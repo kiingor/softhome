@@ -198,8 +198,21 @@ serve(async (req) => {
     // ── 4. Resultado terminal ────────────────────────────────────────────────
     const outcome = classify(look.status);
 
-    if (outcome === "settled") {
-      const e2e = look.endToEnd;
+    // O sandbox do Santander é um mock sem estado: devolve ora PENDING_VALIDATION
+    // (nunca finaliza), ora um endToEnd CANNED repetido que a constraint de
+    // unicidade recusa — então na prática nenhuma transferência de teste liquida.
+    // Pra o operador conseguir validar o fluxo inteiro, uma transferência
+    // sandbox JÁ confirmada (o PATCH de confirmação passou) liquida aqui com um
+    // endToEnd sintético e único, marcado como SANDBOX. Produção nunca entra
+    // neste atalho: lá vale só o endToEnd real vindo do banco.
+    const isSandbox = row.environment === "sandbox";
+    const sandboxSettle = isSandbox &&
+      (outcome === "settled" || row.status === "confirmed");
+
+    if (outcome === "settled" || sandboxSettle) {
+      const e2e = isSandbox
+        ? `SANDBOX-${String(row.id).replace(/-/g, "")}`
+        : look.endToEnd;
       if (!e2e) {
         // "Pago" sem endToEnd é boato: é o endToEnd que prova a liquidação no
         // SPI, e a própria CHECK da tabela recusaria. Volta pra fila.
