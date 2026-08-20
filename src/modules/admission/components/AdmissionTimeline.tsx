@@ -44,17 +44,17 @@ const KIND_ICON: Record<AdmissionEventKind, typeof Note> = {
 
 const KIND_COLOR: Record<AdmissionEventKind, string> = {
   created: "text-muted-foreground bg-muted",
-  token_sent: "text-blue-700 bg-blue-100 dark:text-blue-300 dark:bg-blue-900/30",
-  docs_submitted: "text-blue-700 bg-blue-100 dark:text-blue-300 dark:bg-blue-900/30",
-  doc_validated: "text-orange-700 bg-orange-100 dark:text-orange-300 dark:bg-orange-900/30",
-  doc_approved: "text-orange-700 bg-orange-100 dark:text-orange-300 dark:bg-orange-900/30",
-  doc_rejected: "text-orange-700 bg-orange-100 dark:text-orange-300 dark:bg-orange-900/30",
-  exam_scheduled: "text-sky-700 bg-sky-100 dark:text-sky-300 dark:bg-sky-900/30",
+  token_sent: "text-info bg-info/10 dark:text-info dark:bg-info/15",
+  docs_submitted: "text-info bg-info/10 dark:text-info dark:bg-info/15",
+  doc_validated: "text-primary bg-primary/10 dark:text-primary dark:bg-primary/15",
+  doc_approved: "text-primary bg-primary/10 dark:text-primary dark:bg-primary/15",
+  doc_rejected: "text-primary bg-primary/10 dark:text-primary dark:bg-primary/15",
+  exam_scheduled: "text-info bg-info/10 dark:text-info dark:bg-info/15",
   exam_completed: "text-cyan-700 bg-cyan-100 dark:text-cyan-300 dark:bg-cyan-900/30",
   contract_sent: "text-violet-700 bg-violet-100 dark:text-violet-300 dark:bg-violet-900/30",
   contract_signed: "text-violet-700 bg-violet-100 dark:text-violet-300 dark:bg-violet-900/30",
-  admitted: "text-orange-700 bg-orange-100 dark:text-orange-300 dark:bg-orange-900/30",
-  cancelled: "text-rose-700 bg-rose-100 dark:text-rose-300 dark:bg-rose-900/30",
+  admitted: "text-primary bg-primary/10 dark:text-primary dark:bg-primary/15",
+  cancelled: "text-destructive bg-destructive/10 dark:text-destructive dark:bg-destructive/15",
   note: "text-muted-foreground bg-muted",
 };
 

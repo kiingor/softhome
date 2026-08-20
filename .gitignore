@@ -16,6 +16,8 @@ dist-ssr
 .env
 .env.local
 .env.*.local
+.env.bak*
+.env.*.bak
 
 # Supabase CLI cache (project ref, link metadata)
 supabase/.temp/
@@ -38,3 +40,14 @@ supabase/.branches/
 # Imports avulsos do sistema antigo (dados locais — não commitar)
 /Plano de Cargos.xlsx
 scripts/output/
+
+# Certificado do Santander — chave privada do e-CNPJ da empresa.
+# Commitar isso é incidente de segurança, não descuido: o A1 assina em nome da
+# Softcom e vale até 12/08/2027. Os PEM vivem só no volume da VPS.
+deploy/certs/
+santander-gw/certs/
+*.pfx
+*.p12
+client.key
+client.crt
+CADEIA_COMPLETA.pem

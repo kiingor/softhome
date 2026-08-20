@@ -26,6 +26,7 @@ import {
   extractTextFromResponse,
 } from "../_shared/claude.ts";
 import { embedText, EMBED_MODEL_LABEL } from "../_shared/embeddings.ts";
+import { rateLimitTake } from "../_shared/rate-limit.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -149,6 +150,17 @@ serve(async (req) => {
     return jsonResponse(
       { error: "Body must include { candidateId, filePath?, cvUrl? }" },
       400,
+    );
+  }
+
+  // Rate-limit: processar CV chama IA (custo). Por candidato (10 a cada 10 min —
+  // reprocessar acontece, loop não) mais teto global por minuto. Fail-open.
+  const okCand = await rateLimitTake(sbAdmin, "cv-process", candidateId, 10, 600);
+  const okGlobal = await rateLimitTake(sbAdmin, "cv-process:global", "all", 90, 60);
+  if (!okCand || !okGlobal) {
+    return jsonResponse(
+      { error: "Muitos processamentos em pouco tempo. Tenta de novo em instantes." },
+      429,
     );
   }
 

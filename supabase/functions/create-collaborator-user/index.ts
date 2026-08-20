@@ -1,6 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// Espelha src/lib/security/password-policy.ts. Mantenha os dois iguais e
+// alinhados com o mínimo configurado no painel do Supabase.
+const MIN_PASSWORD_LENGTH = 8;
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -52,9 +56,9 @@ serve(async (req) => {
       );
     }
 
-    if (password.length < 6) {
+    if (password.length < MIN_PASSWORD_LENGTH) {
       return new Response(
-        JSON.stringify({ error: "A senha deve ter no mínimo 6 caracteres" }),
+        JSON.stringify({ error: `A senha deve ter no mínimo ${MIN_PASSWORD_LENGTH} caracteres` }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -105,20 +109,27 @@ serve(async (req) => {
         
         console.log("User already exists, attempting to link to company:", normalizedEmail);
         
-        // Find existing user
-        const { data: existingUsers, error: listError } = await adminClient.auth.admin.listUsers();
-        
-        if (listError) {
-          console.error("Error listing users:", listError);
-          return new Response(
-            JSON.stringify({ error: "Erro ao buscar usuário existente" }),
-            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
+        // Find existing user.
+        // listUsers() sem argumento devolve só a primeira página (50 contas),
+        // então contas antigas nunca eram encontradas e o vínculo falhava com
+        // "Usuário não encontrado". Paginamos até achar.
+        let existingUser: { id: string; email?: string } | undefined;
+        for (let page = 1; page <= 40 && !existingUser; page++) {
+          const { data: pageData, error: listError } =
+            await adminClient.auth.admin.listUsers({ page, perPage: 200 });
 
-        const existingUser = existingUsers.users.find(
-          (u) => u.email?.toLowerCase() === normalizedEmail
-        );
+          if (listError) {
+            console.error("Error listing users:", listError);
+            return new Response(
+              JSON.stringify({ error: "Erro ao buscar usuário existente" }),
+              { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+
+          const users = pageData?.users ?? [];
+          existingUser = users.find((u) => u.email?.toLowerCase() === normalizedEmail);
+          if (users.length < 200) break; // última página
+        }
 
         if (!existingUser) {
           return new Response(
@@ -144,8 +155,27 @@ serve(async (req) => {
           );
         }
 
-        // Update password for existing user
-        await adminClient.auth.admin.updateUserById(userId, { password });
+        // NÃO trocamos a senha de uma conta que já existe.
+        //
+        // Antes, "criar usuário" com um e-mail já cadastrado sobrescrevia a
+        // senha do dono daquela conta — ou seja, quem podia convidar alguém
+        // podia assumir a conta de qualquer usuário do sistema só sabendo o
+        // e-mail dele. Reset de senha tem endpoint próprio (update-user-password),
+        // que valida escopo e grava audit_log.
+        //
+        // Pelo mesmo motivo, não movemos alguém que já pertence a outra empresa.
+        const { data: existingProfile } = await adminClient
+          .from("profiles")
+          .select("company_id")
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (existingProfile?.company_id && existingProfile.company_id !== company_id) {
+          return new Response(
+            JSON.stringify({ error: "Este e-mail já pertence a um usuário de outra empresa" }),
+            { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
 
         // Link to company
         const { error: companyUserError } = await adminClient
@@ -164,11 +194,17 @@ serve(async (req) => {
           console.error("Error adding company_user:", companyUserError);
         }
 
-        // Update profile to point to this company
-        const { error: profileUpdateError } = await adminClient
-          .from("profiles")
-          .update({ company_id: company_id, full_name: full_name || null })
-          .eq("user_id", userId);
+        // Só cria/completa o profile quando ele ainda não aponta pra empresa
+        // alguma — nunca sequestra o de quem já tem vínculo.
+        const { error: profileUpdateError } = existingProfile
+          ? await adminClient
+              .from("profiles")
+              .update({ company_id: company_id, full_name: full_name || null })
+              .eq("user_id", userId)
+              .is("company_id", null)
+          : await adminClient
+              .from("profiles")
+              .insert({ user_id: userId, company_id: company_id, full_name: full_name || null });
 
         if (profileUpdateError) {
           console.error("Error updating profile:", profileUpdateError);
@@ -177,10 +213,11 @@ serve(async (req) => {
         console.log("Existing user linked to company successfully:", userId);
 
         return new Response(
-          JSON.stringify({ 
-            success: true, 
+          JSON.stringify({
+            success: true,
             user_id: userId,
-            message: "Usuário existente vinculado à empresa com sucesso" 
+            password_unchanged: true,
+            message: "Usuário já existia e foi vinculado à empresa. A senha atual dele foi mantida.",
           }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );

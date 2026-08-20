@@ -8,6 +8,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { z } from "zod";
 import { Eye, EyeSlash as EyeOff } from "@phosphor-icons/react";
 import { BrandLogo } from "@/components/branding/BrandLogo";
+import {
+  clearSessionClocks,
+  consumeSessionEnded,
+  SESSION_END_MESSAGES,
+} from "@/lib/security/session-policy";
 const loginSchema = z.object({
   email: z.string().email("Email inválido"),
   password: z.string().min(1, "Senha é obrigatória"),
@@ -20,6 +25,18 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  // Sessão derrubada por inatividade/tempo máximo deixa uma marca — avisamos
+  // aqui pro usuário não achar que o sistema simplesmente o expulsou.
+  useEffect(() => {
+    const reason = consumeSessionEnded();
+    if (reason) {
+      toast({
+        title: "Sessão encerrada",
+        description: SESSION_END_MESSAGES[reason],
+      });
+    }
+  }, [toast]);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -73,6 +90,10 @@ const Login = () => {
         return;
       }
 
+      // Relógios de sessão zerados: a nova sessão não pode herdar a
+      // inatividade acumulada pela anterior.
+      clearSessionClocks();
+
       toast({
         title: "Login realizado! 🎉",
         description: "Bem-vindo de volta ao DNA Softcom!",
@@ -91,30 +112,78 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen gradient-warm flex items-center justify-center p-6">
-      <div className="w-full max-w-md">
-        <div className="bg-card rounded-2xl shadow-card p-8 border border-border">
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center gap-2 mb-4">
-              <BrandLogo size="lg" />
-            </div>
-            <h1 className="text-2xl font-bold text-foreground">Bem-vindo de volta</h1>
-            <p className="text-muted-foreground mt-2">
-              Entre na sua conta DNA Softcom
+    // Grid de 2 colunas do handoff: arte à esquerda, formulário à direita.
+    // Abaixo de lg a arte some e o formulário ocupa a tela inteira.
+    <div className="grid min-h-screen lg:grid-cols-[1.1fr_1fr]">
+      {/* ---------- arte ---------- */}
+      <aside className="relative hidden flex-col justify-between overflow-hidden gradient-hero p-12 lg:flex">
+        {/* textura discreta: pontos que somem nas bordas, sem competir com o texto */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 opacity-[0.06]"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 1px 1px, #fff 1px, transparent 0)",
+            backgroundSize: "28px 28px",
+            maskImage: "radial-gradient(ellipse at 30% 30%, #000 30%, transparent 75%)",
+            WebkitMaskImage: "radial-gradient(ellipse at 30% 30%, #000 30%, transparent 75%)",
+          }}
+        />
+
+        <div className="relative flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
+            <span className="text-base font-extrabold leading-none text-primary-foreground">D</span>
+          </div>
+          <div>
+            <p className="text-[15px] font-extrabold leading-tight text-white">DNA Softcom</p>
+            <p className="mono text-[10px] uppercase tracking-[0.12em] text-white/45">
+              Gente &amp; Cultura
             </p>
           </div>
+        </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="relative max-w-lg">
+          <h2 className="text-[40px] font-extrabold leading-[1.08] tracking-[-0.03em] text-white">
+            Todo mundo da Softcom,
+            <br />
+            <span className="text-primary">num lugar só.</span>
+          </h2>
+          <p className="mt-5 text-[15px] leading-relaxed text-white/55">
+            Admissão, jornada, folha e recrutamento sem planilha no meio do caminho.
+          </p>
+        </div>
+
+        <p className="mono relative text-[10px] uppercase tracking-[0.14em] text-white/30">
+          Softcom Tecnologia · Sistema interno
+        </p>
+      </aside>
+
+      {/* ---------- formulário ---------- */}
+      <main className="flex items-center justify-center bg-background px-6 py-12">
+        <div className="w-full max-w-[400px]">
+          {/* marca compacta, só quando a arte não está visível */}
+          <div className="mb-8 flex items-center gap-3 lg:hidden">
+            <BrandLogo size="md" />
+            <p className="text-[15px] font-extrabold text-foreground">DNA Softcom</p>
+          </div>
+
+          <p className="label-eyebrow">Acesso</p>
+          <h1 className="page-title mt-1">Entrar</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Use o e-mail corporativo da Softcom.
+          </p>
+
+          <form onSubmit={handleSubmit} className="mt-8 space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">E-mail</Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="voce@empresa.com.br"
+                placeholder="voce@softcomtecnologia.com.br"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="h-12"
+                autoComplete="username"
               />
             </div>
 
@@ -123,7 +192,7 @@ const Login = () => {
                 <Label htmlFor="password">Senha</Label>
                 <Link
                   to="/esqueci-senha"
-                  className="text-sm text-primary hover:underline"
+                  className="text-[13px] font-medium text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
                 >
                   Esqueceu a senha?
                 </Link>
@@ -136,31 +205,33 @@ const Login = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="h-12 pr-12"
+                  autoComplete="current-password"
+                  className="pr-12"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                  className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                 >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  {showPassword ? <EyeOff className="h-[18px] w-[18px]" /> : <Eye className="h-[18px] w-[18px]" />}
                 </button>
               </div>
             </div>
 
-            <Button 
-              type="submit" 
-              variant="hero" 
-              size="lg" 
-              className="w-full"
-              disabled={isLoading}
-            >
+            <Button type="submit" size="lg" className="w-full" disabled={isLoading}>
               {isLoading ? "Entrando..." : "Entrar"}
             </Button>
           </form>
 
+          <p className="mt-8 text-[13px] text-muted-foreground">
+            É colaborador?{" "}
+            <Link to="/portal/login" className="font-medium text-primary underline-offset-4 hover:underline">
+              Acesse o portal
+            </Link>
+          </p>
         </div>
-      </div>
+      </main>
     </div>
   );
 };

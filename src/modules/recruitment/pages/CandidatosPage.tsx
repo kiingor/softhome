@@ -99,7 +99,6 @@ export default function CandidatosPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Banco de Talentos</h1>
           <p className="text-muted-foreground">
             Currículos e candidatos guardados pra futuras vagas.
           </p>
@@ -212,7 +211,7 @@ export default function CandidatosPage() {
                           {!c.is_active && (
                             <Badge
                               variant="outline"
-                              className="ml-2 text-xs font-normal"
+                              className="ml-2"
                             >
                               Pediu saída
                             </Badge>

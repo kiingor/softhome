@@ -28,9 +28,15 @@ import {
 } from "@phosphor-icons/react";
 import { z } from "zod";
 
+import {
+  MIN_PASSWORD_LENGTH,
+  PASSWORD_HINT,
+  PASSWORD_TOO_SHORT,
+  isPasswordLongEnough,
+} from "@/lib/security/password-policy";
 const passwordSchema = z
   .object({
-    password: z.string().min(6, "Tá curto demais. Pelo menos 6 caracteres."),
+    password: z.string().min(MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT),
     confirm: z.string(),
   })
   .refine((d) => d.password === d.confirm, {
@@ -118,7 +124,7 @@ export function ChangePasswordDialog({ open, onOpenChange }: Props) {
               <Input
                 id="newPassword"
                 type={showPassword ? "text" : "password"}
-                placeholder="Pelo menos 6 caracteres"
+                placeholder={PASSWORD_HINT}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -153,7 +159,7 @@ export function ChangePasswordDialog({ open, onOpenChange }: Props) {
               </p>
             )}
             {confirm && password === confirm && password.length >= 6 && (
-              <p className="text-xs text-emerald-600 flex items-center gap-1">
+              <p className="text-xs text-success flex items-center gap-1">
                 <CheckCircle className="w-3 h-3" weight="fill" />
                 Beleza, senhas conferem.
               </p>

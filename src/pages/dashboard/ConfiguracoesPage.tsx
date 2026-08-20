@@ -9,19 +9,29 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Buildings as Building2, CircleNotch as Loader2, FloppyDisk as Save, Users, Upload, Trash as Trash2, Image as ImageIcon, ChatCircle as MessageSquare, ShieldCheck } from "@phosphor-icons/react";
+import { Buildings as Building2, CircleNotch as Loader2, FloppyDisk as Save, Users, Upload, Trash as Trash2, Image as ImageIcon, ChatCircle as MessageSquare, ShieldCheck, LockKey } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { UsersAccessTab } from "@/components/dashboard/UsersAccessTab";
+import { SecurityTab } from "@/components/dashboard/SecurityTab";
 import { useIsCompanyAdmin, usePermissions } from "@/hooks/usePermissions";
 import WhatsAppConfigTab from "@/components/whatsapp/WhatsAppConfigTab";
 import AuditoriaTab from "@/modules/audit/pages/AuditoriaTab";
+import { MfaLoginCard } from "@/components/security/MfaLoginCard";
+import { PixEnvironmentCard } from "@/modules/payroll/components/PixEnvironmentCard";
 
 const ConfiguracoesPage = () => {
-  const { currentCompany } = useDashboard();
+  const { currentCompany, hasAnyRole } = useDashboard();
   const queryClient = useQueryClient();
   const { isAdmin } = useIsCompanyAdmin();
   const { canView: canViewPermissoes } = usePermissions("permissoes");
   const canAccessUsersTab = isAdmin || canViewPermissoes;
+  // Aba Segurança hospeda DOIS controles: o 2º fator de LOGIN (todo papel
+  // administrativo pode/deve ativar) e o celular de confirmação de PAGAMENTO (só
+  // quem executa pagamento). Por isso o acesso à aba abre para admin, executores
+  // de pagamento e os papéis que precisam de MFA de login (admin_gc/diretoria).
+  const { canCreate: canExecutePayment } = usePermissions("folha_pagamento_exec");
+  const canAccessSecurityTab =
+    isAdmin || canExecutePayment || hasAnyRole(["admin_gc", "diretoria"]);
   const [searchParams] = useSearchParams();
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState("conta");
@@ -34,7 +44,13 @@ const ConfiguracoesPage = () => {
     if (tab && ["conta", "usuarios", "whatsapp", "auditoria"].includes(tab)) {
       setActiveTab(tab);
     }
-  }, [searchParams]);
+    // 'seguranca' só entra se a pessoa puder ver: a permissão chega assíncrona,
+    // então sem essa guarda um link direto abriria a aba antes da checagem e
+    // deixaria o conteúdo em branco pra quem não paga.
+    if (tab === "seguranca" && canAccessSecurityTab) {
+      setActiveTab(tab);
+    }
+  }, [searchParams, canAccessSecurityTab]);
 
   // Form state for company data
   const [formData, setFormData] = useState({
@@ -215,7 +231,6 @@ const ConfiguracoesPage = () => {
     <PermissionGuard module="configuracoes">
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Configurações</h1>
           <p className="text-muted-foreground">
             Gerencie os dados da sua conta
           </p>
@@ -237,6 +252,12 @@ const ConfiguracoesPage = () => {
               <MessageSquare className="w-4 h-4" />
               Notificações WhatsApp
             </TabsTrigger>
+            {canAccessSecurityTab && (
+              <TabsTrigger value="seguranca" className="gap-2">
+                <LockKey className="w-4 h-4" />
+                Segurança
+              </TabsTrigger>
+            )}
             {isAdmin && (
               <TabsTrigger value="auditoria" className="gap-2">
                 <ShieldCheck className="w-4 h-4" />
@@ -445,6 +466,18 @@ const ConfiguracoesPage = () => {
           <TabsContent value="whatsapp">
             <WhatsAppConfigTab />
           </TabsContent>
+
+          {/* Tab: Segurança — 2º fator de login (papéis admin) + celular de
+              confirmação de pagamento (só executores de pagamento). */}
+          {canAccessSecurityTab && (
+            <TabsContent value="seguranca" className="space-y-6">
+              <MfaLoginCard />
+              {(isAdmin || canExecutePayment) && <SecurityTab />}
+              {/* Ambiente do PIX (sandbox↔produção): só admin_gc / diretoria — é o
+                  botão que liga pagamentos reais. */}
+              {(isAdmin || hasAnyRole(["admin_gc", "diretoria"])) && <PixEnvironmentCard />}
+            </TabsContent>
+          )}
 
           {/* Tab: Auditoria (admin-only) */}
           {isAdmin && (

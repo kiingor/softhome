@@ -235,7 +235,6 @@ const ContabilidadePage = () => {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Contabilidade</h1>
             <p className="text-muted-foreground">
               Upload e associação de contracheques
             </p>
@@ -288,7 +287,7 @@ const ContabilidadePage = () => {
               <PayslipUploadZone files={files} onFilesChange={handleFilesChange} />
 
               {collaboratorsWithPayslip.size > 0 && (
-                <div className="flex items-center gap-2 p-3 bg-yellow-50 text-yellow-800 rounded-lg">
+                <div className="flex items-center gap-2 p-3 bg-warning/5 text-warning rounded-lg">
                   <AlertCircle className="w-5 h-5 flex-shrink-0" />
                   <p className="text-sm">
                     {collaboratorsWithPayslip.size} colaborador(es) já possuem
@@ -375,8 +374,8 @@ const ContabilidadePage = () => {
         {step === "complete" && uploadResults && (
           <Card>
             <CardContent className="p-12 text-center">
-              <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-6">
-                <CheckCircle className="w-10 h-10 text-green-600" />
+              <div className="w-20 h-20 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-6">
+                <CheckCircle className="w-10 h-10 text-success" />
               </div>
               <h2 className="text-2xl font-bold text-foreground mb-2">
                 Importação Concluída!

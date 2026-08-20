@@ -1,0 +1,92 @@
+# santander-gw na VPS — terminador mTLS do PIX da folha (ver ADR 0006).
+#
+# Uso:
+#   cd /root/dna-app
+#   docker compose -f deploy/santander-gw.yml --env-file deploy/santander-gw.env up -d --build
+#
+# SEM TRAEFIK, DE PROPÓSITO. Não há um único label de roteamento aqui e não deve
+# haver: este serviço não existe do lado de fora. Ele segura a chave privada do
+# e-CNPJ da Softcom e, para quem o alcança, ele PAGA. A única barreira que sobra
+# depois da rede é o GW_SHARED_SECRET — não coloque uma segunda porta na frente
+# dele.
+#
+# SEM `ports:` TAMBÉM. Publicar 8080 no host colocaria o gateway em qualquer
+# interface da VM. Quem precisa falar com ele entra na rede, não no host.
+#
+# QUEM CHAMA precisa estar em bank_net. O edge-runtime do Supabase self-hosted
+# sobe em outro compose, então depois de subir este aqui:
+#   docker network connect bank_net supabase-edge-functions
+# e a URL de dentro vira http://santander-gw:8080 (nome do serviço = DNS da rede).
+
+services:
+  santander-gw:
+    build:
+      context: ../santander-gw
+      dockerfile: Dockerfile
+    image: santander-gw:latest
+    container_name: santander-gw
+    restart: unless-stopped
+
+    networks:
+      - bank_net
+
+    volumes:
+      # Caminho relativo ao diretório do arquivo compose (o Compose v2 usa a
+      # pasta do primeiro -f como project dir) → /root/dna-app/deploy/certs.
+      # Essa pasta é root:root 700 e os PEM são 600: o `:ro` protege o container
+      # de si mesmo, não protege o host de quem já está nele.
+      - ./certs:/certs:ro
+
+    environment:
+      # Credenciais e destino. As de hoje são EXCLUSIVAS DE SANDBOX — em
+      # produção o mesmo par devolve invalid_client, o que é uma proteção
+      # acidental bem-vinda (não dá pra pagar de verdade por engano).
+      SANTANDER_CLIENT_ID: ${SANTANDER_CLIENT_ID}
+      SANTANDER_CLIENT_SECRET: ${SANTANDER_CLIENT_SECRET}
+      # sandbox: https://trust-sandbox.api.santander.com.br
+      # produção: https://trust-open.api.santander.com.br
+      # O serviço deriva o ambiente daqui — não existe segunda variável dizendo
+      # "sandbox/produção", porque duas fontes de verdade pro ambiente é como
+      # "ensaiei" vira "paguei".
+      SANTANDER_BASE_URL: ${SANTANDER_BASE_URL:-https://trust-sandbox.api.santander.com.br}
+      # Host do serviço de COMPROVANTE (consult_payment_receipts). Separado
+      # porque essa API não existe no sandbox — só trust-open (produção) e
+      # trust-open-h (homologação). Se não setar, o gateway deriva do ambiente:
+      # produção→trust-open, resto→trust-open-h. Saldo/extrato e comprovante têm
+      # tokens OAuth por host (o token de um host não vale no outro).
+      SANTANDER_RECEIPTS_BASE_URL: ${SANTANDER_RECEIPTS_BASE_URL:-}
+      # Só o workspace com pixPaymentsActive=true aceita PIX (no sandbox, o
+      # PAYMENTS). Escolher errado é erro silencioso de configuração.
+      SANTANDER_WORKSPACE_ID: ${SANTANDER_WORKSPACE_ID}
+      SANTANDER_DEBIT_BRANCH: ${SANTANDER_DEBIT_BRANCH}
+      SANTANDER_DEBIT_ACCOUNT: ${SANTANDER_DEBIT_ACCOUNT}
+
+      # Único portão do serviço. Gere com `openssl rand -hex 32`; o boot recusa
+      # subir com menos de 24 caracteres.
+      GW_SHARED_SECRET: ${GW_SHARED_SECRET}
+
+      # KILL-SWITCH. Lido A CADA REQUEST (não no boot): 'true' bloqueia POST e
+      # PATCH — criar e confirmar pagamento — e deixa GET e /pix/search
+      # funcionando, porque quando alguém desliga o pagamento é exatamente
+      # quando mais se precisa consultar o que já foi enviado.
+      # Mesma forma do AGENDA_SYNC_DISABLED (supabase/functions/_shared/softcom-cloud.ts).
+      PIX_PAYMENTS_DISABLED: ${PIX_PAYMENTS_DISABLED:-false}
+
+      # Vencimento do e-CNPJ, pro /health alertar 30 dias antes. Atualize na
+      # renovação — certificado vencido em dia de folha é o incidente clássico.
+      SANTANDER_CERT_NOT_AFTER: ${SANTANDER_CERT_NOT_AFTER:-2027-08-12}
+
+      # Corpo do PATCH de confirmação: a única parte do contrato ainda não
+      # provada contra o ambiente real. Fica em env pra ajustar sem rebuild.
+      SANTANDER_CONFIRM_STATUS: ${SANTANDER_CONFIRM_STATUS:-AUTHORIZED}
+
+networks:
+  bank_net:
+    # external: false → o Compose cria a rede. Dedicada a este serviço: o
+    # gateway não tem por que estar na mesma rede que o frontend público.
+    external: false
+    name: bank_net
+    # NÃO usar `internal: true` aqui. Rede interna do Docker corta a saída pra
+    # internet, e é a internet que o gateway precisa alcançar (o Santander).
+    # O isolamento que queremos é de ENTRADA, e esse vem de não publicar porta
+    # nem registrar rota no Traefik.

@@ -46,7 +46,8 @@ import {
 import type { PayrollPeriodWithStats } from "../types";
 import type { OpenPeriodValues } from "../schemas/payroll.schema";
 
-export default function PeriodosPage() {
+import PermissionGuard from "@/components/dashboard/PermissionGuard";
+function PeriodosPageContent() {
   const [isOpenDialogOpen, setIsOpenDialogOpen] = useState(false);
   const [deletingPeriod, setDeletingPeriod] = useState<PayrollPeriodWithStats | null>(null);
   const [repopulatingPeriod, setRepopulatingPeriod] = useState<PayrollPeriodWithStats | null>(null);
@@ -61,7 +62,6 @@ export default function PeriodosPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Folha</h1>
           <p className="text-muted-foreground">
             Controle mensal de lançamentos. Não calculamos folha CLT — só
             organizamos pra exportar pro contador.
@@ -117,7 +117,7 @@ export default function PeriodosPage() {
                     <TableCell>
                       <Badge
                         variant="outline"
-                        className={`font-normal border-0 ${PERIOD_STATUS_COLORS[p.status]}`}
+                        className={`border-0 ${PERIOD_STATUS_COLORS[p.status]}`}
                       >
                         {PERIOD_STATUS_LABELS[p.status]}
                       </Badge>
@@ -237,5 +237,15 @@ export default function PeriodosPage() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+// A rota /dashboard/folha não tinha gate nenhum: bastava digitar a URL.
+// O módulo 'folha' agora barra quem não tem permissão de visualizar.
+export default function PeriodosPage() {
+  return (
+    <PermissionGuard module="folha">
+      <PeriodosPageContent />
+    </PermissionGuard>
   );
 }

@@ -149,8 +149,8 @@ export default function AplicarPage() {
       <div className="min-h-screen gradient-warm flex items-center justify-center p-6">
         <Card className="w-full max-w-md">
           <CardContent className="p-8 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center mx-auto mb-4">
-              <CheckCircle className="w-8 h-8 text-orange-700 dark:text-orange-300" />
+            <div className="w-16 h-16 rounded-2xl bg-primary/10 dark:bg-primary/15 flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="w-8 h-8 text-primary dark:text-primary" />
             </div>
             <h1 className="text-xl font-bold text-foreground mb-3">
               {submitted.name}, seu currículo chegou até a gente ✨

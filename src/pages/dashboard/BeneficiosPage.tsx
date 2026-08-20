@@ -217,7 +217,6 @@ const BeneficiosPage = () => {
       <div className="space-y-6 page-content">
         <div className="flex items-center justify-between animate-fade-in">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Benefícios</h1>
             <p className="text-muted-foreground">
               Cadastre os tipos de benefícios da empresa
             </p>
@@ -304,7 +303,7 @@ const BeneficiosPage = () => {
                             {toTitleCase(benefit.name)}
                           </TableCell>
                           <TableCell>
-                            <Badge variant="outline" className="text-xs">
+                            <Badge variant="outline" >
                               {BENEFIT_CATEGORY_LABELS[(benefit.category ?? "other") as BenefitCategory]}
                             </Badge>
                           </TableCell>

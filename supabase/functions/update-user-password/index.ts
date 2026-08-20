@@ -2,16 +2,25 @@
 //
 // Reset de senha de um usuario pelo admin da empresa.
 //
-// Permissoes aceitas (qualquer uma):
-//   - Caller é owner da company (se company_id vier no body)
-//   - Caller é is_company_admin (se company_id vier)
-//   - Caller tem can_edit em modulo 'permissoes' (se company_id vier)
-//   - Fallback: caller tem role global 'admin' ou 'admin_gc' (compat)
+// Quem pode chamar (com company_id no body — qualquer uma das três):
+//   - Caller é owner da company
+//   - Caller é is_company_admin
+//   - Caller tem can_edit no modulo 'permissoes'
+// Sem company_id no body: só role global 'admin'/'admin_gc' (compat legado).
+//
+// Além de autorizar o CALLER, a função valida o ALVO:
+//   - o user_id precisa pertencer à company informada;
+//   - quem não é admin não reseta a senha de quem é (anti-escalada);
+//   - toda troca vira registro em audit_log.
 //
 // Body: { user_id, password OR new_password, company_id? }
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+// Espelha src/lib/security/password-policy.ts. Mantenha os dois iguais e
+// alinhados com o mínimo configurado no painel do Supabase.
+const MIN_PASSWORD_LENGTH = 8;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -62,9 +71,9 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
-    if (password.length < 6) {
+    if (password.length < MIN_PASSWORD_LENGTH) {
       return new Response(
-        JSON.stringify({ error: "A senha precisa de pelo menos 6 caracteres" }),
+        JSON.stringify({ error: `A senha precisa de pelo menos ${MIN_PASSWORD_LENGTH} caracteres` }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -116,20 +125,74 @@ serve(async (req) => {
       }
     }
 
-    // 2. Fallback: role global 'admin' ou 'admin_gc' (compat com chamadas antigas)
-    if (!allowed) {
+    // 2. Fallback: role global 'admin'/'admin_gc'.
+    // Só vale quando company_id NÃO veio no body — se veio, a decisão tem que
+    // sair do vínculo com aquela empresa (bloco 1), senão o fallback vira um
+    // bypass que anula toda a checagem acima.
+    const callerRolesList: string[] = await (async () => {
       const { data: roles } = await userClient.rpc("get_user_roles", {
         _user_id: callerUser.id,
       });
-      const rolesList: string[] = Array.isArray(roles) ? roles : [];
-      if (rolesList.includes("admin") || rolesList.includes("admin_gc")) {
-        allowed = true;
-        reason = "role_admin";
-      }
+      return Array.isArray(roles) ? (roles as string[]) : [];
+    })();
+    const callerIsAdmin =
+      callerRolesList.includes("admin") || callerRolesList.includes("admin_gc");
+
+    if (!allowed && !company_id && callerIsAdmin) {
+      allowed = true;
+      reason = "role_admin";
     }
 
     if (!allowed) {
       console.error("Permissão negada — caller:", callerUser.id, "user_id:", user_id, "company_id:", company_id);
+      return new Response(
+        JSON.stringify({ error: "Sem permissão para resetar senha deste usuário" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // ─── O alvo precisa estar no escopo do caller ──────────────
+    // Sem isso a autorização checa a empresa de QUEM CHAMA e nunca a de QUEM
+    // SOFRE a troca: bastava mandar o user_id do admin do sistema junto com o
+    // company_id da própria filial pra assumir a conta dele.
+    if (company_id) {
+      const [{ data: link }, { data: ownerRow }] = await Promise.all([
+        adminClient
+          .from("company_users")
+          .select("id")
+          .eq("company_id", company_id)
+          .eq("user_id", user_id)
+          .eq("is_active", true)
+          .maybeSingle(),
+        adminClient
+          .from("companies")
+          .select("owner_id")
+          .eq("id", company_id)
+          .maybeSingle(),
+      ]);
+
+      if (!link && ownerRow?.owner_id !== user_id) {
+        return new Response(
+          JSON.stringify({ error: "Usuário não pertence a esta empresa" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
+
+    // ─── Ninguém escala pra cima ───────────────────────────────
+    // Delegação de módulo ("permissoes.can_edit") não pode resetar a senha de
+    // um admin — seria trocar acesso de uma filial por acesso ao sistema todo.
+    const { data: targetRoles } = await adminClient
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user_id);
+
+    const targetIsAdmin = (targetRoles ?? []).some((r) =>
+      ["admin", "admin_gc"].includes(String((r as { role: unknown }).role)),
+    );
+
+    if (targetIsAdmin && !callerIsAdmin && reason !== "owner") {
+      console.error("Escalada bloqueada — caller:", callerUser.id, "alvo admin:", user_id);
       return new Response(
         JSON.stringify({ error: "Sem permissão para resetar senha deste usuário" }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -151,6 +214,21 @@ serve(async (req) => {
     }
 
     console.log("Senha atualizada — user_id:", user_id, "via:", reason);
+
+    // Rastro obrigatório: reset de senha por terceiro é operação sensível e
+    // hoje não deixava nenhum registro. Falha aqui não desfaz a troca de senha
+    // (que já aconteceu), então só logamos.
+    const { error: auditError } = await adminClient.from("audit_log").insert({
+      user_id: callerUser.id,
+      company_id: company_id ?? null,
+      action: "update",
+      table_name: "auth.users",
+      record_id: user_id,
+      after: { event: "password_reset", authorized_by: reason },
+    });
+    if (auditError) {
+      console.error("Falha ao gravar audit_log do reset:", auditError.message);
+    }
 
     return new Response(
       JSON.stringify({ success: true, message: "Senha atualizada" }),

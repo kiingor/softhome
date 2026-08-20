@@ -12,9 +12,9 @@ import {
 
 const ACTION: Record<string, { label: string; Icon: typeof Check; cls: string }> = {
   started: { label: "iniciou a validação", Icon: SealCheck, cls: "text-primary" },
-  marked_corrected: { label: "marcou como corrigido", Icon: Check, cls: "text-emerald-600" },
+  marked_corrected: { label: "marcou como corrigido", Icon: Check, cls: "text-success" },
   marked_ignored: { label: "marcou como ignorado", Icon: Prohibit, cls: "text-muted-foreground" },
-  reopened: { label: "reabriu", Icon: ArrowCounterClockwise, cls: "text-amber-600" },
+  reopened: { label: "reabriu", Icon: ArrowCounterClockwise, cls: "text-warning" },
 };
 
 export function ValidationLog({ validationId }: { validationId: string }) {

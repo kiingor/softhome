@@ -36,10 +36,10 @@ export const JOB_STATUS_LABELS: Record<JobOpeningStatus, string> = {
 
 export const JOB_STATUS_COLORS: Record<JobOpeningStatus, string> = {
   draft: "bg-muted text-muted-foreground",
-  open: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
-  paused: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+  open: "bg-primary/10 text-primary dark:bg-primary/15 dark:text-primary",
+  paused: "bg-warning/10 text-warning dark:bg-warning/15 dark:text-warning",
   filled: "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300",
-  cancelled: "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300",
+  cancelled: "bg-destructive/10 text-destructive dark:bg-destructive/15 dark:text-destructive",
 };
 
 // Labels conhecidos pros stages padrão. Stages custom usam o slug como label.
@@ -73,14 +73,14 @@ export function stageLabel(stage: string): string {
 
 const KNOWN_STAGE_COLORS: Record<string, string> = {
   new: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
-  screening: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
-  interview_hr: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+  screening: "bg-info/10 text-info dark:bg-info/15 dark:text-info",
+  interview_hr: "bg-warning/10 text-warning dark:bg-warning/15 dark:text-warning",
   tests: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
   interview_manager:
-    "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
+    "bg-primary/10 text-primary dark:bg-primary/15 dark:text-primary",
   offer: "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300",
-  accepted: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
-  rejected: "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300",
+  accepted: "bg-primary/10 text-primary dark:bg-primary/15 dark:text-primary",
+  rejected: "bg-destructive/10 text-destructive dark:bg-destructive/15 dark:text-destructive",
   withdrawn: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
 };
 

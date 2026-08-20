@@ -20,7 +20,14 @@
 
 // SDK pinned to a known version. Bump deliberately; changing the URL is the
 // equivalent of a version bump in package.json for the Node side.
-import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.91.1";
+//
+// `?no-dts` é obrigatório: o edge-runtime self-hosted resolve os tipos do
+// pacote ao montar o grafo de módulos, e o `.d.mts` do SDK tem um import
+// relativo inválido ("node-fetch.js"), o que derruba o worker no boot com
+// "failed to create the graph: Failed resolving types". A Supabase Cloud não
+// resolve tipos e por isso não sofria com isso. O parâmetro só suprime as
+// declarações de tipo — o JavaScript entregue é idêntico.
+import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.91.1?no-dts";
 
 /** Default model used by every SoftHouse agent unless explicitly overridden.
  * `dna-model` é o alias/combo do iarouter (ANTHROPIC_BASE_URL custom da Softcom):

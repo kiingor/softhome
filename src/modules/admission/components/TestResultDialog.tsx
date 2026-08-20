@@ -105,7 +105,7 @@ export function TestResultDialog({
               {typeof summary.correct === "number" &&
                 typeof summary.total === "number" && (
                   <Badge
-                    className="bg-emerald-100 text-emerald-700 border-0 hover:bg-emerald-100"
+                    className="bg-success/10 text-success border-0 hover:bg-success/15"
                   >
                     {summary.correct} / {summary.total} corretas
                   </Badge>
@@ -114,11 +114,11 @@ export function TestResultDialog({
               {/* Informática (objetivas + abertas) */}
               {summary.objective && (
                 <>
-                  <Badge className="bg-emerald-100 text-emerald-700 border-0 hover:bg-emerald-100">
+                  <Badge className="bg-success/10 text-success border-0 hover:bg-success/15">
                     Objetivas: {summary.objective.correct} / {summary.objective.total}
                   </Badge>
                   {summary.open && (
-                    <Badge className="bg-amber-100 text-amber-700 border-0 hover:bg-amber-100">
+                    <Badge className="bg-warning/10 text-warning border-0 hover:bg-warning/15">
                       Abertas: {summary.open.answered} / {summary.open.total} (avalia manualmente)
                     </Badge>
                   )}
@@ -145,7 +145,7 @@ export function TestResultDialog({
                     <Badge
                       key={t}
                       variant="secondary"
-                      className="text-xs"
+                      
                       title={TRAIT_LABELS[t]}
                     >
                       {t}: {summary.traits![t]}%
@@ -276,13 +276,13 @@ function SingleChoiceResult({
         let cls = "border-border";
         let icon = null;
         if (hasAutoGrade && isChosen && isCorrectOpt) {
-          cls = "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/20";
-          icon = <CheckCircle className="w-4 h-4 text-emerald-600" weight="fill" />;
+          cls = "border-success/25 bg-success/5 dark:bg-success/15";
+          icon = <CheckCircle className="w-4 h-4 text-success" weight="fill" />;
         } else if (hasAutoGrade && isChosen && !isCorrectOpt) {
-          cls = "border-rose-500 bg-rose-50 dark:bg-rose-950/20";
-          icon = <XCircle className="w-4 h-4 text-rose-600" weight="fill" />;
+          cls = "border-destructive/25 bg-destructive/5 dark:bg-destructive/15";
+          icon = <XCircle className="w-4 h-4 text-destructive" weight="fill" />;
         } else if (hasAutoGrade && isCorrectOpt) {
-          cls = "border-emerald-300 bg-emerald-50/50 dark:bg-emerald-950/10";
+          cls = "border-success/25 bg-success/15 dark:bg-success/15";
         } else if (isChosen) {
           cls = "border-primary bg-primary/5";
         }
@@ -305,10 +305,10 @@ function SingleChoiceResult({
       {hasAutoGrade && (
         <p className="text-xs flex items-center gap-1 pt-0.5">
           {isRight && (
-            <span className="text-emerald-700 font-medium">Resposta correta ✓</span>
+            <span className="text-success font-medium">Resposta correta ✓</span>
           )}
           {isWrong && (
-            <span className="text-rose-700">
+            <span className="text-destructive">
               Resposta incorreta — gabarito: <strong>{correct}</strong>
             </span>
           )}
@@ -339,10 +339,10 @@ function OpenTextResult({
         )}
       </div>
       {question.suggestedAnswer && (
-        <div className="flex items-start gap-2 text-xs text-muted-foreground bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-md p-2.5">
-          <Info className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" weight="fill" />
+        <div className="flex items-start gap-2 text-xs text-muted-foreground bg-warning/5 dark:bg-warning/15 border border-warning/25 dark:border-warning/25 rounded-md p-2.5">
+          <Info className="w-3.5 h-3.5 text-warning shrink-0 mt-0.5" weight="fill" />
           <div>
-            <strong className="text-amber-700 dark:text-amber-400">Sugestão de gabarito (RH):</strong>{" "}
+            <strong className="text-warning dark:text-warning">Sugestão de gabarito (RH):</strong>{" "}
             {question.suggestedAnswer}
           </div>
         </div>

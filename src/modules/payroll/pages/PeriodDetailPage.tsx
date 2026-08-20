@@ -82,7 +82,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PaymentsTab } from "../components/PaymentsTab";
-import { StatBlock } from "../components/StatBlock";
+import { cn } from "@/lib/utils";
 import { VacationAdvanceDialog } from "../components/VacationAdvanceDialog";
 import { PayrollValidationButton } from "../components/validation/PayrollValidationButton";
 import { toast } from "sonner";
@@ -120,7 +120,8 @@ import type { NewEntryValues } from "../schemas/payroll.schema";
 import { exportPayrollExcel } from "../services/payroll-export.service";
 import { formatCurrency } from "@/lib/formatters";
 
-export default function PeriodDetailPage() {
+import PermissionGuard from "@/components/dashboard/PermissionGuard";
+function PeriodDetailPageContent() {
   const { id } = useParams<{ id: string }>();
   const { currentCompany, hasAnyRole } = useDashboard();
   const canManage = hasAnyRole(["admin_gc", "gestor_gc"]);
@@ -577,7 +578,7 @@ export default function PeriodDetailPage() {
             <div className="flex items-center gap-3 mt-2 flex-wrap">
               <Badge
                 variant="outline"
-                className={`font-normal border-0 ${PERIOD_STATUS_COLORS[period.status]}`}
+                className={`border-0 ${PERIOD_STATUS_COLORS[period.status]}`}
               >
                 {PERIOD_STATUS_LABELS[period.status]}
               </Badge>
@@ -594,11 +595,11 @@ export default function PeriodDetailPage() {
               <Button
                 variant="outline"
                 onClick={() => setAlertsOpen(true)}
-                className="border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800 dark:border-amber-800 dark:text-amber-400"
+                className="border-warning/25 text-warning hover:bg-warning/15 hover:text-warning dark:border-warning/25 dark:text-warning"
               >
                 <AlertTriangle className="w-4 h-4 mr-2" weight="fill" />
                 Alertas
-                <span className="ml-2 inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold dark:bg-amber-900/50 dark:text-amber-300">
+                <span className="ml-2 inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-warning/10 text-warning text-xs font-semibold dark:bg-warning/15 dark:text-warning">
                   {alerts.length}
                 </span>
               </Button>
@@ -772,7 +773,7 @@ export default function PeriodDetailPage() {
                 <p className="text-sm text-muted-foreground">
                   Valores líquidos (com INSS e IRPF já descontados conforme a
                   tabela 2026). Benefícios, FGTS e lançamentos estornados ficam
-                  fora. Passa o mouse no ícone <Info className="inline w-3 h-3 mx-0.5 text-amber-600" weight="fill" /> pra ver bruto/desconto/líquido.
+                  fora. Passa o mouse no ícone <Info className="inline w-3 h-3 mx-0.5 text-warning" weight="fill" /> pra ver bruto/desconto/líquido.
                 </p>
               </CardHeader>
               <CardContent>
@@ -780,6 +781,7 @@ export default function PeriodDetailPage() {
                   periodId={period.id}
                   entries={filteredEntries}
                   canManage={canManagePayments}
+                  periodStatus={period.status}
                 />
               </CardContent>
             </Card>
@@ -787,55 +789,80 @@ export default function PeriodDetailPage() {
         )}
 
         <TabsContent value="lancamentos">
-          {/* KPIs desta aba — totais dos lançamentos (exclui bonificação/custo-setor).
-              Estagiários (por cargo) saem dos totais principais e ganham bloco à parte. */}
-          <div className="flex flex-col lg:flex-row gap-4 mb-4">
-            <div className="lg:flex-[3] min-w-0 space-y-1.5">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">
+          {/* Resumo dos lançamentos — mesmo padrão de card da aba Pagamentos.
+              Antes eram 8 cards grandes (principais + estagiários) tomando meia
+              tela; agora é um bloco coeso por grupo, com os números em mono. */}
+          <div className="space-y-3 mb-4">
+            <div className="rounded-lg border border-border bg-card p-4 shadow-soft">
+              <p className="label-eyebrow mb-3">
                 {lancamentoStats.intern.collaborators > 0 ? "Folha — sem estagiários" : "Folha"}
               </p>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                <StatBlock label="Pessoas" value={String(lancamentoStats.main.collaborators)} />
-                <StatBlock
-                  label="Proventos"
-                  value={formatCurrency(lancamentoStats.main.earnings)}
-                  accent="emerald"
-                />
-                <StatBlock
-                  label="Descontos"
-                  value={formatCurrency(lancamentoStats.main.deductions)}
-                  accent="rose"
-                />
-                <StatBlock
-                  label="Líquido"
-                  value={formatCurrency(lancamentoStats.main.net)}
-                  accent={lancamentoStats.main.net >= 0 ? "emerald" : "rose"}
-                />
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="min-w-0">
+                  <p className="label-eyebrow">Pessoas</p>
+                  <p className="mono mt-1 text-lg font-semibold leading-tight tracking-[-0.02em] text-foreground">
+                    {lancamentoStats.main.collaborators}
+                  </p>
+                </div>
+                <div className="min-w-0">
+                  <p className="label-eyebrow">Proventos</p>
+                  <p className="mono mt-1 text-lg font-semibold leading-tight tracking-[-0.02em] text-success truncate">
+                    {formatCurrency(lancamentoStats.main.earnings)}
+                  </p>
+                </div>
+                <div className="min-w-0">
+                  <p className="label-eyebrow">Descontos</p>
+                  <p className="mono mt-1 text-lg font-semibold leading-tight tracking-[-0.02em] text-destructive truncate">
+                    {formatCurrency(lancamentoStats.main.deductions)}
+                  </p>
+                </div>
+                <div className="min-w-0">
+                  <p className="label-eyebrow">Líquido</p>
+                  <p
+                    className={cn(
+                      "mono mt-1 text-lg font-semibold leading-tight tracking-[-0.02em] truncate",
+                      lancamentoStats.main.net >= 0 ? "text-success" : "text-destructive",
+                    )}
+                  >
+                    {formatCurrency(lancamentoStats.main.net)}
+                  </p>
+                </div>
               </div>
             </div>
 
             {lancamentoStats.intern.collaborators > 0 && (
-              <div className="lg:flex-[2] min-w-0 space-y-1.5 lg:border-l lg:border-border lg:pl-4">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">
-                  Estagiários
-                </p>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                  <StatBlock label="Pessoas" value={String(lancamentoStats.intern.collaborators)} />
-                  <StatBlock
-                    label="Proventos"
-                    value={formatCurrency(lancamentoStats.intern.earnings)}
-                    accent="emerald"
-                  />
-                  <StatBlock
-                    label="Descontos"
-                    value={formatCurrency(lancamentoStats.intern.deductions)}
-                    accent="rose"
-                  />
-                  <StatBlock
-                    label="Líquido"
-                    value={formatCurrency(lancamentoStats.intern.net)}
-                    accent={lancamentoStats.intern.net >= 0 ? "emerald" : "rose"}
-                  />
+              <div className="rounded-lg border border-border bg-card p-4 shadow-soft">
+                <p className="label-eyebrow mb-3">Estagiários</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="min-w-0">
+                    <p className="label-eyebrow">Pessoas</p>
+                    <p className="mono mt-1 text-lg font-semibold leading-tight tracking-[-0.02em] text-foreground">
+                      {lancamentoStats.intern.collaborators}
+                    </p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="label-eyebrow">Proventos</p>
+                    <p className="mono mt-1 text-lg font-semibold leading-tight tracking-[-0.02em] text-success truncate">
+                      {formatCurrency(lancamentoStats.intern.earnings)}
+                    </p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="label-eyebrow">Descontos</p>
+                    <p className="mono mt-1 text-lg font-semibold leading-tight tracking-[-0.02em] text-destructive truncate">
+                      {formatCurrency(lancamentoStats.intern.deductions)}
+                    </p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="label-eyebrow">Líquido</p>
+                    <p
+                      className={cn(
+                        "mono mt-1 text-lg font-semibold leading-tight tracking-[-0.02em] truncate",
+                        lancamentoStats.intern.net >= 0 ? "text-success" : "text-destructive",
+                      )}
+                    >
+                      {formatCurrency(lancamentoStats.intern.net)}
+                    </p>
+                  </div>
                 </div>
               </div>
             )}
@@ -866,19 +893,19 @@ export default function PeriodDetailPage() {
                       Colaborador
                     </label>
                     <div className="relative">
-                      <MagnifyingGlass className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                      <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                       <Input
                         type="text"
                         placeholder="Buscar colaborador..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-[220px] pl-8 pr-8 h-9"
+                        className="w-[240px] pl-9 pr-9 h-10"
                       />
                       {isSearching && (
                         <button
                           type="button"
                           onClick={() => setSearchTerm("")}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition focus:outline-none focus:ring-2 focus:ring-primary/40 rounded"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded"
                           aria-label="Limpar busca"
                           title="Limpar busca"
                         >
@@ -895,7 +922,7 @@ export default function PeriodDetailPage() {
                       value={reviewFilter}
                       onValueChange={(v) => setReviewFilter(v as typeof reviewFilter)}
                     >
-                      <SelectTrigger className="w-[170px] h-9">
+                      <SelectTrigger className="w-[180px] h-10">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -913,7 +940,7 @@ export default function PeriodDetailPage() {
                       value={obsFilter}
                       onValueChange={(v) => setObsFilter(v as typeof obsFilter)}
                     >
-                      <SelectTrigger className="w-[170px] h-9">
+                      <SelectTrigger className="w-[180px] h-10">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -931,7 +958,7 @@ export default function PeriodDetailPage() {
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
-                          className="w-[190px] h-9 justify-between font-normal"
+                          className="w-[190px] h-10 justify-between font-normal"
                         >
                           <span className="truncate">
                             {positionFilter.size === 0
@@ -1096,7 +1123,7 @@ export default function PeriodDetailPage() {
                     <TableHead className="w-[120px]">Tipo</TableHead>
                     <TableHead>Descrição</TableHead>
                     <TableHead className="text-right w-[140px] whitespace-nowrap">Valor</TableHead>
-                    <TableHead className="w-[44px] p-0"></TableHead>
+                    <TableHead className="w-[170px] p-0"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1107,26 +1134,13 @@ export default function PeriodDetailPage() {
                         <TableRow
                           className={`hover:bg-muted/50 cursor-pointer ${
                             isReviewed(g.id)
-                              ? "bg-emerald-50 dark:bg-emerald-950/20"
+                              ? "bg-success/5 dark:bg-success/15"
                               : "bg-muted/20"
                           }`}
                           onClick={() => toggleCollab(g.id)}
                         >
                           <TableCell>
                             <div className="flex items-center gap-2 font-medium">
-                              <Checkbox
-                                checked={isReviewed(g.id)}
-                                disabled={!canManage || upsertReview.isPending}
-                                onClick={(e) => e.stopPropagation()}
-                                onCheckedChange={(checked) =>
-                                  upsertReview.mutate({
-                                    collaboratorId: g.id,
-                                    patch: { is_reviewed: !!checked },
-                                  })
-                                }
-                                aria-label={`Marcar ${g.name} como conferido`}
-                                title="Conferido"
-                              />
                               {isOpen ? (
                                 <CaretDown className="w-4 h-4 text-muted-foreground" />
                               ) : (
@@ -1146,7 +1160,7 @@ export default function PeriodDetailPage() {
                             {/* PIX do colaborador — mesma apresentação da aba
                                 Pagamentos, pra quem confere o lançamento não
                                 precisar trocar de aba pra ver a chave. */}
-                            <div className="flex items-center gap-1.5 text-xs mt-1 pl-[3.25rem]">
+                            <div className="flex items-center gap-1.5 text-xs mt-1 pl-6">
                               {g.pixKey ? (
                                 <>
                                   <span className="text-muted-foreground">PIX:</span>
@@ -1183,25 +1197,61 @@ export default function PeriodDetailPage() {
                           <TableCell
                             className={`text-right text-sm font-mono font-semibold whitespace-nowrap ${
                               g.net >= 0
-                                ? "text-orange-700 dark:text-orange-300"
-                                : "text-rose-700 dark:text-rose-300"
+                                ? "text-primary dark:text-primary"
+                                : "text-destructive dark:text-destructive"
                             }`}
                           >
                             {g.net >= 0 ? "+ " : "- "}
                             {formatCurrency(Math.abs(g.net))}
                           </TableCell>
-                          <TableCell className="p-0 pr-1 align-middle">
-                            <ReviewObsButton
-                              hasObs={hasObs(g.id)}
-                              observation={reviewByCollab.get(g.id)?.observation ?? ""}
-                              disabled={!canManage}
-                              onSave={(text) =>
-                                upsertReview.mutate({
-                                  collaboratorId: g.id,
-                                  patch: { observation: text.trim() || null },
-                                })
-                              }
-                            />
+                          <TableCell className="p-0 pr-2 align-middle">
+                            {/* Validar = a antiga marcação "Conferido", agora um
+                                botão explícito (mesmo padrão da aba Pagamentos).
+                                O checkbox saiu — na folha ele virou seleção. */}
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className={cn(
+                                  "h-7 gap-1.5 px-2.5 text-xs",
+                                  isReviewed(g.id)
+                                    ? "border-success/40 text-success hover:bg-success/10 hover:text-success dark:text-success"
+                                    : "text-muted-foreground",
+                                )}
+                                disabled={!canManage || upsertReview.isPending}
+                                title={
+                                  isReviewed(g.id)
+                                    ? "Conferido — clique pra desmarcar"
+                                    : "Marcar como conferido"
+                                }
+                                aria-label={`${isReviewed(g.id) ? "Desmarcar" : "Validar"} ${g.name}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  upsertReview.mutate({
+                                    collaboratorId: g.id,
+                                    patch: { is_reviewed: !isReviewed(g.id) },
+                                  });
+                                }}
+                              >
+                                <CheckCircle
+                                  className="w-3.5 h-3.5"
+                                  weight={isReviewed(g.id) ? "fill" : "regular"}
+                                />
+                                {isReviewed(g.id) ? "Validado" : "Validar"}
+                              </Button>
+                              <ReviewObsButton
+                                hasObs={hasObs(g.id)}
+                                observation={reviewByCollab.get(g.id)?.observation ?? ""}
+                                disabled={!canManage}
+                                onSave={(text) =>
+                                  upsertReview.mutate({
+                                    collaboratorId: g.id,
+                                    patch: { observation: text.trim() || null },
+                                  })
+                                }
+                              />
+                            </div>
                           </TableCell>
                         </TableRow>
                         {isOpen &&
@@ -1259,7 +1309,7 @@ export default function PeriodDetailPage() {
                                         <HoverCardTrigger asChild>
                                           <button
                                             type="button"
-                                            className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-full text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900/30 transition focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                                            className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-full text-warning hover:bg-warning/15 dark:hover:bg-warning/15 transition focus:outline-none focus:ring-2 focus:ring-warning/30"
                                             aria-label="Ver detalhes do líquido"
                                             onClick={(ev) => ev.stopPropagation()}
                                           >
@@ -1282,7 +1332,7 @@ export default function PeriodDetailPage() {
                                             {deductions.map((d) => (
                                               <div
                                                 key={d.label}
-                                                className="flex items-center justify-between gap-2 text-rose-700 dark:text-rose-300"
+                                                className="flex items-center justify-between gap-2 text-destructive dark:text-destructive"
                                               >
                                                 <span>− {d.label}</span>
                                                 <span className="font-mono">
@@ -1292,7 +1342,7 @@ export default function PeriodDetailPage() {
                                             ))}
                                             <div className="border-t border-border pt-1.5 flex items-center justify-between gap-2 font-medium">
                                               <span>Líquido</span>
-                                              <span className="font-mono text-orange-700 dark:text-orange-300">
+                                              <span className="font-mono text-primary dark:text-primary">
                                                 {formatCurrency(value)}
                                               </span>
                                             </div>
@@ -1317,9 +1367,9 @@ export default function PeriodDetailPage() {
                                 <TableCell
                                   className={`text-right text-sm font-mono whitespace-nowrap ${
                                     value < 0
-                                      ? "text-rose-700 dark:text-rose-300"
+                                      ? "text-destructive dark:text-destructive"
                                       : earning
-                                      ? "text-orange-700 dark:text-orange-300"
+                                      ? "text-primary dark:text-primary"
                                       : "text-foreground"
                                   }`}
                                 >
@@ -1368,7 +1418,7 @@ export default function PeriodDetailPage() {
         <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-amber-600" weight="fill" />
+              <AlertTriangle className="w-5 h-5 text-warning" weight="fill" />
               Alertas pendentes ({alerts.length})
             </DialogTitle>
           </DialogHeader>
@@ -1380,7 +1430,7 @@ export default function PeriodDetailPage() {
               >
                 <Badge
                   variant="outline"
-                  className={`font-normal border-0 shrink-0 ${ALERT_SEVERITY_COLORS[a.severity]}`}
+                  className={`border-0 shrink-0 ${ALERT_SEVERITY_COLORS[a.severity]}`}
                 >
                   {ALERT_SEVERITY_LABELS[a.severity] ?? a.severity}
                 </Badge>
@@ -1695,7 +1745,7 @@ function ReviewObsButton({
           type="button"
           size="icon"
           variant="ghost"
-          className={`h-7 w-7 ${hasObs ? "text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30" : "text-muted-foreground/40 hover:text-foreground"}`}
+          className={`h-7 w-7 ${hasObs ? "text-warning hover:text-warning hover:bg-warning/15 dark:hover:bg-warning/15" : "text-muted-foreground/40 hover:text-foreground"}`}
           title={hasObs ? `Observação: ${observation}` : "Adicionar observação"}
           onClick={(e) => e.stopPropagation()}
         >
@@ -1743,3 +1793,12 @@ function ReviewObsButton({
   );
 }
 
+// A rota /dashboard/folha/:id não tinha gate nenhum: bastava digitar a URL.
+// O módulo 'folha' agora barra quem não tem permissão de visualizar.
+export default function PeriodDetailPage() {
+  return (
+    <PermissionGuard module="folha">
+      <PeriodDetailPageContent />
+    </PermissionGuard>
+  );
+}

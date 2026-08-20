@@ -27,6 +27,7 @@ import {
   extractTextFromResponse,
 } from "../_shared/claude.ts";
 import { embedText, EMBED_MODEL_LABEL } from "../_shared/embeddings.ts";
+import { rateLimitTake } from "../_shared/rate-limit.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -137,6 +138,21 @@ serve(async (req) => {
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const sbAdmin = createClient(supabaseUrl, serviceKey);
 
+  // Rate-limit: cada aplicação dispara triagem por IA (custo). Por CPF (5 a cada
+  // 10 min — recandidatar é normal, spam não) e um teto global por minuto contra
+  // flood distribuído. Fail-open: se o limitador cair, a aplicação segue.
+  const underPerCpf = await rateLimitTake(sbAdmin, "recruitment-apply", cleanCpf, 5, 600);
+  const underGlobal = await rateLimitTake(sbAdmin, "recruitment-apply:global", "all", 60, 60);
+  if (!underPerCpf || !underGlobal) {
+    return jsonResponse(
+      {
+        error:
+          "Muitas aplicações em pouco tempo. Espera alguns minutos e tenta de novo.",
+      },
+      429,
+    );
+  }
+
   // 1. Vaga existe + status='open'
   const { data: job, error: jobErr } = await sbAdmin
     .from("job_openings")
@@ -155,19 +171,48 @@ serve(async (req) => {
   }
 
   // 2. Detecta candidato recorrente por email OU cpf
-  const { data: existing } = await sbAdmin
-    .from("candidates")
-    .select("id, name, is_active")
-    .eq("company_id", job.company_id)
-    .or(`email.eq.${body.email},cpf.eq.${cleanCpf}`)
-    .limit(1)
-    .maybeSingle();
+  //
+  // O `.or()` do PostgREST recebe uma STRING de filtro. Interpolar o e-mail cru
+  // ali dentro deixava o candidato anônimo injetar operadores: um `email` como
+  // `x@x.com,id.neq.00000000-0000-0000-0000-000000000000` casava com qualquer
+  // candidato da empresa e o UPDATE abaixo sobrescrevia o cadastro dele.
+  // Por isso: validação estrita do formato + duas consultas com `.eq()`, que
+  // são parametrizadas.
+  const email = String(body.email ?? "").trim().toLowerCase();
+  if (!/^[^\s@,()"'*]+@[^\s@,()"'*]+\.[^\s@,()"'*]+$/.test(email) || email.length > 160) {
+    return jsonResponse({ error: "Email inválido" }, 400);
+  }
+
+  const [byEmail, byCpf] = await Promise.all([
+    sbAdmin
+      .from("candidates")
+      .select("id, name, cpf, is_active")
+      .eq("company_id", job.company_id)
+      .eq("email", email)
+      .maybeSingle(),
+    sbAdmin
+      .from("candidates")
+      .select("id, name, cpf, is_active")
+      .eq("company_id", job.company_id)
+      .eq("cpf", cleanCpf)
+      .maybeSingle(),
+  ]);
+
+  const existing = byEmail.data ?? byCpf.data;
+
+  // Achar o cadastro pelo e-mail não basta pra reassumi-lo: sem conferir o CPF,
+  // quem soubesse o e-mail de um candidato reescrevia os dados dele.
+  if (existing?.cpf && existing.cpf !== cleanCpf) {
+    return jsonResponse(
+      { error: "Os dados não conferem com um cadastro já existente. Fale com o RH." },
+      409,
+    );
+  }
 
   let candidateId: string;
   if (existing) {
     candidateId = existing.id;
     // Atualiza dados (caso candidato tenha mudado tel/linkedin).
-    // is_active fica true (só vira false via "remover" pelo RH ou pedido LGPD).
     // consent_talent_pool é informativo, não controla visibilidade.
     await sbAdmin
       .from("candidates")
@@ -175,7 +220,9 @@ serve(async (req) => {
         name: body.name,
         phone: body.phone || null,
         linkedin_url: body.linkedin_url || null,
-        is_active: true,
+        // Exclusão a pedido do titular (LGPD art. 18) não pode ser desfeita por
+        // um POST anônimo: quem já estava inativo continua inativo.
+        is_active: existing.is_active ?? true,
         consent_talent_pool: body.consent_talent_pool,
         consent_lgpd_at: new Date().toISOString(),
       })
@@ -186,7 +233,7 @@ serve(async (req) => {
       .insert({
         company_id: job.company_id,
         name: body.name,
-        email: body.email,
+        email,
         phone: body.phone || null,
         cpf: cleanCpf,
         linkedin_url: body.linkedin_url || null,

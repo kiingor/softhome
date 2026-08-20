@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
-  }
   public: {
     Tables: {
       admission_documents: {
@@ -79,21 +74,18 @@ export type Database = {
           {
             foreignKeyName: "admission_documents_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "admission_documents_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "admission_documents_journey_id_fkey"
             columns: ["journey_id"]
-            isOneToOne: false
             referencedRelation: "admission_journeys"
             referencedColumns: ["id"]
           },
@@ -137,28 +129,24 @@ export type Database = {
           {
             foreignKeyName: "admission_events_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "admission_events_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "admission_events_document_id_fkey"
             columns: ["document_id"]
-            isOneToOne: false
             referencedRelation: "admission_documents"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "admission_events_journey_id_fkey"
             columns: ["journey_id"]
-            isOneToOne: false
             referencedRelation: "admission_journeys"
             referencedColumns: ["id"]
           },
@@ -226,14 +214,12 @@ export type Database = {
           {
             foreignKeyName: "admission_journey_tests_journey_id_fkey"
             columns: ["journey_id"]
-            isOneToOne: false
             referencedRelation: "admission_journeys"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "admission_journey_tests_test_id_fkey"
             columns: ["test_id"]
-            isOneToOne: false
             referencedRelation: "admission_tests"
             referencedColumns: ["id"]
           },
@@ -328,28 +314,24 @@ export type Database = {
           {
             foreignKeyName: "admission_journeys_collaborator_id_fkey"
             columns: ["collaborator_id"]
-            isOneToOne: false
             referencedRelation: "collaborators"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "admission_journeys_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "admission_journeys_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "admission_journeys_position_id_fkey"
             columns: ["position_id"]
-            isOneToOne: false
             referencedRelation: "positions"
             referencedColumns: ["id"]
           },
@@ -402,14 +384,12 @@ export type Database = {
           {
             foreignKeyName: "admission_tests_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "admission_tests_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -456,7 +436,6 @@ export type Database = {
           {
             foreignKeyName: "agent_messages_session_id_fkey"
             columns: ["session_id"]
-            isOneToOne: false
             referencedRelation: "agent_sessions"
             referencedColumns: ["id"]
           },
@@ -506,21 +485,18 @@ export type Database = {
           {
             foreignKeyName: "agent_search_log_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "agent_search_log_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "agent_search_log_session_id_fkey"
             columns: ["session_id"]
-            isOneToOne: false
             referencedRelation: "agent_sessions"
             referencedColumns: ["id"]
           },
@@ -561,14 +537,12 @@ export type Database = {
           {
             foreignKeyName: "agent_sessions_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "agent_sessions_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -648,35 +622,30 @@ export type Database = {
           {
             foreignKeyName: "application_tests_application_id_fkey"
             columns: ["application_id"]
-            isOneToOne: false
             referencedRelation: "candidate_applications"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "application_tests_candidate_id_fkey"
             columns: ["candidate_id"]
-            isOneToOne: false
             referencedRelation: "candidates"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "application_tests_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "application_tests_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "application_tests_test_id_fkey"
             columns: ["test_id"]
-            isOneToOne: false
             referencedRelation: "admission_tests"
             referencedColumns: ["id"]
           },
@@ -720,18 +689,169 @@ export type Database = {
           {
             foreignKeyName: "audit_log_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "audit_log_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]
+      }
+      backfill_20260722_ficha_log: {
+        Row: {
+          collaborator_id: string
+          company_id: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_active: boolean
+          type: Database["public"]["Enums"]["payroll_entry_type"]
+          updated_at: string
+          value: number
+        }
+        Insert: {
+          collaborator_id: string
+          company_id: string
+          created_at: string
+          created_by?: string | null
+          description?: string | null
+          id: string
+          is_active: boolean
+          type: Database["public"]["Enums"]["payroll_entry_type"]
+          updated_at: string
+          value: number
+        }
+        Update: {
+          collaborator_id?: string
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          type?: Database["public"]["Enums"]["payroll_entry_type"]
+          updated_at?: string
+          value?: number
+        }
+        Relationships: []
+      }
+      backfill_20260722_payroll_log: {
+        Row: {
+          id: string
+        }
+        Insert: {
+          id: string
+        }
+        Update: {
+          id?: string
+        }
+        Relationships: []
+      }
+      backup_20260722_fixed_entries: {
+        Row: {
+          collaborator_id: string | null
+          company_id: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          id: string | null
+          is_active: boolean | null
+          type: Database["public"]["Enums"]["payroll_entry_type"] | null
+          updated_at: string | null
+          value: number | null
+        }
+        Insert: {
+          collaborator_id?: string | null
+          company_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          type?: Database["public"]["Enums"]["payroll_entry_type"] | null
+          updated_at?: string | null
+          value?: number | null
+        }
+        Update: {
+          collaborator_id?: string | null
+          company_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          type?: Database["public"]["Enums"]["payroll_entry_type"] | null
+          updated_at?: string | null
+          value?: number | null
+        }
+        Relationships: []
+      }
+      backup_20260722_payroll_jul: {
+        Row: {
+          collaborator_id: string | null
+          company_id: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          external_id: string | null
+          id: string | null
+          installment_group_id: string | null
+          installment_number: number | null
+          installment_total: number | null
+          is_fixed: boolean | null
+          is_payable: boolean | null
+          month: number | null
+          store_id: string | null
+          type: Database["public"]["Enums"]["payroll_entry_type"] | null
+          updated_at: string | null
+          value: number | null
+          year: number | null
+        }
+        Insert: {
+          collaborator_id?: string | null
+          company_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          external_id?: string | null
+          id?: string | null
+          installment_group_id?: string | null
+          installment_number?: number | null
+          installment_total?: number | null
+          is_fixed?: boolean | null
+          is_payable?: boolean | null
+          month?: number | null
+          store_id?: string | null
+          type?: Database["public"]["Enums"]["payroll_entry_type"] | null
+          updated_at?: string | null
+          value?: number | null
+          year?: number | null
+        }
+        Update: {
+          collaborator_id?: string | null
+          company_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          external_id?: string | null
+          id?: string | null
+          installment_group_id?: string | null
+          installment_number?: number | null
+          installment_total?: number | null
+          is_fixed?: boolean | null
+          is_payable?: boolean | null
+          month?: number | null
+          store_id?: string | null
+          type?: Database["public"]["Enums"]["payroll_entry_type"] | null
+          updated_at?: string | null
+          value?: number | null
+          year?: number | null
+        }
+        Relationships: []
       }
       badges: {
         Row: {
@@ -777,14 +897,12 @@ export type Database = {
           {
             foreignKeyName: "badges_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "badges_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -834,21 +952,18 @@ export type Database = {
           {
             foreignKeyName: "benefits_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "benefits_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "benefits_region_id_fkey"
             columns: ["region_id"]
-            isOneToOne: false
             referencedRelation: "vt_regions"
             referencedColumns: ["id"]
           },
@@ -883,69 +998,13 @@ export type Database = {
           {
             foreignKeyName: "benefits_assignments_benefit_id_fkey"
             columns: ["benefit_id"]
-            isOneToOne: false
             referencedRelation: "benefits"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "benefits_assignments_collaborator_id_fkey"
             columns: ["collaborator_id"]
-            isOneToOne: false
             referencedRelation: "collaborators"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      collaborator_fixed_entries: {
-        Row: {
-          collaborator_id: string
-          company_id: string
-          created_at: string
-          created_by: string | null
-          description: string | null
-          id: string
-          is_active: boolean
-          type: Database["public"]["Enums"]["payroll_entry_type"]
-          updated_at: string
-          value: number
-        }
-        Insert: {
-          collaborator_id: string
-          company_id: string
-          created_at?: string
-          created_by?: string | null
-          description?: string | null
-          id?: string
-          is_active?: boolean
-          type: Database["public"]["Enums"]["payroll_entry_type"]
-          updated_at?: string
-          value: number
-        }
-        Update: {
-          collaborator_id?: string
-          company_id?: string
-          created_at?: string
-          created_by?: string | null
-          description?: string | null
-          id?: string
-          is_active?: boolean
-          type?: Database["public"]["Enums"]["payroll_entry_type"]
-          updated_at?: string
-          value?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "collaborator_fixed_entries_collaborator_id_fkey"
-            columns: ["collaborator_id"]
-            isOneToOne: false
-            referencedRelation: "collaborators"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "collaborator_fixed_entries_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]
@@ -1006,14 +1065,12 @@ export type Database = {
           {
             foreignKeyName: "bonus_entries_collaborator_id_fkey"
             columns: ["collaborator_id"]
-            isOneToOne: false
             referencedRelation: "collaborators"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "bonus_entries_period_id_fkey"
             columns: ["period_id"]
-            isOneToOne: false
             referencedRelation: "bonus_periods"
             referencedColumns: ["id"]
           },
@@ -1057,7 +1114,6 @@ export type Database = {
           {
             foreignKeyName: "bonus_payments_entry_id_fkey"
             columns: ["entry_id"]
-            isOneToOne: false
             referencedRelation: "bonus_entries"
             referencedColumns: ["id"]
           },
@@ -1113,14 +1169,12 @@ export type Database = {
           {
             foreignKeyName: "bonus_periods_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "bonus_periods_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -1176,35 +1230,30 @@ export type Database = {
           {
             foreignKeyName: "candidate_applications_candidate_id_fkey"
             columns: ["candidate_id"]
-            isOneToOne: false
             referencedRelation: "candidates"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "candidate_applications_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "candidate_applications_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "candidate_applications_job_id_fkey"
             columns: ["job_id"]
-            isOneToOne: false
             referencedRelation: "agent_recruitment_pipeline"
             referencedColumns: ["job_id"]
           },
           {
             foreignKeyName: "candidate_applications_job_id_fkey"
             columns: ["job_id"]
-            isOneToOne: false
             referencedRelation: "job_openings"
             referencedColumns: ["id"]
           },
@@ -1248,21 +1297,18 @@ export type Database = {
           {
             foreignKeyName: "candidate_embeddings_candidate_id_fkey"
             columns: ["candidate_id"]
-            isOneToOne: true
             referencedRelation: "candidates"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "candidate_embeddings_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "candidate_embeddings_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -1333,14 +1379,12 @@ export type Database = {
           {
             foreignKeyName: "candidates_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "candidates_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -1375,14 +1419,12 @@ export type Database = {
           {
             foreignKeyName: "closed_periods_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "closed_periods_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -1435,21 +1477,18 @@ export type Database = {
           {
             foreignKeyName: "collaborator_absences_collaborator_id_fkey"
             columns: ["collaborator_id"]
-            isOneToOne: false
             referencedRelation: "collaborators"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "collaborator_absences_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "collaborator_absences_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -1520,21 +1559,18 @@ export type Database = {
           {
             foreignKeyName: "collaborator_alimony_orders_collaborator_id_fkey"
             columns: ["collaborator_id"]
-            isOneToOne: false
             referencedRelation: "collaborators"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "collaborator_alimony_orders_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "collaborator_alimony_orders_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -1584,28 +1620,24 @@ export type Database = {
           {
             foreignKeyName: "collaborator_badges_badge_id_fkey"
             columns: ["badge_id"]
-            isOneToOne: false
             referencedRelation: "badges"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "collaborator_badges_collaborator_id_fkey"
             columns: ["collaborator_id"]
-            isOneToOne: false
             referencedRelation: "collaborators"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "collaborator_badges_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "collaborator_badges_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -1622,6 +1654,7 @@ export type Database = {
           external_id: string | null
           id: string
           is_health_plan_dependent: boolean
+          is_invalid: boolean
           is_irpf_dependent: boolean
           kinship: Database["public"]["Enums"]["kinship_type"]
           name: string
@@ -1640,6 +1673,7 @@ export type Database = {
           external_id?: string | null
           id?: string
           is_health_plan_dependent?: boolean
+          is_invalid?: boolean
           is_irpf_dependent?: boolean
           kinship: Database["public"]["Enums"]["kinship_type"]
           name: string
@@ -1658,6 +1692,7 @@ export type Database = {
           external_id?: string | null
           id?: string
           is_health_plan_dependent?: boolean
+          is_invalid?: boolean
           is_irpf_dependent?: boolean
           kinship?: Database["public"]["Enums"]["kinship_type"]
           name?: string
@@ -1670,21 +1705,18 @@ export type Database = {
           {
             foreignKeyName: "collaborator_dependents_collaborator_id_fkey"
             columns: ["collaborator_id"]
-            isOneToOne: false
             referencedRelation: "collaborators"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "collaborator_dependents_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "collaborator_dependents_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -1734,28 +1766,24 @@ export type Database = {
           {
             foreignKeyName: "collaborator_documents_collaborator_id_fkey"
             columns: ["collaborator_id"]
-            isOneToOne: false
             referencedRelation: "collaborators"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "collaborator_documents_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "collaborator_documents_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "collaborator_documents_position_document_id_fkey"
             columns: ["position_document_id"]
-            isOneToOne: false
             referencedRelation: "position_documents"
             referencedColumns: ["id"]
           },
@@ -1793,21 +1821,18 @@ export type Database = {
           {
             foreignKeyName: "collaborator_emails_collaborator_id_fkey"
             columns: ["collaborator_id"]
-            isOneToOne: false
             referencedRelation: "collaborators"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "collaborator_emails_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "collaborator_emails_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -1854,21 +1879,18 @@ export type Database = {
           {
             foreignKeyName: "collaborator_emergency_contacts_collaborator_id_fkey"
             columns: ["collaborator_id"]
-            isOneToOne: false
             referencedRelation: "collaborators"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "collaborator_emergency_contacts_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "collaborator_emergency_contacts_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -1927,21 +1949,76 @@ export type Database = {
           {
             foreignKeyName: "collaborator_extras_collaborator_id_fkey"
             columns: ["collaborator_id"]
-            isOneToOne: false
             referencedRelation: "collaborators"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "collaborator_extras_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "collaborator_extras_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      collaborator_fixed_entries: {
+        Row: {
+          collaborator_id: string
+          company_id: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_active: boolean
+          type: Database["public"]["Enums"]["payroll_entry_type"]
+          updated_at: string
+          value: number
+        }
+        Insert: {
+          collaborator_id: string
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          type: Database["public"]["Enums"]["payroll_entry_type"]
+          updated_at?: string
+          value: number
+        }
+        Update: {
+          collaborator_id?: string
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          type?: Database["public"]["Enums"]["payroll_entry_type"]
+          updated_at?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collaborator_fixed_entries_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collaborator_fixed_entries_company_id_fkey"
+            columns: ["company_id"]
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "collaborator_fixed_entries_company_id_fkey"
+            columns: ["company_id"]
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -2009,21 +2086,18 @@ export type Database = {
           {
             foreignKeyName: "collaborator_health_plans_collaborator_id_fkey"
             columns: ["collaborator_id"]
-            isOneToOne: false
             referencedRelation: "collaborators"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "collaborator_health_plans_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "collaborator_health_plans_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -2073,21 +2147,18 @@ export type Database = {
           {
             foreignKeyName: "collaborator_internships_collaborator_id_fkey"
             columns: ["collaborator_id"]
-            isOneToOne: false
             referencedRelation: "collaborators"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "collaborator_internships_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "collaborator_internships_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -2149,21 +2220,18 @@ export type Database = {
           {
             foreignKeyName: "collaborator_leaves_collaborator_id_fkey"
             columns: ["collaborator_id"]
-            isOneToOne: false
             referencedRelation: "collaborators"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "collaborator_leaves_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "collaborator_leaves_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -2219,21 +2287,18 @@ export type Database = {
           {
             foreignKeyName: "collaborator_medical_certificates_collaborator_id_fkey"
             columns: ["collaborator_id"]
-            isOneToOne: false
             referencedRelation: "collaborators"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "collaborator_medical_certificates_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "collaborator_medical_certificates_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -2277,7 +2342,6 @@ export type Database = {
           {
             foreignKeyName: "collaborator_notifications_collaborator_id_fkey"
             columns: ["collaborator_id"]
-            isOneToOne: false
             referencedRelation: "collaborators"
             referencedColumns: ["id"]
           },
@@ -2321,28 +2385,24 @@ export type Database = {
           {
             foreignKeyName: "collaborator_pdvs_collaborator_id_fkey"
             columns: ["collaborator_id"]
-            isOneToOne: false
             referencedRelation: "collaborators"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "collaborator_pdvs_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "collaborator_pdvs_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "collaborator_pdvs_store_id_fkey"
             columns: ["store_id"]
-            isOneToOne: false
             referencedRelation: "stores"
             referencedColumns: ["id"]
           },
@@ -2392,21 +2452,18 @@ export type Database = {
           {
             foreignKeyName: "collaborator_timeline_events_collaborator_id_fkey"
             columns: ["collaborator_id"]
-            isOneToOne: false
             referencedRelation: "collaborators"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "collaborator_timeline_events_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "collaborator_timeline_events_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -2459,21 +2516,18 @@ export type Database = {
           {
             foreignKeyName: "collaborator_uniform_sizes_collaborator_id_fkey"
             columns: ["collaborator_id"]
-            isOneToOne: false
             referencedRelation: "collaborators"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "collaborator_uniform_sizes_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "collaborator_uniform_sizes_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -2496,7 +2550,7 @@ export type Database = {
           company_id: string
           contracted_cnpj: string | null
           contracted_store_id: string | null
-          cpf: string
+          cpf: string | null
           created_at: string
           ctps: string | null
           ctps_series: string | null
@@ -2533,6 +2587,8 @@ export type Database = {
           photo_url: string | null
           pis: string | null
           pix_key: string | null
+          pix_key_normalized: string | null
+          pix_key_type: Database["public"]["Enums"]["pix_key_type"] | null
           position: string | null
           position_id: string | null
           postal_code: string | null
@@ -2561,8 +2617,6 @@ export type Database = {
           agenda?: string | null
           bank_account?: string | null
           birth_date?: string | null
-          agenda?: string | null
-          bank_account?: string | null
           city?: string | null
           commission_license?: number | null
           commission_monthly?: number | null
@@ -2572,7 +2626,7 @@ export type Database = {
           company_id: string
           contracted_cnpj?: string | null
           contracted_store_id?: string | null
-          cpf: string
+          cpf?: string | null
           created_at?: string
           ctps?: string | null
           ctps_series?: string | null
@@ -2609,6 +2663,8 @@ export type Database = {
           photo_url?: string | null
           pis?: string | null
           pix_key?: string | null
+          pix_key_normalized?: string | null
+          pix_key_type?: Database["public"]["Enums"]["pix_key_type"] | null
           position?: string | null
           position_id?: string | null
           postal_code?: string | null
@@ -2646,7 +2702,7 @@ export type Database = {
           company_id?: string
           contracted_cnpj?: string | null
           contracted_store_id?: string | null
-          cpf?: string
+          cpf?: string | null
           created_at?: string
           ctps?: string | null
           ctps_series?: string | null
@@ -2683,6 +2739,8 @@ export type Database = {
           photo_url?: string | null
           pis?: string | null
           pix_key?: string | null
+          pix_key_normalized?: string | null
+          pix_key_type?: Database["public"]["Enums"]["pix_key_type"] | null
           position?: string | null
           position_id?: string | null
           postal_code?: string | null
@@ -2708,49 +2766,42 @@ export type Database = {
           {
             foreignKeyName: "collaborators_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "collaborators_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "collaborators_contracted_store_id_fkey"
             columns: ["contracted_store_id"]
-            isOneToOne: false
             referencedRelation: "stores"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "collaborators_position_id_fkey"
             columns: ["position_id"]
-            isOneToOne: false
             referencedRelation: "positions"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "collaborators_store_id_fkey"
             columns: ["store_id"]
-            isOneToOne: false
             referencedRelation: "stores"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "collaborators_supervisor_id_fkey"
             columns: ["supervisor_id"]
-            isOneToOne: false
             referencedRelation: "collaborators"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "collaborators_team_id_fkey"
             columns: ["team_id"]
-            isOneToOne: false
             referencedRelation: "teams"
             referencedColumns: ["id"]
           },
@@ -2800,14 +2851,12 @@ export type Database = {
           {
             foreignKeyName: "companies_parent_company_id_fkey"
             columns: ["parent_company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "companies_parent_company_id_fkey"
             columns: ["parent_company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -2854,18 +2903,37 @@ export type Database = {
           {
             foreignKeyName: "company_users_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "company_users_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]
+      }
+      dep_irpf_backfill_backup_202606: {
+        Row: {
+          backed_up_at: string | null
+          collaborator_id: string | null
+          id: string | null
+          original_flag: boolean | null
+        }
+        Insert: {
+          backed_up_at?: string | null
+          collaborator_id?: string | null
+          id?: string | null
+          original_flag?: boolean | null
+        }
+        Update: {
+          backed_up_at?: string | null
+          collaborator_id?: string | null
+          id?: string | null
+          original_flag?: boolean | null
+        }
+        Relationships: []
       }
       exam_documents: {
         Row: {
@@ -2905,21 +2973,18 @@ export type Database = {
           {
             foreignKeyName: "exam_documents_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "exam_documents_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "exam_documents_exam_id_fkey"
             columns: ["exam_id"]
-            isOneToOne: false
             referencedRelation: "occupational_exams"
             referencedColumns: ["id"]
           },
@@ -2969,28 +3034,24 @@ export type Database = {
           {
             foreignKeyName: "interview_feedbacks_application_id_fkey"
             columns: ["application_id"]
-            isOneToOne: false
             referencedRelation: "candidate_applications"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "interview_feedbacks_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "interview_feedbacks_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "interview_feedbacks_schedule_id_fkey"
             columns: ["schedule_id"]
-            isOneToOne: false
             referencedRelation: "interview_schedules"
             referencedColumns: ["id"]
           },
@@ -3043,21 +3104,18 @@ export type Database = {
           {
             foreignKeyName: "interview_schedules_application_id_fkey"
             columns: ["application_id"]
-            isOneToOne: false
             referencedRelation: "candidate_applications"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "interview_schedules_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "interview_schedules_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -3125,28 +3183,24 @@ export type Database = {
           {
             foreignKeyName: "job_openings_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "job_openings_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "job_openings_position_id_fkey"
             columns: ["position_id"]
-            isOneToOne: false
             referencedRelation: "positions"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "job_openings_team_id_fkey"
             columns: ["team_id"]
-            isOneToOne: false
             referencedRelation: "teams"
             referencedColumns: ["id"]
           },
@@ -3199,21 +3253,18 @@ export type Database = {
           {
             foreignKeyName: "journey_milestones_collaborator_id_fkey"
             columns: ["collaborator_id"]
-            isOneToOne: false
             referencedRelation: "collaborators"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "journey_milestones_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "journey_milestones_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -3257,21 +3308,18 @@ export type Database = {
           {
             foreignKeyName: "notification_logs_collaborator_id_fkey"
             columns: ["collaborator_id"]
-            isOneToOne: false
             referencedRelation: "collaborators"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "notification_logs_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "notification_logs_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -3309,14 +3357,12 @@ export type Database = {
           {
             foreignKeyName: "notification_templates_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "notification_templates_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -3384,35 +3430,30 @@ export type Database = {
           {
             foreignKeyName: "occupational_exams_collaborator_id_fkey"
             columns: ["collaborator_id"]
-            isOneToOne: false
             referencedRelation: "collaborators"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "occupational_exams_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "occupational_exams_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "occupational_exams_position_id_fkey"
             columns: ["position_id"]
-            isOneToOne: false
             referencedRelation: "positions"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "occupational_exams_previous_position_id_fkey"
             columns: ["previous_position_id"]
-            isOneToOne: false
             referencedRelation: "positions"
             referencedColumns: ["id"]
           },
@@ -3444,7 +3485,6 @@ export type Database = {
           {
             foreignKeyName: "onboarding_errors_onboarding_session_id_fkey"
             columns: ["onboarding_session_id"]
-            isOneToOne: false
             referencedRelation: "onboarding_sessions"
             referencedColumns: ["id"]
           },
@@ -3488,21 +3528,207 @@ export type Database = {
           {
             foreignKeyName: "onboarding_sessions_collaborator_id_fkey"
             columns: ["collaborator_id"]
-            isOneToOne: false
             referencedRelation: "collaborators"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "onboarding_sessions_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "onboarding_sessions_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_2fa_challenges: {
+        Row: {
+          attempts: number
+          code_hash: string
+          company_id: string
+          consumed_at: string | null
+          created_at: string
+          device_id: string | null
+          expires_at: string
+          factor_type: string
+          failed_at: string | null
+          id: string
+          max_attempts: number
+          purpose: string
+          salt: string
+          sent_to_last4: string | null
+          transfer_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          attempts?: number
+          code_hash: string
+          company_id: string
+          consumed_at?: string | null
+          created_at?: string
+          device_id?: string | null
+          expires_at: string
+          factor_type?: string
+          failed_at?: string | null
+          id?: string
+          max_attempts?: number
+          purpose: string
+          salt: string
+          sent_to_last4?: string | null
+          transfer_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          attempts?: number
+          code_hash?: string
+          company_id?: string
+          consumed_at?: string | null
+          created_at?: string
+          device_id?: string | null
+          expires_at?: string
+          factor_type?: string
+          failed_at?: string | null
+          id?: string
+          max_attempts?: number
+          purpose?: string
+          salt?: string
+          sent_to_last4?: string | null
+          transfer_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_2fa_challenges_company_id_fkey"
+            columns: ["company_id"]
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "payment_2fa_challenges_company_id_fkey"
+            columns: ["company_id"]
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_2fa_challenges_device_id_fkey"
+            columns: ["device_id"]
+            referencedRelation: "payment_2fa_devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_2fa_challenges_transfer_id_fkey"
+            columns: ["transfer_id"]
+            referencedRelation: "payroll_pix_transfers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_2fa_devices: {
+        Row: {
+          active_from: string | null
+          company_id: string
+          created_at: string
+          id: string
+          locked_until: string | null
+          phone: string
+          phone_last4: string | null
+          revoked_at: string | null
+          revoked_reason: string | null
+          status: string
+          updated_at: string
+          user_id: string
+          verified_at: string | null
+        }
+        Insert: {
+          active_from?: string | null
+          company_id: string
+          created_at?: string
+          id?: string
+          locked_until?: string | null
+          phone: string
+          phone_last4?: string | null
+          revoked_at?: string | null
+          revoked_reason?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          verified_at?: string | null
+        }
+        Update: {
+          active_from?: string | null
+          company_id?: string
+          created_at?: string
+          id?: string
+          locked_until?: string | null
+          phone?: string
+          phone_last4?: string | null
+          revoked_at?: string | null
+          revoked_reason?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          verified_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_2fa_devices_company_id_fkey"
+            columns: ["company_id"]
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "payment_2fa_devices_company_id_fkey"
+            columns: ["company_id"]
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_2fa_events: {
+        Row: {
+          company_id: string | null
+          created_at: string
+          id: string
+          ip: string | null
+          kind: string
+          metadata: Json
+          user_id: string | null
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string
+          id?: string
+          ip?: string | null
+          kind: string
+          metadata?: Json
+          user_id?: string | null
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string
+          id?: string
+          ip?: string | null
+          kind?: string
+          metadata?: Json
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_2fa_events_company_id_fkey"
+            columns: ["company_id"]
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "payment_2fa_events_company_id_fkey"
+            columns: ["company_id"]
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -3558,28 +3784,82 @@ export type Database = {
           {
             foreignKeyName: "payroll_alerts_collaborator_id_fkey"
             columns: ["collaborator_id"]
-            isOneToOne: false
             referencedRelation: "collaborators"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "payroll_alerts_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "payroll_alerts_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "payroll_alerts_period_id_fkey"
             columns: ["period_id"]
-            isOneToOne: false
+            referencedRelation: "payroll_periods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payroll_collaborator_reviews: {
+        Row: {
+          collaborator_id: string
+          created_at: string
+          director_status: string | null
+          director_status_at: string | null
+          director_status_by: string | null
+          id: string
+          is_reviewed: boolean
+          observation: string | null
+          period_id: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          collaborator_id: string
+          created_at?: string
+          director_status?: string | null
+          director_status_at?: string | null
+          director_status_by?: string | null
+          id?: string
+          is_reviewed?: boolean
+          observation?: string | null
+          period_id: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          collaborator_id?: string
+          created_at?: string
+          director_status?: string | null
+          director_status_at?: string | null
+          director_status_by?: string | null
+          id?: string
+          is_reviewed?: boolean
+          observation?: string | null
+          period_id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payroll_collaborator_reviews_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_collaborator_reviews_period_id_fkey"
+            columns: ["period_id"]
             referencedRelation: "payroll_periods"
             referencedColumns: ["id"]
           },
@@ -3650,88 +3930,200 @@ export type Database = {
           {
             foreignKeyName: "payroll_entries_collaborator_id_fkey"
             columns: ["collaborator_id"]
-            isOneToOne: false
             referencedRelation: "collaborators"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "payroll_entries_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "payroll_entries_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "payroll_entries_store_id_fkey"
             columns: ["store_id"]
-            isOneToOne: false
             referencedRelation: "stores"
             referencedColumns: ["id"]
           },
         ]
       }
-      payroll_collaborator_reviews: {
+      payroll_entries_fixed_backup_20260618: {
         Row: {
+          collaborator_id: string | null
+          company_id: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          external_id: string | null
+          id: string | null
+          installment_group_id: string | null
+          installment_number: number | null
+          installment_total: number | null
+          is_fixed: boolean | null
+          is_payable: boolean | null
+          month: number | null
+          store_id: string | null
+          type: Database["public"]["Enums"]["payroll_entry_type"] | null
+          updated_at: string | null
+          value: number | null
+          year: number | null
+        }
+        Insert: {
+          collaborator_id?: string | null
+          company_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          external_id?: string | null
+          id?: string | null
+          installment_group_id?: string | null
+          installment_number?: number | null
+          installment_total?: number | null
+          is_fixed?: boolean | null
+          is_payable?: boolean | null
+          month?: number | null
+          store_id?: string | null
+          type?: Database["public"]["Enums"]["payroll_entry_type"] | null
+          updated_at?: string | null
+          value?: number | null
+          year?: number | null
+        }
+        Update: {
+          collaborator_id?: string | null
+          company_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          external_id?: string | null
+          id?: string | null
+          installment_group_id?: string | null
+          installment_number?: number | null
+          installment_total?: number | null
+          is_fixed?: boolean | null
+          is_payable?: boolean | null
+          month?: number | null
+          store_id?: string | null
+          type?: Database["public"]["Enums"]["payroll_entry_type"] | null
+          updated_at?: string | null
+          value?: number | null
+          year?: number | null
+        }
+        Relationships: []
+      }
+      payroll_payable_lines: {
+        Row: {
+          built_at: string
+          built_from_status: Database["public"]["Enums"]["payroll_period_status"]
           collaborator_id: string
+          company_id: string
+          components: Json
           created_at: string
-          director_status: string | null
-          director_status_at: string | null
-          director_status_by: string | null
+          discounts: Json
+          entry_id: string
+          gross: number
+          has_alimony_block: boolean
           id: string
-          is_reviewed: boolean
-          observation: string | null
+          inss: number
+          irpf: number
+          kind: string
+          net_amount: number
+          other_deductions: number
+          payee_document: string | null
+          payee_name: string
+          payee_pix_key: string | null
+          payee_pix_key_norm: string | null
+          payee_pix_key_type: Database["public"]["Enums"]["pix_key_type"] | null
           period_id: string
-          reviewed_at: string | null
-          reviewed_by: string | null
           updated_at: string
         }
         Insert: {
+          built_at?: string
+          built_from_status: Database["public"]["Enums"]["payroll_period_status"]
           collaborator_id: string
+          company_id: string
+          components: Json
           created_at?: string
-          director_status?: string | null
-          director_status_at?: string | null
-          director_status_by?: string | null
+          discounts?: Json
+          entry_id: string
+          gross: number
+          has_alimony_block?: boolean
           id?: string
-          is_reviewed?: boolean
-          observation?: string | null
+          inss?: number
+          irpf?: number
+          kind: string
+          net_amount: number
+          other_deductions?: number
+          payee_document?: string | null
+          payee_name: string
+          payee_pix_key?: string | null
+          payee_pix_key_norm?: string | null
+          payee_pix_key_type?:
+            | Database["public"]["Enums"]["pix_key_type"]
+            | null
           period_id: string
-          reviewed_at?: string | null
-          reviewed_by?: string | null
           updated_at?: string
         }
         Update: {
+          built_at?: string
+          built_from_status?: Database["public"]["Enums"]["payroll_period_status"]
           collaborator_id?: string
+          company_id?: string
+          components?: Json
           created_at?: string
-          director_status?: string | null
-          director_status_at?: string | null
-          director_status_by?: string | null
+          discounts?: Json
+          entry_id?: string
+          gross?: number
+          has_alimony_block?: boolean
           id?: string
-          is_reviewed?: boolean
-          observation?: string | null
+          inss?: number
+          irpf?: number
+          kind?: string
+          net_amount?: number
+          other_deductions?: number
+          payee_document?: string | null
+          payee_name?: string
+          payee_pix_key?: string | null
+          payee_pix_key_norm?: string | null
+          payee_pix_key_type?:
+            | Database["public"]["Enums"]["pix_key_type"]
+            | null
           period_id?: string
-          reviewed_at?: string | null
-          reviewed_by?: string | null
           updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "payroll_collaborator_reviews_collaborator_id_fkey"
+            foreignKeyName: "payroll_payable_lines_collaborator_id_fkey"
             columns: ["collaborator_id"]
-            isOneToOne: false
             referencedRelation: "collaborators"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "payroll_collaborator_reviews_period_id_fkey"
+            foreignKeyName: "payroll_payable_lines_company_id_fkey"
+            columns: ["company_id"]
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "payroll_payable_lines_company_id_fkey"
+            columns: ["company_id"]
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_payable_lines_entry_id_fkey"
+            columns: ["entry_id"]
+            referencedRelation: "payroll_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_payable_lines_period_id_fkey"
             columns: ["period_id"]
-            isOneToOne: false
             referencedRelation: "payroll_periods"
             referencedColumns: ["id"]
           },
@@ -3740,50 +4132,75 @@ export type Database = {
       payroll_payments: {
         Row: {
           amount: number
+          company_id: string
           created_at: string
           entry_id: string
           id: string
+          method: string
           notes: string | null
           paid_at: string | null
           paid_by: string | null
           period_id: string
+          settled_transfer_id: string | null
           updated_at: string
         }
         Insert: {
           amount?: number
+          company_id: string
           created_at?: string
           entry_id: string
           id?: string
+          method?: string
           notes?: string | null
           paid_at?: string | null
           paid_by?: string | null
           period_id: string
+          settled_transfer_id?: string | null
           updated_at?: string
         }
         Update: {
           amount?: number
+          company_id?: string
           created_at?: string
           entry_id?: string
           id?: string
+          method?: string
           notes?: string | null
           paid_at?: string | null
           paid_by?: string | null
           period_id?: string
+          settled_transfer_id?: string | null
           updated_at?: string
         }
         Relationships: [
           {
+            foreignKeyName: "payroll_payments_company_id_fkey"
+            columns: ["company_id"]
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "payroll_payments_company_id_fkey"
+            columns: ["company_id"]
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "payroll_payments_entry_id_fkey"
             columns: ["entry_id"]
-            isOneToOne: true
             referencedRelation: "payroll_entries"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "payroll_payments_period_id_fkey"
             columns: ["period_id"]
-            isOneToOne: false
             referencedRelation: "payroll_periods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_payments_settled_transfer_id_fkey"
+            columns: ["settled_transfer_id"]
+            referencedRelation: "payroll_pix_transfers"
             referencedColumns: ["id"]
           },
         ]
@@ -3831,7 +4248,26 @@ export type Database = {
           reason?: string | null
           to_status?: Database["public"]["Enums"]["payroll_period_status"]
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "payroll_period_approvals_company_id_fkey"
+            columns: ["company_id"]
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "payroll_period_approvals_company_id_fkey"
+            columns: ["company_id"]
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_period_approvals_period_id_fkey"
+            columns: ["period_id"]
+            referencedRelation: "payroll_periods"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       payroll_period_notes: {
         Row: {
@@ -3849,14 +4285,14 @@ export type Database = {
             | null
           resolved_at: string | null
           resolved_by: string | null
-          scope: string
+          scope: string | null
           updated_at: string
         }
         Insert: {
           author_stage?: string
           body: string
           collaborator_id?: string | null
-          company_id?: string
+          company_id: string
           created_at?: string
           created_by?: string | null
           id?: string
@@ -3867,6 +4303,7 @@ export type Database = {
             | null
           resolved_at?: string | null
           resolved_by?: string | null
+          scope?: string | null
           updated_at?: string
         }
         Update: {
@@ -3879,11 +4316,40 @@ export type Database = {
           id?: string
           is_resolved?: boolean
           period_id?: string
+          period_status_at_note?:
+            | Database["public"]["Enums"]["payroll_period_status"]
+            | null
           resolved_at?: string | null
           resolved_by?: string | null
+          scope?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "payroll_period_notes_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_period_notes_company_id_fkey"
+            columns: ["company_id"]
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "payroll_period_notes_company_id_fkey"
+            columns: ["company_id"]
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_period_notes_period_id_fkey"
+            columns: ["period_id"]
+            referencedRelation: "payroll_periods"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       payroll_periods: {
         Row: {
@@ -3956,14 +4422,376 @@ export type Database = {
           {
             foreignKeyName: "payroll_periods_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "payroll_periods_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payroll_pix_transfers: {
+        Row: {
+          amount: number
+          attempt: number
+          check_count: number
+          collaborator_id: string
+          company_id: string
+          confirmed_at: string | null
+          created_at: string
+          created_by: string | null
+          end_to_end_id: string | null
+          entry_id: string
+          environment: string
+          error_code: string | null
+          error_message: string | null
+          failed_at: string | null
+          http_status: number | null
+          id: string
+          idempotency_key: string
+          last_checked_at: string | null
+          next_check_at: string | null
+          payable_line_id: string | null
+          payee_document: string | null
+          payee_name: string
+          payee_pix_key: string
+          payee_pix_key_norm: string
+          payee_pix_key_type: Database["public"]["Enums"]["pix_key_type"]
+          payer_snapshot: Json | null
+          period_id: string
+          provider: string
+          provider_payment_id: string | null
+          provider_status: string | null
+          request_payload: Json | null
+          resolved_by: string | null
+          resolved_reason: string | null
+          response_payload: Json | null
+          sent_at: string | null
+          settled_at: string | null
+          status: Database["public"]["Enums"]["pix_transfer_status"]
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          attempt: number
+          check_count?: number
+          collaborator_id: string
+          company_id: string
+          confirmed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          end_to_end_id?: string | null
+          entry_id: string
+          environment: string
+          error_code?: string | null
+          error_message?: string | null
+          failed_at?: string | null
+          http_status?: number | null
+          id?: string
+          idempotency_key: string
+          last_checked_at?: string | null
+          next_check_at?: string | null
+          payable_line_id?: string | null
+          payee_document?: string | null
+          payee_name: string
+          payee_pix_key: string
+          payee_pix_key_norm: string
+          payee_pix_key_type: Database["public"]["Enums"]["pix_key_type"]
+          payer_snapshot?: Json | null
+          period_id: string
+          provider?: string
+          provider_payment_id?: string | null
+          provider_status?: string | null
+          request_payload?: Json | null
+          resolved_by?: string | null
+          resolved_reason?: string | null
+          response_payload?: Json | null
+          sent_at?: string | null
+          settled_at?: string | null
+          status?: Database["public"]["Enums"]["pix_transfer_status"]
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          attempt?: number
+          check_count?: number
+          collaborator_id?: string
+          company_id?: string
+          confirmed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          end_to_end_id?: string | null
+          entry_id?: string
+          environment?: string
+          error_code?: string | null
+          error_message?: string | null
+          failed_at?: string | null
+          http_status?: number | null
+          id?: string
+          idempotency_key?: string
+          last_checked_at?: string | null
+          next_check_at?: string | null
+          payable_line_id?: string | null
+          payee_document?: string | null
+          payee_name?: string
+          payee_pix_key?: string
+          payee_pix_key_norm?: string
+          payee_pix_key_type?: Database["public"]["Enums"]["pix_key_type"]
+          payer_snapshot?: Json | null
+          period_id?: string
+          provider?: string
+          provider_payment_id?: string | null
+          provider_status?: string | null
+          request_payload?: Json | null
+          resolved_by?: string | null
+          resolved_reason?: string | null
+          response_payload?: Json | null
+          sent_at?: string | null
+          settled_at?: string | null
+          status?: Database["public"]["Enums"]["pix_transfer_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payroll_pix_transfers_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_pix_transfers_company_id_fkey"
+            columns: ["company_id"]
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "payroll_pix_transfers_company_id_fkey"
+            columns: ["company_id"]
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_pix_transfers_entry_id_fkey"
+            columns: ["entry_id"]
+            referencedRelation: "payroll_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_pix_transfers_payable_line_id_fkey"
+            columns: ["payable_line_id"]
+            referencedRelation: "payroll_payable_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_pix_transfers_period_id_fkey"
+            columns: ["period_id"]
+            referencedRelation: "payroll_periods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payroll_validation_items: {
+        Row: {
+          actual_value: number | null
+          check_group: string
+          check_label: string
+          collaborator_id: string | null
+          collaborator_name: string
+          company_id: string
+          created_at: string
+          diff: number | null
+          direction: string | null
+          expected_value: number | null
+          id: string
+          notes: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          severity: string
+          status: string
+          updated_at: string
+          validation_id: string
+        }
+        Insert: {
+          actual_value?: number | null
+          check_group: string
+          check_label: string
+          collaborator_id?: string | null
+          collaborator_name: string
+          company_id: string
+          created_at?: string
+          diff?: number | null
+          direction?: string | null
+          expected_value?: number | null
+          id?: string
+          notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          status?: string
+          updated_at?: string
+          validation_id: string
+        }
+        Update: {
+          actual_value?: number | null
+          check_group?: string
+          check_label?: string
+          collaborator_id?: string | null
+          collaborator_name?: string
+          company_id?: string
+          created_at?: string
+          diff?: number | null
+          direction?: string | null
+          expected_value?: number | null
+          id?: string
+          notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          status?: string
+          updated_at?: string
+          validation_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payroll_validation_items_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_validation_items_company_id_fkey"
+            columns: ["company_id"]
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "payroll_validation_items_company_id_fkey"
+            columns: ["company_id"]
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_validation_items_validation_id_fkey"
+            columns: ["validation_id"]
+            referencedRelation: "payroll_validations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payroll_validation_logs: {
+        Row: {
+          action: string
+          company_id: string
+          created_at: string
+          id: string
+          item_id: string | null
+          notes: string | null
+          user_id: string | null
+          validation_id: string
+        }
+        Insert: {
+          action: string
+          company_id: string
+          created_at?: string
+          id?: string
+          item_id?: string | null
+          notes?: string | null
+          user_id?: string | null
+          validation_id: string
+        }
+        Update: {
+          action?: string
+          company_id?: string
+          created_at?: string
+          id?: string
+          item_id?: string | null
+          notes?: string | null
+          user_id?: string | null
+          validation_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payroll_validation_logs_company_id_fkey"
+            columns: ["company_id"]
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "payroll_validation_logs_company_id_fkey"
+            columns: ["company_id"]
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_validation_logs_item_id_fkey"
+            columns: ["item_id"]
+            referencedRelation: "payroll_validation_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_validation_logs_validation_id_fkey"
+            columns: ["validation_id"]
+            referencedRelation: "payroll_validations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payroll_validations: {
+        Row: {
+          collaborators_matched: number
+          collaborators_total: number
+          company_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          items_resolved: number
+          items_total: number
+          pdf_file_names: string[]
+          reference_month: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          collaborators_matched?: number
+          collaborators_total?: number
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          items_resolved?: number
+          items_total?: number
+          pdf_file_names?: string[]
+          reference_month: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          collaborators_matched?: number
+          collaborators_total?: number
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          items_resolved?: number
+          items_total?: number
+          pdf_file_names?: string[]
+          reference_month?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payroll_validations_company_id_fkey"
+            columns: ["company_id"]
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "payroll_validations_company_id_fkey"
+            columns: ["company_id"]
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -4007,21 +4835,18 @@ export type Database = {
           {
             foreignKeyName: "payslips_collaborator_id_fkey"
             columns: ["collaborator_id"]
-            isOneToOne: false
             referencedRelation: "collaborators"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "payslips_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "payslips_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -4059,21 +4884,18 @@ export type Database = {
           {
             foreignKeyName: "position_documents_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "position_documents_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "position_documents_position_id_fkey"
             columns: ["position_id"]
-            isOneToOne: false
             referencedRelation: "positions"
             referencedColumns: ["id"]
           },
@@ -4132,21 +4954,18 @@ export type Database = {
           {
             foreignKeyName: "positions_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "positions_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "positions_team_id_fkey"
             columns: ["team_id"]
-            isOneToOne: false
             referencedRelation: "teams"
             referencedColumns: ["id"]
           },
@@ -4181,25 +5000,70 @@ export type Database = {
           {
             foreignKeyName: "profiles_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "profiles_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "profiles_store_id_fkey"
             columns: ["store_id"]
-            isOneToOne: false
             referencedRelation: "stores"
             referencedColumns: ["id"]
           },
         ]
+      }
+      reajuste_saude_202606_backup_entries: {
+        Row: {
+          backed_up_at: string | null
+          collaborator_id: string | null
+          company_id: string | null
+          description: string | null
+          id: string | null
+          original_value: number | null
+        }
+        Insert: {
+          backed_up_at?: string | null
+          collaborator_id?: string | null
+          company_id?: string | null
+          description?: string | null
+          id?: string | null
+          original_value?: number | null
+        }
+        Update: {
+          backed_up_at?: string | null
+          collaborator_id?: string | null
+          company_id?: string | null
+          description?: string | null
+          id?: string | null
+          original_value?: number | null
+        }
+        Relationships: []
+      }
+      reajuste_saude_202606_backup_plans: {
+        Row: {
+          backed_up_at: string | null
+          collaborator_id: string | null
+          id: string | null
+          original_value: number | null
+        }
+        Insert: {
+          backed_up_at?: string | null
+          collaborator_id?: string | null
+          id?: string | null
+          original_value?: number | null
+        }
+        Update: {
+          backed_up_at?: string | null
+          collaborator_id?: string | null
+          id?: string | null
+          original_value?: number | null
+        }
+        Relationships: []
       }
       store_holidays: {
         Row: {
@@ -4239,21 +5103,18 @@ export type Database = {
           {
             foreignKeyName: "store_holidays_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "store_holidays_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "store_holidays_store_id_fkey"
             columns: ["store_id"]
-            isOneToOne: false
             referencedRelation: "stores"
             referencedColumns: ["id"]
           },
@@ -4297,14 +5158,94 @@ export type Database = {
           {
             foreignKeyName: "stores_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "stores_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sync_jobs: {
+        Row: {
+          company_id: string
+          created_at: string
+          created_by: string | null
+          current_step: string | null
+          cursor: Json | null
+          deactivated: number
+          error_message: string | null
+          errors: Json
+          finished_at: string | null
+          id: string
+          inserted: number
+          options: Json | null
+          processed: number
+          resource: string
+          result: Json | null
+          started_at: string | null
+          status: string
+          total: number
+          updated: number
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          current_step?: string | null
+          cursor?: Json | null
+          deactivated?: number
+          error_message?: string | null
+          errors?: Json
+          finished_at?: string | null
+          id?: string
+          inserted?: number
+          options?: Json | null
+          processed?: number
+          resource: string
+          result?: Json | null
+          started_at?: string | null
+          status?: string
+          total?: number
+          updated?: number
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          current_step?: string | null
+          cursor?: Json | null
+          deactivated?: number
+          error_message?: string | null
+          errors?: Json
+          finished_at?: string | null
+          id?: string
+          inserted?: number
+          options?: Json | null
+          processed?: number
+          resource?: string
+          result?: Json | null
+          started_at?: string | null
+          status?: string
+          total?: number
+          updated?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sync_jobs_company_id_fkey"
+            columns: ["company_id"]
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "sync_jobs_company_id_fkey"
+            columns: ["company_id"]
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -4354,14 +5295,12 @@ export type Database = {
           {
             foreignKeyName: "system_messages_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "system_messages_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -4426,21 +5365,18 @@ export type Database = {
           {
             foreignKeyName: "teams_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "teams_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "teams_store_id_fkey"
             columns: ["store_id"]
-            isOneToOne: false
             referencedRelation: "stores"
             referencedColumns: ["id"]
           },
@@ -4487,14 +5423,12 @@ export type Database = {
           {
             foreignKeyName: "user_permissions_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "user_permissions_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -4541,7 +5475,6 @@ export type Database = {
           manual_adjustment_notes: string | null
           start_date: string
           status: string
-          value_paid: number | null
         }
         Insert: {
           collaborator_id: string
@@ -4587,21 +5520,18 @@ export type Database = {
           {
             foreignKeyName: "vacation_periods_collaborator_id_fkey"
             columns: ["collaborator_id"]
-            isOneToOne: false
             referencedRelation: "collaborators"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "vacation_periods_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "vacation_periods_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -4699,28 +5629,24 @@ export type Database = {
           {
             foreignKeyName: "vacation_requests_collaborator_id_fkey"
             columns: ["collaborator_id"]
-            isOneToOne: false
             referencedRelation: "collaborators"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "vacation_requests_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "vacation_requests_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "vacation_requests_vacation_period_id_fkey"
             columns: ["vacation_period_id"]
-            isOneToOne: false
             referencedRelation: "vacation_periods"
             referencedColumns: ["id"]
           },
@@ -4791,28 +5717,30 @@ export type Database = {
           {
             foreignKeyName: "vt_period_entries_collaborator_id_fkey"
             columns: ["collaborator_id"]
-            isOneToOne: false
             referencedRelation: "collaborators"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "vt_period_entries_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "vt_period_entries_company_id_fkey"
+            columns: ["company_id"]
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "vt_period_entries_period_id_fkey"
             columns: ["period_id"]
-            isOneToOne: false
             referencedRelation: "vt_periods"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "vt_period_entries_region_id_fkey"
             columns: ["region_id"]
-            isOneToOne: false
             referencedRelation: "vt_regions"
             referencedColumns: ["id"]
           },
@@ -4853,7 +5781,12 @@ export type Database = {
           {
             foreignKeyName: "vt_periods_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "vt_periods_company_id_fkey"
+            columns: ["company_id"]
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -4891,7 +5824,12 @@ export type Database = {
           {
             foreignKeyName: "vt_regions_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
+            referencedRelation: "agent_company_overview"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "vt_regions_company_id_fkey"
+            columns: ["company_id"]
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -4932,14 +5870,12 @@ export type Database = {
           {
             foreignKeyName: "whatsapp_instances_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: true
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "whatsapp_instances_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: true
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -4961,14 +5897,12 @@ export type Database = {
           {
             foreignKeyName: "admission_journeys_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "admission_journeys_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -4987,14 +5921,12 @@ export type Database = {
           {
             foreignKeyName: "collaborators_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "collaborators_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -5018,14 +5950,12 @@ export type Database = {
           {
             foreignKeyName: "companies_parent_company_id_fkey"
             columns: ["parent_company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "companies_parent_company_id_fkey"
             columns: ["parent_company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -5046,21 +5976,18 @@ export type Database = {
           {
             foreignKeyName: "collaborator_badges_collaborator_id_fkey"
             columns: ["collaborator_id"]
-            isOneToOne: false
             referencedRelation: "collaborators"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "collaborator_badges_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "collaborator_badges_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -5078,14 +6005,12 @@ export type Database = {
           {
             foreignKeyName: "journey_milestones_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "journey_milestones_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -5113,14 +6038,12 @@ export type Database = {
           {
             foreignKeyName: "job_openings_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "agent_company_overview"
             referencedColumns: ["company_id"]
           },
           {
             foreignKeyName: "job_openings_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -5128,75 +6051,12 @@ export type Database = {
       }
     }
     Functions: {
-      delete_payroll_entry_with_reason: {
-        Args: { p_entry_id: string; p_reason: string }
-        Returns: undefined
-      }
-      set_payroll_period_status: {
-        Args: {
-          p_period_id: string
-          p_to_status: Database["public"]["Enums"]["payroll_period_status"]
-          p_reason?: string | null
-        }
-        Returns: Database["public"]["Enums"]["payroll_period_status"]
-      }
-      resolve_payroll_period_note: {
-        Args: { p_note_id: string; p_resolved: boolean }
-        Returns: undefined
-      }
-      payroll_period_is_locked: {
-        Args: { p_company_id: string; p_reference_month: string }
-        Returns: boolean
-      }
-      log_payroll_recalc: {
-        Args: { p_company_id: string; p_reference_month: string; p_scope?: string }
-        Returns: undefined
-      }
       adjust_vacation_period_manual: {
         Args: {
           _days_sold: number
           _days_taken: number
           _notes?: string
           _period_id: string
-        }
-        Returns: {
-          collaborator_id: string
-          company_id: string
-          created_at: string
-          days_entitled: number
-          days_remaining: number
-          days_sold: number
-          days_taken: number
-          end_date: string
-          external_id: string | null
-          id: string
-          manual_adjustment_at: string | null
-          manual_adjustment_by: string | null
-          manual_adjustment_notes: string | null
-          start_date: string
-          status: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "vacation_periods"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      edit_vacation_period_manual: {
-        Args: {
-          _period_id: string
-          _start_date: string
-          _end_date: string
-          _days_entitled: number
-          _days_taken: number
-          _days_sold: number
-          _status: string
-          _gozo_start_date?: string | null
-          _gozo_end_date?: string | null
-          _data_limite?: string | null
-          _notes?: string | null
-          _value_paid?: number | null
         }
         Returns: {
           collaborator_id: string
@@ -5217,7 +6077,6 @@ export type Database = {
           manual_adjustment_notes: string | null
           start_date: string
           status: string
-          value_paid: number | null
         }
         SetofOptions: {
           from: "*"
@@ -5225,6 +6084,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      can_manage_payroll_validation: {
+        Args: { p_company_id: string }
+        Returns: boolean
       }
       can_modify_module: {
         Args: { _company_id: string; _module: string; _user_id: string }
@@ -5252,6 +6115,61 @@ export type Database = {
           p_token: string
         }
         Returns: Json
+      }
+      create_payroll_validation: {
+        Args: {
+          p_company_id: string
+          p_items: Json
+          p_pdf_names: string[]
+          p_reference_month: string
+          p_stats: Json
+        }
+        Returns: string
+      }
+      delete_payroll_entry_with_reason: {
+        Args: { p_entry_id: string; p_reason: string }
+        Returns: undefined
+      }
+      edit_vacation_period_manual: {
+        Args: {
+          _data_limite?: string
+          _days_entitled: number
+          _days_sold: number
+          _days_taken: number
+          _end_date: string
+          _gozo_end_date?: string
+          _gozo_start_date?: string
+          _notes?: string
+          _period_id: string
+          _start_date: string
+          _status: string
+        }
+        Returns: {
+          collaborator_id: string
+          company_id: string
+          created_at: string
+          data_limite: string | null
+          days_entitled: number
+          days_remaining: number
+          days_sold: number
+          days_taken: number
+          end_date: string
+          external_id: string | null
+          gozo_end_date: string | null
+          gozo_start_date: string | null
+          id: string
+          manual_adjustment_at: string | null
+          manual_adjustment_by: string | null
+          manual_adjustment_notes: string | null
+          start_date: string
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "vacation_periods"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       generate_vacation_periods: {
         Args: {
@@ -5315,6 +6233,14 @@ export type Database = {
         Args: { _company_id: string; _user_id: string }
         Returns: boolean
       }
+      log_payroll_recalc: {
+        Args: {
+          p_company_id: string
+          p_reference_month: string
+          p_scope?: string
+        }
+        Returns: undefined
+      }
       match_candidates: {
         Args: {
           filter_company_id?: string
@@ -5328,6 +6254,462 @@ export type Database = {
           similarity: number
         }[]
       }
+      payment_2fa_consume_challenge: {
+        Args: { p_code_hash: string; p_id: string; p_purpose: string }
+        Returns: {
+          challenge_id: string
+          company_id: string
+          device_id: string
+          purpose: string
+          transfer_id: string
+          user_id: string
+        }[]
+      }
+      payroll_build_payable_lines: {
+        Args: { p_period_id: string }
+        Returns: number
+      }
+      payroll_entry_label: {
+        Args: { p_description: string; p_type: string }
+        Returns: string
+      }
+      payroll_monthly_merged_rank: { Args: { p_type: string }; Returns: number }
+      payroll_payment_set_manual_paid: {
+        Args: { p_amount?: number; p_entry_id: string; p_paid: boolean }
+        Returns: {
+          amount: number
+          company_id: string
+          created_at: string
+          entry_id: string
+          id: string
+          method: string
+          notes: string | null
+          paid_at: string | null
+          paid_by: string | null
+          period_id: string
+          settled_transfer_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "payroll_payments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      payroll_period_is_locked:
+        | {
+            Args: { p_company_id: string; p_reference_month: string }
+            Returns: boolean
+          }
+        | {
+            Args: {
+              p_status: Database["public"]["Enums"]["payroll_period_status"]
+            }
+            Returns: boolean
+          }
+      payroll_period_transition_action: {
+        Args: {
+          p_from: Database["public"]["Enums"]["payroll_period_status"]
+          p_to: Database["public"]["Enums"]["payroll_period_status"]
+        }
+        Returns: string
+      }
+      payroll_pix_confirm: {
+        Args: {
+          p_http_status?: number
+          p_id: string
+          p_provider_status?: string
+          p_response?: Json
+        }
+        Returns: {
+          amount: number
+          attempt: number
+          check_count: number
+          collaborator_id: string
+          company_id: string
+          confirmed_at: string | null
+          created_at: string
+          created_by: string | null
+          end_to_end_id: string | null
+          entry_id: string
+          environment: string
+          error_code: string | null
+          error_message: string | null
+          failed_at: string | null
+          http_status: number | null
+          id: string
+          idempotency_key: string
+          last_checked_at: string | null
+          next_check_at: string | null
+          payable_line_id: string | null
+          payee_document: string | null
+          payee_name: string
+          payee_pix_key: string
+          payee_pix_key_norm: string
+          payee_pix_key_type: Database["public"]["Enums"]["pix_key_type"]
+          payer_snapshot: Json | null
+          period_id: string
+          provider: string
+          provider_payment_id: string | null
+          provider_status: string | null
+          request_payload: Json | null
+          resolved_by: string | null
+          resolved_reason: string | null
+          response_payload: Json | null
+          sent_at: string | null
+          settled_at: string | null
+          status: Database["public"]["Enums"]["pix_transfer_status"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "payroll_pix_transfers"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      payroll_pix_fail: {
+        Args: {
+          p_code: string
+          p_http_status?: number
+          p_id: string
+          p_msg: string
+          p_response?: Json
+        }
+        Returns: {
+          amount: number
+          attempt: number
+          check_count: number
+          collaborator_id: string
+          company_id: string
+          confirmed_at: string | null
+          created_at: string
+          created_by: string | null
+          end_to_end_id: string | null
+          entry_id: string
+          environment: string
+          error_code: string | null
+          error_message: string | null
+          failed_at: string | null
+          http_status: number | null
+          id: string
+          idempotency_key: string
+          last_checked_at: string | null
+          next_check_at: string | null
+          payable_line_id: string | null
+          payee_document: string | null
+          payee_name: string
+          payee_pix_key: string
+          payee_pix_key_norm: string
+          payee_pix_key_type: Database["public"]["Enums"]["pix_key_type"]
+          payer_snapshot: Json | null
+          period_id: string
+          provider: string
+          provider_payment_id: string | null
+          provider_status: string | null
+          request_payload: Json | null
+          resolved_by: string | null
+          resolved_reason: string | null
+          response_payload: Json | null
+          sent_at: string | null
+          settled_at: string | null
+          status: Database["public"]["Enums"]["pix_transfer_status"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "payroll_pix_transfers"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      payroll_pix_mark_sent: {
+        Args: {
+          p_http_status?: number
+          p_id: string
+          p_provider_payment_id: string
+          p_provider_status?: string
+          p_response?: Json
+        }
+        Returns: {
+          amount: number
+          attempt: number
+          check_count: number
+          collaborator_id: string
+          company_id: string
+          confirmed_at: string | null
+          created_at: string
+          created_by: string | null
+          end_to_end_id: string | null
+          entry_id: string
+          environment: string
+          error_code: string | null
+          error_message: string | null
+          failed_at: string | null
+          http_status: number | null
+          id: string
+          idempotency_key: string
+          last_checked_at: string | null
+          next_check_at: string | null
+          payable_line_id: string | null
+          payee_document: string | null
+          payee_name: string
+          payee_pix_key: string
+          payee_pix_key_norm: string
+          payee_pix_key_type: Database["public"]["Enums"]["pix_key_type"]
+          payer_snapshot: Json | null
+          period_id: string
+          provider: string
+          provider_payment_id: string | null
+          provider_status: string | null
+          request_payload: Json | null
+          resolved_by: string | null
+          resolved_reason: string | null
+          response_payload: Json | null
+          sent_at: string | null
+          settled_at: string | null
+          status: Database["public"]["Enums"]["pix_transfer_status"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "payroll_pix_transfers"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      payroll_pix_mark_unknown: {
+        Args: { p_id: string; p_motivo: string }
+        Returns: {
+          amount: number
+          attempt: number
+          check_count: number
+          collaborator_id: string
+          company_id: string
+          confirmed_at: string | null
+          created_at: string
+          created_by: string | null
+          end_to_end_id: string | null
+          entry_id: string
+          environment: string
+          error_code: string | null
+          error_message: string | null
+          failed_at: string | null
+          http_status: number | null
+          id: string
+          idempotency_key: string
+          last_checked_at: string | null
+          next_check_at: string | null
+          payable_line_id: string | null
+          payee_document: string | null
+          payee_name: string
+          payee_pix_key: string
+          payee_pix_key_norm: string
+          payee_pix_key_type: Database["public"]["Enums"]["pix_key_type"]
+          payer_snapshot: Json | null
+          period_id: string
+          provider: string
+          provider_payment_id: string | null
+          provider_status: string | null
+          request_payload: Json | null
+          resolved_by: string | null
+          resolved_reason: string | null
+          response_payload: Json | null
+          sent_at: string | null
+          settled_at: string | null
+          status: Database["public"]["Enums"]["pix_transfer_status"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "payroll_pix_transfers"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      payroll_pix_open_transfer: {
+        Args: { p_actor: string; p_entry_id: string; p_environment?: string }
+        Returns: {
+          amount: number
+          attempt: number
+          check_count: number
+          collaborator_id: string
+          company_id: string
+          confirmed_at: string | null
+          created_at: string
+          created_by: string | null
+          end_to_end_id: string | null
+          entry_id: string
+          environment: string
+          error_code: string | null
+          error_message: string | null
+          failed_at: string | null
+          http_status: number | null
+          id: string
+          idempotency_key: string
+          last_checked_at: string | null
+          next_check_at: string | null
+          payable_line_id: string | null
+          payee_document: string | null
+          payee_name: string
+          payee_pix_key: string
+          payee_pix_key_norm: string
+          payee_pix_key_type: Database["public"]["Enums"]["pix_key_type"]
+          payer_snapshot: Json | null
+          period_id: string
+          provider: string
+          provider_payment_id: string | null
+          provider_status: string | null
+          request_payload: Json | null
+          resolved_by: string | null
+          resolved_reason: string | null
+          response_payload: Json | null
+          sent_at: string | null
+          settled_at: string | null
+          status: Database["public"]["Enums"]["pix_transfer_status"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "payroll_pix_transfers"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      payroll_pix_resolve_unknown: {
+        Args: {
+          p_actor?: string
+          p_e2e?: string
+          p_id: string
+          p_motivo: string
+          p_status: Database["public"]["Enums"]["pix_transfer_status"]
+        }
+        Returns: {
+          amount: number
+          attempt: number
+          check_count: number
+          collaborator_id: string
+          company_id: string
+          confirmed_at: string | null
+          created_at: string
+          created_by: string | null
+          end_to_end_id: string | null
+          entry_id: string
+          environment: string
+          error_code: string | null
+          error_message: string | null
+          failed_at: string | null
+          http_status: number | null
+          id: string
+          idempotency_key: string
+          last_checked_at: string | null
+          next_check_at: string | null
+          payable_line_id: string | null
+          payee_document: string | null
+          payee_name: string
+          payee_pix_key: string
+          payee_pix_key_norm: string
+          payee_pix_key_type: Database["public"]["Enums"]["pix_key_type"]
+          payer_snapshot: Json | null
+          period_id: string
+          provider: string
+          provider_payment_id: string | null
+          provider_status: string | null
+          request_payload: Json | null
+          resolved_by: string | null
+          resolved_reason: string | null
+          response_payload: Json | null
+          sent_at: string | null
+          settled_at: string | null
+          status: Database["public"]["Enums"]["pix_transfer_status"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "payroll_pix_transfers"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      payroll_pix_settle: {
+        Args: {
+          p_end_to_end_id: string
+          p_response?: Json
+          p_settled_at?: string
+          p_transfer_id: string
+        }
+        Returns: {
+          amount: number
+          attempt: number
+          check_count: number
+          collaborator_id: string
+          company_id: string
+          confirmed_at: string | null
+          created_at: string
+          created_by: string | null
+          end_to_end_id: string | null
+          entry_id: string
+          environment: string
+          error_code: string | null
+          error_message: string | null
+          failed_at: string | null
+          http_status: number | null
+          id: string
+          idempotency_key: string
+          last_checked_at: string | null
+          next_check_at: string | null
+          payable_line_id: string | null
+          payee_document: string | null
+          payee_name: string
+          payee_pix_key: string
+          payee_pix_key_norm: string
+          payee_pix_key_type: Database["public"]["Enums"]["pix_key_type"]
+          payer_snapshot: Json | null
+          period_id: string
+          provider: string
+          provider_payment_id: string | null
+          provider_status: string | null
+          request_payload: Json | null
+          resolved_by: string | null
+          resolved_reason: string | null
+          response_payload: Json | null
+          sent_at: string | null
+          settled_at: string | null
+          status: Database["public"]["Enums"]["pix_transfer_status"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "payroll_pix_transfers"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      pix_key_normalized: {
+        Args: { p_cpf: string; p_key: string }
+        Returns: string
+      }
+      pix_key_type: {
+        Args: { p_cpf: string; p_key: string }
+        Returns: Database["public"]["Enums"]["pix_key_type"]
+      }
+      resolve_payroll_period_note: {
+        Args: { p_note_id: string; p_resolved: boolean }
+        Returns: undefined
+      }
+      resolve_payroll_validation_item: {
+        Args: { p_item_id: string; p_notes: string; p_status: string }
+        Returns: undefined
+      }
+      resolve_payroll_validation_items_bulk: {
+        Args: { p_item_ids: string[]; p_notes: string; p_status: string }
+        Returns: number
+      }
+      resolve_tests_session_application: {
+        Args: { p_token: string }
+        Returns: string
+      }
       save_application_test_progress_by_token: {
         Args: { p_answers: Json; p_token: string }
         Returns: Json
@@ -5335,6 +6717,14 @@ export type Database = {
       save_application_test_progress_in_session: {
         Args: { p_answers: Json; p_test_id: string; p_token: string }
         Returns: Json
+      }
+      set_payroll_period_status: {
+        Args: {
+          p_period_id: string
+          p_reason?: string
+          p_to_status: Database["public"]["Enums"]["payroll_period_status"]
+        }
+        Returns: Database["public"]["Enums"]["payroll_period_status"]
       }
       start_application_test_by_token: {
         Args: { p_token: string }
@@ -5344,6 +6734,20 @@ export type Database = {
         Args: { p_test_id: string; p_token: string }
         Returns: Json
       }
+      storage_collaborator_company: {
+        Args: { _collab: string }
+        Returns: string
+      }
+      storage_is_company_staff: {
+        Args: { _company: string; _module: string }
+        Returns: boolean
+      }
+      storage_is_own_collaborator: {
+        Args: { _collab: string }
+        Returns: boolean
+      }
+      storage_is_rh: { Args: never; Returns: boolean }
+      storage_uuid: { Args: { _txt: string }; Returns: string }
       user_belongs_to_company: {
         Args: { _company_id: string; _user_id: string }
         Returns: boolean
@@ -5488,15 +6892,26 @@ export type Database = {
         | "desconto"
         | "gratificacao"
         | "ferias"
+        | "salario_familia"
         | "carro_agregado"
         | "periculosidade"
         | "emprestimo"
+        | "auxilio_vale_transporte"
+        | "salario_retroativo"
       payroll_period_status:
         | "open"
         | "aprovado_rh"
         | "aprovado_diretoria"
         | "closed"
         | "exported"
+      pix_key_type: "cpf" | "cnpj" | "email" | "phone" | "evp"
+      pix_transfer_status:
+        | "created"
+        | "sent"
+        | "confirmed"
+        | "settled"
+        | "failed"
+        | "unknown"
       plan_tier: "essencial" | "crescer" | "profissional" | "empresa_plus"
     }
     CompositeTypes: {
@@ -5775,9 +7190,12 @@ export const Constants = {
         "desconto",
         "gratificacao",
         "ferias",
+        "salario_familia",
         "carro_agregado",
         "periculosidade",
         "emprestimo",
+        "auxilio_vale_transporte",
+        "salario_retroativo",
       ],
       payroll_period_status: [
         "open",
@@ -5785,6 +7203,15 @@ export const Constants = {
         "aprovado_diretoria",
         "closed",
         "exported",
+      ],
+      pix_key_type: ["cpf", "cnpj", "email", "phone", "evp"],
+      pix_transfer_status: [
+        "created",
+        "sent",
+        "confirmed",
+        "settled",
+        "failed",
+        "unknown",
       ],
       plan_tier: ["essencial", "crescer", "profissional", "empresa_plus"],
     },

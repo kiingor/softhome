@@ -14,7 +14,9 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ['Manrope', 'system-ui', 'sans-serif'],
+        // Inter na interface, JetBrains Mono em dados (ver .mono, com tnum)
+        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -34,6 +36,15 @@ export default {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
         },
+        success: {
+          DEFAULT: "hsl(var(--success))",
+          foreground: "hsl(var(--success-foreground))",
+        },
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
+        },
+        info: "hsl(var(--info))",
         muted: {
           DEFAULT: "hsl(var(--muted))",
           foreground: "hsl(var(--muted-foreground))",
@@ -61,12 +72,16 @@ export default {
           ring: "hsl(var(--sidebar-ring))",
         },
       },
+      // Escala do handoff: 7px (controles), 10px (cards), 16px (superfícies
+      // grandes). O shadcn usa rounded-md em botão/input e rounded-lg em card,
+      // então o mapeamento abaixo entrega os valores certos sem tocar nos 50
+      // componentes.
       borderRadius: {
-        lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
-        xl: "calc(var(--radius) + 4px)",
-        "2xl": "calc(var(--radius) + 8px)",
+        lg: "var(--radius)",                    /* 10px */
+        md: "calc(var(--radius) - 3px)",        /*  7px */
+        sm: "calc(var(--radius) - 5px)",        /*  5px */
+        xl: "calc(var(--radius) + 6px)",        /* 16px */
+        "2xl": "calc(var(--radius) + 10px)",    /* 20px */
       },
       keyframes: {
         "accordion-down": {

@@ -21,6 +21,12 @@ export type ModuleType =
   | "candidatos"
   | "folha"
   | "folha_pagamentos"
+  // Módulo de EXECUÇÃO do pagamento, separado de "folha_pagamentos" (que é a
+  // tela/visão). Aqui `can_create` quer dizer EXECUTAR o pagamento — é o verbo
+  // mais próximo semanticamente e é o que o padrão da casa mapeia pra
+  // action='create'. Ele sozinho NÃO autoriza nada: o gate real exige papel +
+  // este módulo + 2FA, e a escrita em si é feita por função SECURITY DEFINER.
+  | "folha_pagamento_exec"
   | "decimo_terceiro"
   | "recrutador"
   | "feedback";
@@ -53,6 +59,7 @@ export const MODULE_LABELS: Record<ModuleType, string> = {
   candidatos: "Candidatos",
   folha: "Folha — Lançamentos",
   folha_pagamentos: "Folha — Pagamentos",
+  folha_pagamento_exec: "Folha — Realizar Pagamento",
   decimo_terceiro: "13º Salário",
   recrutador: "Agente Recrutador",
   feedback: "Feedback do Colaborador",
@@ -73,7 +80,7 @@ export const MODULE_GROUPS: ModuleGroup[] = [
   {
     label: "Operação",
     description: "Rotina de gente & cultura",
-    modules: ["folha", "folha_pagamentos", "decimo_terceiro", "ferias", "financeiro", "beneficios", "exames", "contabilidade"],
+    modules: ["folha", "folha_pagamentos", "folha_pagamento_exec", "decimo_terceiro", "ferias", "financeiro", "beneficios", "exames", "contabilidade"],
   },
   {
     label: "Recrutamento",

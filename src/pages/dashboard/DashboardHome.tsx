@@ -126,11 +126,11 @@ const TIMELINE_KIND_META: Record<
   TimelineKind,
   { icon: React.ComponentType<{ className?: string; weight?: "regular" | "fill" }>; bg: string; fg: string }
 > = {
-  ferias: { icon: Vacation, bg: "bg-emerald-100 dark:bg-emerald-950/40", fg: "text-emerald-700 dark:text-emerald-300" },
-  exame: { icon: Stethoscope, bg: "bg-amber-100 dark:bg-amber-950/40", fg: "text-amber-700 dark:text-amber-300" },
+  ferias: { icon: Vacation, bg: "bg-success/10 dark:bg-success/15", fg: "text-success dark:text-success" },
+  exame: { icon: Stethoscope, bg: "bg-warning/10 dark:bg-warning/15", fg: "text-warning dark:text-warning" },
   admissao: { icon: UserPlus, bg: "bg-primary/15", fg: "text-primary" },
   aniversario: { icon: Cake, bg: "bg-pink-100 dark:bg-pink-950/40", fg: "text-pink-600 dark:text-pink-300" },
-  folha: { icon: DollarSign, bg: "bg-blue-100 dark:bg-blue-950/40", fg: "text-blue-700 dark:text-blue-300" },
+  folha: { icon: DollarSign, bg: "bg-info/10 dark:bg-info/15", fg: "text-info dark:text-info" },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -567,7 +567,7 @@ const DashboardHome = () => {
       meta:
         newCollaboratorsLast30 > 0 ? (
           <span>
-            <span className="text-emerald-500 font-semibold">+{newCollaboratorsLast30}</span> nos últimos 30 dias
+            <span className="text-success font-semibold">+{newCollaboratorsLast30}</span> nos últimos 30 dias
           </span>
         ) : (
           <span>sem novas admissões em 30 dias</span>
@@ -600,7 +600,7 @@ const DashboardHome = () => {
       icon: Stethoscope,
       meta:
         examsCritical.length > 0 ? (
-          <span className="text-amber-600 dark:text-amber-400 font-semibold">
+          <span className="text-warning dark:text-warning font-semibold">
             {examsCritical.length} crítico{examsCritical.length === 1 ? "" : "s"}
           </span>
         ) : (
@@ -988,27 +988,27 @@ function AlertRow({
 }) {
   const iconColors: Record<AlertPriority, { bg: string; fg: string; chip: string; chipLabel: string }> = {
     critical: {
-      bg: "bg-red-100 dark:bg-red-950/40",
-      fg: "text-red-600 dark:text-red-400",
-      chip: "bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-300",
+      bg: "bg-destructive/10 dark:bg-destructive/15",
+      fg: "text-destructive dark:text-destructive",
+      chip: "bg-destructive/10 dark:bg-destructive/15 text-destructive dark:text-destructive",
       chipLabel: "Crítico",
     },
     warn: {
-      bg: "bg-amber-100 dark:bg-amber-950/40",
-      fg: "text-amber-700 dark:text-amber-400",
-      chip: "bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300",
+      bg: "bg-warning/10 dark:bg-warning/15",
+      fg: "text-warning dark:text-warning",
+      chip: "bg-warning/10 dark:bg-warning/15 text-warning dark:text-warning",
       chipLabel: "Atenção",
     },
     info: {
-      bg: "bg-blue-100 dark:bg-blue-950/40",
-      fg: "text-blue-700 dark:text-blue-400",
-      chip: "bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300",
+      bg: "bg-info/10 dark:bg-info/15",
+      fg: "text-info dark:text-info",
+      chip: "bg-info/10 dark:bg-info/15 text-info dark:text-info",
       chipLabel: "Info",
     },
     ok: {
-      bg: "bg-emerald-100 dark:bg-emerald-950/40",
-      fg: "text-emerald-700 dark:text-emerald-400",
-      chip: "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300",
+      bg: "bg-success/10 dark:bg-success/15",
+      fg: "text-success dark:text-success",
+      chip: "bg-success/10 dark:bg-success/15 text-success dark:text-success",
       chipLabel: "Tudo certo",
     },
   };

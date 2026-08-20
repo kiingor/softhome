@@ -329,7 +329,7 @@ const BenefitForm = ({
                   Previsão para {currentMonth.toString().padStart(2, "0")}/{currentYear}:
                 </p>
                 <p className="font-medium text-primary">
-                  {formatCurrency(parseCurrencyInput(valueDisplay))} × {monthlyPreview.workingDays} dias = <strong>{formatCurrency(monthlyPreview.total)}</strong>
+                  {formatCurrency(parseCurrencyInput(valueDisplay))} × {monthlyPreview.workingDays} dias = <strong className="mono">{formatCurrency(monthlyPreview.total)}</strong>
                 </p>
               </div>
             )}

@@ -106,8 +106,8 @@ function NoteBox({
               variant="outline"
               className={`text-[10px] h-4 px-1.5 ${
                 n.author_stage === "diretoria"
-                  ? "border-emerald-300 text-emerald-700 dark:text-emerald-300"
-                  : "border-blue-300 text-blue-700 dark:text-blue-300"
+                  ? "border-success/25 text-success dark:text-success"
+                  : "border-info/25 text-info dark:text-info"
               }`}
             >
               {n.author_stage === "diretoria" ? "Diretoria" : "RH"}
@@ -263,8 +263,8 @@ export function PayrollApprovalTab({
       {/* KPIs — o que a diretoria assina */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <StatBlock label="Pessoas" value={String(totals.pessoas)} />
-        <StatBlock label="Bruto" value={formatCurrency(totals.bruto)} accent="emerald" />
-        <StatBlock label="Descontos" value={formatCurrency(totals.descontos)} accent="rose" />
+        <StatBlock label="Bruto" value={formatCurrency(totals.bruto)} tom="positivo" />
+        <StatBlock label="Descontos" value={formatCurrency(totals.descontos)} tom="negativo" />
         <StatBlock label="Líquido a pagar" value={formatCurrency(totals.liquido)} />
         <StatBlock label="FGTS (empresa)" value={formatCurrency(totals.fgts)} />
       </div>
@@ -274,7 +274,7 @@ export function PayrollApprovalTab({
           Do bruto acima, {formatCurrency(totals.bonificacao)} são{" "}
           <strong>bonificação (custo de setor)</strong> — já somados no líquido.
           Custo total da folha (bruto + FGTS):{" "}
-          <strong>{formatCurrency(totals.custoTotal)}</strong>.
+          <strong className="mono">{formatCurrency(totals.custoTotal)}</strong>.
         </p>
       )}
 
@@ -326,12 +326,12 @@ export function PayrollApprovalTab({
       {/* Progresso do parecer por colaborador */}
       <div className="flex flex-wrap items-center gap-3 text-xs">
         <span className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+          <span className="w-2.5 h-2.5 rounded-full bg-success" />
           {parecerCount.aprovados} aprovado
           {parecerCount.aprovados === 1 ? "" : "s"}
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+          <span className="w-2.5 h-2.5 rounded-full bg-warning" />
           {parecerCount.atencao} com atenção
         </span>
         <span className="flex items-center gap-1.5 text-muted-foreground">
@@ -341,7 +341,7 @@ export function PayrollApprovalTab({
       </div>
 
       {totals.liquidoNaoPositivo > 0 && (
-        <div className="rounded-lg border border-rose-200 bg-rose-50 dark:bg-rose-950/20 dark:border-rose-900/60 p-3 text-xs">
+        <div className="rounded-lg border border-destructive/25 bg-destructive/5 dark:bg-destructive/15 dark:border-destructive/25 p-3 text-xs">
           <strong>{totals.liquidoNaoPositivo}</strong> colaborador
           {totals.liquidoNaoPositivo === 1 ? "" : "es"} com líquido zerado ou
           negativo (descontos ≥ proventos). Diferente da aba Pagamentos, esta
@@ -383,9 +383,9 @@ export function PayrollApprovalTab({
                   <TableRow
                     className={`cursor-pointer hover:bg-muted/50 ${
                       parecer === "aprovado"
-                        ? "bg-emerald-50/60 dark:bg-emerald-950/20"
+                        ? "bg-success/15 dark:bg-success/15"
                         : parecer === "atencao"
-                        ? "bg-amber-50/60 dark:bg-amber-950/20"
+                        ? "bg-warning/15 dark:bg-warning/15"
                         : ""
                     }`}
                     onClick={() => toggle(row.collaboratorId)}
@@ -403,7 +403,7 @@ export function PayrollApprovalTab({
                         {row.liquido <= 0 && (
                           <Badge
                             variant="outline"
-                            className="text-[10px] h-4 px-1.5 border-rose-300 text-rose-700 dark:text-rose-300"
+                            className="text-[10px] h-4 px-1.5 border-destructive/25 text-destructive dark:text-destructive"
                           >
                             Líquido {row.liquido < 0 ? "negativo" : "zerado"}
                           </Badge>
@@ -411,7 +411,7 @@ export function PayrollApprovalTab({
                         {openNotes > 0 && (
                           <Badge
                             variant="outline"
-                            className="text-[10px] h-4 px-1.5 border-amber-300 text-amber-700 dark:text-amber-300"
+                            className="text-[10px] h-4 px-1.5 border-warning/25 text-warning dark:text-warning"
                           >
                             {openNotes} obs.
                           </Badge>
@@ -421,14 +421,14 @@ export function PayrollApprovalTab({
                     <TableCell className="text-right font-mono text-sm">
                       {formatCurrency(row.bruto)}
                     </TableCell>
-                    <TableCell className="text-right font-mono text-sm text-rose-700 dark:text-rose-300">
+                    <TableCell className="text-right font-mono text-sm text-destructive dark:text-destructive">
                       {row.descontos > 0 ? `- ${formatCurrency(row.descontos)}` : "—"}
                     </TableCell>
                     <TableCell
                       className={`text-right font-mono text-sm font-semibold ${
                         row.liquido <= 0
-                          ? "text-rose-700 dark:text-rose-300"
-                          : "text-orange-700 dark:text-orange-300"
+                          ? "text-destructive dark:text-destructive"
+                          : "text-primary dark:text-primary"
                       }`}
                     >
                       {formatCurrency(row.liquido)}
@@ -449,7 +449,7 @@ export function PayrollApprovalTab({
                           disabled={!canComment || setStatus.isPending}
                           className={`h-7 px-2 text-xs gap-1 ${
                             parecer === "aprovado"
-                              ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300"
+                              ? "bg-success/10 text-success hover:bg-success/15 dark:bg-success/15 dark:text-success"
                               : "text-muted-foreground"
                           }`}
                           title={
@@ -480,7 +480,7 @@ export function PayrollApprovalTab({
                           disabled={!canComment || setStatus.isPending}
                           className={`h-7 px-2 text-xs gap-1 ${
                             parecer === "atencao"
-                              ? "bg-amber-100 text-amber-800 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-300"
+                              ? "bg-warning/10 text-warning hover:bg-warning/15 dark:bg-warning/15 dark:text-warning"
                               : "text-muted-foreground"
                           }`}
                           title={
@@ -512,7 +512,7 @@ export function PayrollApprovalTab({
                             size="icon"
                             className={`h-7 w-7 ${
                               openNotes > 0
-                                ? "text-amber-600"
+                                ? "text-warning"
                                 : "text-muted-foreground"
                             }`}
                             title="Observações desta pessoa"
@@ -579,8 +579,8 @@ export function PayrollApprovalTab({
                               natureza === "informativo"
                                 ? "text-muted-foreground"
                                 : natureza === "credito"
-                                ? "text-orange-700 dark:text-orange-300"
-                                : "text-rose-700 dark:text-rose-300"
+                                ? "text-primary dark:text-primary"
+                                : "text-destructive dark:text-destructive"
                             }`}
                           >
                             {natureza === "credito"

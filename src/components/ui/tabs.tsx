@@ -12,7 +12,9 @@ const TabsList = React.forwardRef<
   <TabsPrimitive.List
     ref={ref}
     className={cn(
-      "inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground",
+      // Aba sublinhada do handoff (.cd-tabs): régua embaixo, sem caixa cinza.
+      // A barra da aba ativa é o indicador — é ela que carrega o laranja.
+      "inline-flex h-auto w-full items-center justify-start gap-1 rounded-none border-b border-border bg-transparent p-0 text-muted-foreground",
       className,
     )}
     {...props}
@@ -27,7 +29,9 @@ const TabsTrigger = React.forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+      "relative inline-flex h-[42px] items-center justify-center whitespace-nowrap rounded-none border-0 bg-transparent px-4 text-sm font-semibold text-muted-foreground shadow-none ring-offset-background transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
+      "data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none",
+      "data-[state=active]:after:absolute data-[state=active]:after:inset-x-3 data-[state=active]:after:-bottom-px data-[state=active]:after:h-[2.5px] data-[state=active]:after:rounded-t-sm data-[state=active]:after:bg-primary data-[state=active]:after:content-['']",
       className,
     )}
     {...props}

@@ -1,131 +1,186 @@
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { Resend } from "https://esm.sh/resend@2.0.0";
+// send-invite-email
+//
+// Avisa por e-mail que um usuário ganhou acesso ao DNA Softcom.
+//
+// O que foi corrigido aqui (a versão anterior era resíduo do fork SaaS):
+//   1. Autenticação de verdade. Antes bastava QUALQUER string no header
+//      Authorization — o header nunca era validado e a function roda com
+//      verify_jwt = false, então um anônimo disparava e-mail pela conta Resend
+//      da empresa com nome/empresa/remetente que ele escolhesse.
+//   2. Autorização: só quem pode gerenciar usuários daquela empresa.
+//   3. Escape de HTML nos campos do corpo (eram interpolados crus).
+//   4. O CTA apontava pra https://meurh.com.br/aceitar-convite — domínio do SaaS
+//      de origem, fora do controle da Softcom. Agora vem de PUBLIC_APP_ORIGIN.
+//   5. A senha NÃO vai por e-mail. O caller mandava `recipientPassword` que o
+//      template nem usava; agora o campo é ignorado de propósito.
+//
+// Body: { recipientEmail, recipientName?, companyName?, inviterName?, company_id }
+//
+// Configure antes de usar:
+//   npx supabase secrets set PUBLIC_APP_ORIGIN=https://<dominio-do-dna>
 
-const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
+import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { escapeHtml, renderBaseTemplate, sendEmail } from "../_shared/resend.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+const json = (payload: unknown, status = 200) =>
+  new Response(JSON.stringify(payload), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+
 interface InviteEmailRequest {
-  recipientEmail: string;
-  recipientName: string;
-  companyName: string;
-  inviterName: string;
+  recipientEmail?: string;
+  recipientName?: string;
+  companyName?: string;
+  inviterName?: string;
+  company_id?: string;
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Verificar autenticação
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      console.error("No authorization header provided");
-      return new Response(
-        JSON.stringify({ error: "Não autorizado" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return json({ error: "Não autorizado" }, 401);
     }
 
-    const { recipientEmail, recipientName, companyName, inviterName }: InviteEmailRequest = await req.json();
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    console.log("Sending invite email to:", recipientEmail);
-    console.log("Company:", companyName);
-    console.log("Inviter:", inviterName);
-
-    // Build the invite acceptance URL with email
-    const acceptUrl = `https://meurh.com.br/aceitar-convite?email=${encodeURIComponent(recipientEmail)}`;
-
-    const emailResponse = await resend.emails.send({
-      from: "Meu RH <onboarding@resend.dev>",
-      to: [recipientEmail],
-      subject: `Você foi convidado para acessar ${companyName} no Meu RH`,
-      html: `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        </head>
-        <body style="margin: 0; padding: 0; background-color: #f3f4f6;">
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff;">
-            <div style="background: linear-gradient(135deg, #7C3AED 0%, #5B21B6 100%); padding: 40px; text-align: center;">
-              <h1 style="color: white; margin: 0; font-size: 28px;">Meu RH</h1>
-              <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 14px;">
-                Sistema de Gestão de Pessoas
-              </p>
-            </div>
-            
-            <div style="padding: 40px;">
-              <h2 style="color: #1f2937; margin: 0 0 20px 0; font-size: 22px;">
-                Olá${recipientName ? `, ${recipientName}` : ''}!
-              </h2>
-              
-              <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
-                <strong>${inviterName}</strong> convidou você para acessar o sistema de RH da empresa 
-                <strong>${companyName}</strong>.
-              </p>
-              
-              <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 15px 0;">
-                Com o Meu RH você poderá:
-              </p>
-              
-              <ul style="color: #4b5563; font-size: 16px; line-height: 1.8; margin: 0 0 30px 0; padding-left: 20px;">
-                <li>Gerenciar colaboradores e equipes</li>
-                <li>Acompanhar folha de pagamento</li>
-                <li>Visualizar benefícios e férias</li>
-                <li>Gerar relatórios para contabilidade</li>
-              </ul>
-              
-              <div style="text-align: center; margin: 30px 0;">
-                <a href="${acceptUrl}" 
-                   style="background: linear-gradient(135deg, #7C3AED 0%, #5B21B6 100%); 
-                          color: white; padding: 14px 32px; 
-                          text-decoration: none; border-radius: 8px; font-weight: bold;
-                          display: inline-block; font-size: 16px;">
-                  Acessar o Sistema
-                </a>
-              </div>
-              
-              <div style="background: #f9fafb; border-radius: 8px; padding: 20px; margin-top: 30px;">
-                <p style="color: #6b7280; font-size: 14px; margin: 0; line-height: 1.6;">
-                  <strong>💡 Dica:</strong> Se você ainda não possui uma conta, clique no botão acima 
-                  e crie sua conta utilizando este mesmo email: <strong>${recipientEmail}</strong>
-                </p>
-              </div>
-            </div>
-            
-            <div style="background: #1f2937; padding: 25px; text-align: center;">
-              <p style="color: #9ca3af; font-size: 12px; margin: 0;">
-                © 2025 Meu RH - Sistema de Gestão de Pessoas
-              </p>
-              <p style="color: #6b7280; font-size: 11px; margin: 10px 0 0 0;">
-                Este email foi enviado porque você foi convidado para acessar o sistema.
-              </p>
-            </div>
-          </div>
-        </body>
-        </html>
-      `,
+    // Valida o token de verdade — não basta o header existir.
+    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
     });
 
-    console.log("Email sent successfully:", emailResponse);
+    const { data: { user: callerUser }, error: authError } =
+      await userClient.auth.getUser();
+    if (authError || !callerUser) {
+      return json({ error: "Não autorizado" }, 401);
+    }
 
-    return new Response(
-      JSON.stringify({ success: true, data: emailResponse }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    const body: InviteEmailRequest = await req.json().catch(() => ({}));
+    const recipientEmail = String(body.recipientEmail ?? "").trim().toLowerCase();
+    const companyId = body.company_id;
 
-  } catch (error: any) {
-    console.error("Error sending invite email:", error);
-    return new Response(
-      JSON.stringify({ error: error.message || "Erro ao enviar email" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    if (!recipientEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail)) {
+      return json({ error: "E-mail do destinatário inválido" }, 400);
+    }
+    if (!companyId) {
+      return json({ error: "ID da empresa é obrigatório" }, 400);
+    }
+
+    const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    // ─── Autorização ────────────────────────────────────────────
+    // Mesma régua de create-collaborator-user: owner da empresa, admin dela,
+    // ou delegação explícita no módulo de permissões.
+    let allowed = false;
+
+    const { data: company } = await adminClient
+      .from("companies")
+      .select("id, owner_id, company_name")
+      .eq("id", companyId)
+      .maybeSingle();
+
+    if (!company) {
+      return json({ error: "Empresa não encontrada" }, 404);
+    }
+    if (company.owner_id === callerUser.id) {
+      allowed = true;
+    }
+
+    if (!allowed) {
+      const { data: isAdmin } = await adminClient.rpc("is_company_admin", {
+        _user_id: callerUser.id,
+        _company_id: companyId,
+      });
+      if (isAdmin) allowed = true;
+    }
+
+    if (!allowed) {
+      const { data: perm } = await adminClient
+        .from("user_permissions")
+        .select("can_edit")
+        .eq("user_id", callerUser.id)
+        .eq("company_id", companyId)
+        .eq("module", "permissoes")
+        .maybeSingle();
+      if (perm?.can_edit) allowed = true;
+    }
+
+    if (!allowed) {
+      console.error("send-invite-email negado — caller:", callerUser.id);
+      return json({ error: "Sem permissão para convidar usuários nesta empresa" }, 403);
+    }
+
+    // ─── Destino do link ────────────────────────────────────────
+    // Vem do ambiente, nunca do body: origem controlada pelo cliente vira link
+    // de phishing saindo de um e-mail legítimo da empresa.
+    const origin = (Deno.env.get("PUBLIC_APP_ORIGIN") ?? "").replace(/\/$/, "");
+    if (!origin) {
+      console.error("PUBLIC_APP_ORIGIN não configurada");
+      return json({ error: "Origem pública do app não configurada" }, 500);
+    }
+
+    // ─── Corpo ──────────────────────────────────────────────────
+    const recipientName = String(body.recipientName ?? "").trim();
+    const companyName = String(body.companyName ?? company.company_name ?? "").trim();
+    const inviterName = String(body.inviterName ?? "").trim();
+
+    const greeting = recipientName ? `Olá, ${escapeHtml(recipientName)}!` : "Olá!";
+    const invitedBy = inviterName
+      ? `<strong>${escapeHtml(inviterName)}</strong> liberou`
+      : "O RH liberou";
+
+    const html = renderBaseTemplate({
+      heading: "Seu acesso está liberado",
+      companyName: companyName || undefined,
+      ctaLabel: "Entrar no DNA Softcom",
+      ctaUrl: `${origin}/login`,
+      bodyHtml: `
+        <p>${greeting}</p>
+        <p>
+          ${invitedBy} seu acesso ao DNA Softcom${
+            companyName ? ` — ${escapeHtml(companyName)}` : ""
+          }.
+        </p>
+        <p>
+          Entre com o e-mail <strong>${escapeHtml(recipientEmail)}</strong> e a senha
+          que o RH combinou com você. Se ainda não tem a senha ou não lembra dela,
+          use "Esqueci a senha" na tela de login.
+        </p>
+      `,
+      footerText:
+        "Por segurança, nunca mandamos senha por e-mail. Se você não esperava este aviso, fale com o RH.",
+    });
+
+    const result = await sendEmail({
+      to: recipientEmail,
+      subject: companyName
+        ? `Seu acesso ao DNA Softcom — ${companyName}`
+        : "Seu acesso ao DNA Softcom",
+      html,
+    });
+
+    console.log("Convite enviado — id:", result.id);
+
+    return json({ success: true, id: result.id });
+  } catch (error) {
+    console.error("send-invite-email error:", (error as Error).message);
+    // Mensagem genérica: detalhe interno não volta pro cliente.
+    return json({ error: "Não foi possível enviar o e-mail de acesso" }, 500);
   }
 });

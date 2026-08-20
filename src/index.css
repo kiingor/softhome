@@ -1,104 +1,144 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* DNA Softcom — design tokens (ver docs/DESIGN_SYSTEM.md) */
+/* ============================================================
+   DNA Softcom — design tokens
+   Sistema herdado do handoff Agenda Softcom (AgendaV3): mesma
+   estrutura, escala e componentes; identidade trocada de
+   teal + mustard para ink quente + laranja Softcom (#F97316).
+   Ver docs/DESIGN_SYSTEM.md.
+   ============================================================ */
 
 @layer base {
   :root {
-    /* Light-first */
-    --background: 0 0% 100%;
-    --foreground: 222 47% 11%;
+    /* ---- superfícies ---- */
+    /* off-white quente #F1F1F0 — nunca branco puro no fundo, o
+       branco fica reservado às superfícies elevadas (card/popover) */
+    --background: 60 4% 94%;
+    --foreground: 240 4% 5%;          /* ink #0D0D0E */
 
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 240 4% 5%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
+    --popover-foreground: 240 4% 5%;
 
-    /* Orange primary (#F97316) */
-    --primary: 21 95% 53%;
+    /* ---- marca ---- */
+    /* Laranja usado com parcimônia: item ativo, botão primário e
+       marca. Se aparecer em muitos lugares na mesma tela, perde a
+       função de apontar a ação. */
+    --primary: 21 95% 53%;            /* #F97316 */
     --primary-foreground: 0 0% 100%;
-
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222 47% 11%;
-
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
 
     --accent: 21 95% 53%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
+    --secondary: 0 0% 98%;            /* #FAFAFA */
+    --secondary-foreground: 240 4% 5%;
 
-    --success: 21 95% 53%;
+    --muted: 0 0% 98%;
+    --muted-foreground: 240 2% 44%;   /* #6E6E73 */
+
+    /* ---- status ---- */
+    /* success era laranja (idêntico ao primary), o que tornava
+       "deu certo" indistinguível de "clique aqui". Agora é verde. */
+    --success: 143 55% 40%;           /* #2EA05A */
+    --success-foreground: 0 0% 100%;
     --warning: 38 92% 50%;
+    --warning-foreground: 240 4% 5%;
+    --destructive: 0 64% 56%;         /* #D64545 */
+    --destructive-foreground: 0 0% 100%;
     --info: 217 91% 60%;
 
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
+    /* ---- traços ---- */
+    --border: 60 4% 90%;              /* #E6E6E4 */
+    --input: 60 4% 84%;               /* #D8D8D5 — mais forte que a borda comum */
     --ring: 21 95% 53%;
 
-    --radius: 0.5rem;
+    /* ---- escala ---- */
+    --radius: 0.625rem;               /* 10px; md=7px e xl=16px derivam daqui */
 
-    /* Custom tokens */
-    --gradient-hero: linear-gradient(135deg, hsl(21 95% 53%) 0%, hsl(21 95% 60%) 100%);
-    --gradient-warm: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(210 40% 98%) 100%);
-    --shadow-soft: 0 4px 20px -4px hsl(222 47% 11% / 0.06);
-    --shadow-card: 0 8px 32px -8px hsl(222 47% 11% / 0.10);
-    --shadow-glow: 0 0 40px hsl(21 95% 53% / 0.25);
+    /* ---- sombras ---- */
+    /* Duas apenas: repouso e elevação. Sem glow. */
+    --shadow-soft: 0 1px 2px hsl(240 4% 5% / 0.05), 0 8px 24px hsl(240 4% 5% / 0.04);
+    --shadow-card: 0 4px 12px hsl(240 4% 5% / 0.10), 0 16px 48px hsl(240 4% 5% / 0.10);
+    --shadow-glow: 0 0 0 3px hsl(21 95% 53% / 0.18);
 
-    /* Sidebar */
-    --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 222 47% 20%;
+    /* ---- gradientes ---- */
+    /* Discretos e restritos a arte de marca (login, hero). */
+    --gradient-hero: linear-gradient(135deg, hsl(24 10% 10%) 0%, hsl(24 13% 20%) 100%);
+    --gradient-warm: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(60 4% 97%) 100%);
+
+    /* ---- sidebar ---- */
+    /* Ink quente: escura NOS DOIS TEMAS. É a assinatura do sistema
+       — a navegação é uma âncora estável, não acompanha o tema. */
+    --sidebar-background: 24 10% 10%;       /* #1C1917 */
+    --sidebar-foreground: 24 5% 64%;        /* #A8A29E */
     --sidebar-primary: 21 95% 53%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 210 40% 96%;
-    --sidebar-accent-foreground: 222 47% 11%;
-    --sidebar-border: 214 32% 91%;
+    --sidebar-accent: 24 13% 20%;           /* #3A322D — item ativo */
+    --sidebar-accent-foreground: 60 6% 95%; /* #F4F4F2 */
+    --sidebar-border: 24 9% 17%;            /* #2E2926 */
     --sidebar-ring: 21 95% 53%;
+    --sidebar-hover: 24 9% 17%;
+    --sidebar-faint: 24 5% 42%;
   }
 
   .dark {
-    --background: 222 47% 11%;
-    --foreground: 210 40% 98%;
+    --background: 24 10% 10%;
+    --foreground: 60 6% 95%;
 
-    --card: 222 47% 13%;
-    --card-foreground: 210 40% 98%;
+    --card: 24 8% 14%;
+    --card-foreground: 60 6% 95%;
 
-    --popover: 222 47% 13%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 24 8% 14%;
+    --popover-foreground: 60 6% 95%;
 
-    --primary: 21 95% 60%;
-    --primary-foreground: 222 47% 11%;
+    --primary: 21 95% 58%;
+    --primary-foreground: 24 10% 10%;
 
-    --secondary: 217 33% 18%;
-    --secondary-foreground: 210 40% 98%;
+    --accent: 21 95% 58%;
+    --accent-foreground: 24 10% 10%;
 
-    --muted: 217 33% 18%;
-    --muted-foreground: 215 20% 65%;
+    --secondary: 24 9% 17%;
+    --secondary-foreground: 60 6% 95%;
 
-    --accent: 21 95% 60%;
-    --accent-foreground: 222 47% 11%;
+    --muted: 24 9% 17%;
+    --muted-foreground: 24 5% 64%;
 
-    --destructive: 0 84% 60%;
+    --success: 143 45% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 55%;
+    --warning-foreground: 24 10% 10%;
+    --destructive: 0 64% 58%;
     --destructive-foreground: 0 0% 100%;
+    --info: 217 91% 65%;
 
-    --border: 217 33% 22%;
-    --input: 217 33% 22%;
-    --ring: 21 95% 60%;
+    --border: 24 13% 20%;
+    --input: 22 13% 26%;
+    --ring: 21 95% 58%;
 
-    --sidebar-background: 222 47% 13%;
-    --sidebar-foreground: 210 40% 90%;
-    --sidebar-primary: 21 95% 60%;
-    --sidebar-primary-foreground: 222 47% 11%;
-    --sidebar-accent: 217 33% 18%;
-    --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 217 33% 22%;
-    --sidebar-ring: 21 95% 60%;
+    --shadow-soft: 0 1px 2px hsl(0 0% 0% / 0.35), 0 8px 24px hsl(0 0% 0% / 0.30);
+    --shadow-card: 0 4px 12px hsl(0 0% 0% / 0.42), 0 16px 48px hsl(0 0% 0% / 0.42);
+    --shadow-glow: 0 0 0 3px hsl(21 95% 58% / 0.22);
+
+    --gradient-hero: linear-gradient(135deg, hsl(24 12% 7%) 0%, hsl(24 13% 20%) 100%);
+    --gradient-warm: linear-gradient(180deg, hsl(24 8% 14%) 0%, hsl(24 9% 17%) 100%);
+
+    /* No escuro a sidebar afunda mais que o fundo, mantendo a hierarquia */
+    --sidebar-background: 24 12% 7%;
+    --sidebar-foreground: 24 5% 64%;
+    --sidebar-primary: 21 95% 58%;
+    --sidebar-primary-foreground: 24 10% 10%;
+    --sidebar-accent: 24 10% 16%;
+    --sidebar-accent-foreground: 60 6% 95%;
+    --sidebar-border: 24 10% 13%;
+    --sidebar-ring: 21 95% 58%;
+    --sidebar-hover: 24 10% 13%;
+    --sidebar-faint: 24 5% 38%;
   }
 }
 
@@ -113,7 +153,7 @@
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
-    font-family: 'Manrope', system-ui, sans-serif;
+    text-rendering: optimizeLegibility;
   }
 
   body.theme-loading {
@@ -121,12 +161,43 @@
   }
 
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Manrope', system-ui, sans-serif;
     @apply font-bold tracking-tight;
+  }
+
+  ::selection {
+    background: hsl(21 95% 53% / 0.22);
+    color: hsl(var(--foreground));
+  }
+}
+
+@layer components {
+  /* Rótulo em caixa alta que abre seções e grupos de menu. */
+  .label-eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground;
+  }
+
+  /* Título de página: grande, apertado, sem cor de marca. */
+  .page-title {
+    @apply text-[26px] font-extrabold tracking-[-0.02em] text-foreground leading-tight;
   }
 }
 
 @layer utilities {
+  /* Números, datas, valores e documentos: monoespaçado com dígitos
+     de largura fixa, para as colunas alinharem verticalmente. */
+  .mono {
+    font-family: theme('fontFamily.mono');
+    font-feature-settings: "tnum" 1;
+  }
+
+  /* O `font-mono` do Tailwind só troca a família — sem `tnum` os dígitos
+     mantêm largura variável e a coluna de valores continua desalinhada.
+     Como o app já usa `font-mono` em dezenas de lugares, é mais seguro
+     ensinar a utilitária existente do que reescrever cada chamada. */
+  .font-mono {
+    font-feature-settings: "tnum" 1;
+  }
+
   .gradient-hero {
     background: var(--gradient-hero);
   }
@@ -147,11 +218,10 @@
     box-shadow: var(--shadow-glow);
   }
 
+  /* Mantido pela API; agora resolve para a cor sólida da marca —
+     texto em degradê não combina com o tom editorial do sistema. */
   .text-gradient {
-    background: var(--gradient-hero);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    @apply text-primary;
   }
 }
 
@@ -259,7 +329,7 @@
 }
 
 .table-row-animate:hover {
-  background-color: hsl(var(--muted) / 0.5);
+  background-color: hsl(var(--muted) / 0.6);
 }
 
 .card-hover {
@@ -269,4 +339,28 @@
 .card-hover:hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-card);
+}
+
+/* Barra de rolagem discreta, como no handoff */
+.scroll::-webkit-scrollbar,
+.overflow-auto::-webkit-scrollbar,
+.overflow-y-auto::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+.scroll::-webkit-scrollbar-thumb,
+.overflow-auto::-webkit-scrollbar-thumb,
+.overflow-y-auto::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.35);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.scroll::-webkit-scrollbar-thumb:hover,
+.overflow-auto::-webkit-scrollbar-thumb:hover,
+.overflow-y-auto::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.55);
+  background-clip: padding-box;
 }

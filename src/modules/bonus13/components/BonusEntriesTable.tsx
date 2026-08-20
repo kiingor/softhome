@@ -27,8 +27,8 @@ type Props = {
 
 const MODE_COLORS: Record<string, string> = {
   batch: "bg-slate-100 text-slate-700",
-  individual: "bg-amber-100 text-amber-700",
-  anticipated: "bg-emerald-100 text-emerald-700",
+  individual: "bg-warning/10 text-warning",
+  anticipated: "bg-success/10 text-success",
 };
 
 export function BonusEntriesTable({
@@ -80,16 +80,16 @@ export function BonusEntriesTable({
             <TableCell className="tabular-nums text-sm">
               {e.months_worked}/12
             </TableCell>
-            <TableCell className="tabular-nums text-sm text-muted-foreground">
+            <TableCell className="mono tabular-nums text-sm text-muted-foreground">
               {formatCurrency(e.base_salary)}
             </TableCell>
-            <TableCell className="tabular-nums text-sm font-semibold">
+            <TableCell className="mono tabular-nums text-sm font-semibold">
               {formatCurrency(e.gross_value)}
             </TableCell>
             <TableCell>
               <Badge
                 variant="outline"
-                className={`font-normal border-0 ${MODE_COLORS[e.mode] ?? ""}`}
+                className={`border-0 ${MODE_COLORS[e.mode] ?? ""}`}
               >
                 {BONUS_MODE_LABELS[e.mode]}
               </Badge>

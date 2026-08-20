@@ -235,14 +235,14 @@ export function VacationAdvanceDialog({
                   lançadas na folha de <strong>{targetLabel}</strong>.
                 </p>
                 {confirming?.posted_to_payroll && confirming.payroll_month && (
-                  <p className="text-amber-700 dark:text-amber-400">
+                  <p className="text-warning dark:text-warning">
                     ⚠️ O lançamento atual em <strong>
                       {String(confirming.payroll_month).padStart(2, "0")}/{confirming.payroll_year}
                     </strong> será apagado e recriado em {targetLabel}.
                   </p>
                 )}
                 <p className="text-xs text-muted-foreground pt-1">
-                  Valor líquido: <strong>{formatCurrency(confirming?.calculation_snapshot?.liquido ?? 0)}</strong>
+                  Valor líquido: <strong className="mono">{formatCurrency(confirming?.calculation_snapshot?.liquido ?? 0)}</strong>
                 </p>
               </div>
             </AlertDialogDescription>

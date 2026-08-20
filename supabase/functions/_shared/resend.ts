@@ -176,7 +176,11 @@ export function renderBaseTemplate(opts: BaseTemplateOptions): string {
 </html>`;
 }
 
-function escapeHtml(s: string): string {
+/**
+ * Neutraliza HTML em texto que veio de fora (nome, empresa, e-mail).
+ * Exportado porque toda function que monta corpo de e-mail precisa disso.
+ */
+export function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")

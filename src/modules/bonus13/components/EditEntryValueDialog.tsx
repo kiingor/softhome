@@ -75,12 +75,12 @@ export function EditEntryValueDialog({ open, onOpenChange, entry }: Props) {
           <div className="rounded-lg border bg-muted/30 p-3 text-sm space-y-1">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Salário base (snapshot)</span>
-              <span className="tabular-nums">{formatCurrency(entry.base_salary)}</span>
+              <span className="mono tabular-nums">{formatCurrency(entry.base_salary)}</span>
             </div>
             {(entry.gratificacao_sum ?? 0) > 0 && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Gratificações no ano</span>
-                <span className="tabular-nums">
+                <span className="mono tabular-nums">
                   {formatCurrency(entry.gratificacao_sum)}
                 </span>
               </div>
@@ -88,7 +88,7 @@ export function EditEntryValueDialog({ open, onOpenChange, entry }: Props) {
             {(entry.adicional_monthly ?? 0) > 0 && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Adicional mensal</span>
-                <span className="tabular-nums">
+                <span className="mono tabular-nums">
                   {formatCurrency(entry.adicional_monthly)}
                 </span>
               </div>
@@ -99,7 +99,7 @@ export function EditEntryValueDialog({ open, onOpenChange, entry }: Props) {
             </div>
             <div className="flex justify-between border-t pt-1 mt-1">
               <span className="text-muted-foreground">Valor calculado</span>
-              <span className="tabular-nums font-medium">{formatCurrency(calculated)}</span>
+              <span className="mono tabular-nums font-medium">{formatCurrency(calculated)}</span>
             </div>
           </div>
         )}

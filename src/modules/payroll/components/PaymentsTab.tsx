@@ -14,55 +14,40 @@ import {
   Info,
   Copy,
   MagnifyingGlass,
+  Receipt,
+  CheckCircle,
+  Users,
   X as XIcon,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/formatters";
-import { StatBlock } from "./StatBlock";
+import { cn } from "@/lib/utils";
+import { Segmented } from "./Segmented";
 import {
-  isEarning,
-  MANUAL_DEBIT_TYPES,
   ENTRY_TYPE_LABELS,
   ENTRY_TYPE_COLORS,
   type PayrollEntryWithCollaborator,
 } from "../types";
+import {
+  buildPaymentLines,
+  type PaymentLineComponent,
+  type PaymentLineDiscount,
+} from "../lib/buildPaymentLines";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { PixPaymentDialog } from "./PixPaymentDialog";
+import { BatchPixDialog, type BatchSelectedLine } from "./BatchPixDialog";
+import { AccountBalanceCard } from "./AccountBalanceCard";
+import { usePixTransfers, usePixPayment, useVoucher, type PixTransfer } from "../hooks/use-pix-payment";
+import { usePermissions } from "@/hooks/usePermissions";
+import { useDashboard } from "@/contexts/DashboardContext";
 
 interface PaymentsTabProps {
   periodId: string;
   entries: PayrollEntryWithCollaborator[];
   canManage: boolean;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Pagamento mensal — o que entra na MESMA linha (mesmo PIX)
-//
-// Regra de produto: o colaborador recebe UM pagamento com salário base,
-// gratificações, hora extra, periculosidade e salário-família juntos.
-//
-// É também o recorte correto pro líquido: o INSS/IRPF do mês incide sobre essa
-// base (hora extra e periculosidade integram a base — ver
-// INSS_TAXABLE_EARNING_TYPES em ../types), então o imposto descontado aqui bate
-// com o contracheque em vez de sair todo do salário base.
-//
-// FORA daqui, cada um em sua linha: bonificação (custo de setor) e carro
-// agregado — a diretoria confere esses à parte. Benefício pagável, atestado,
-// VT e salário retroativo também seguem em linha própria.
-//
-// A ordem do array é a ordem de exibição no popup de detalhe.
-// ─────────────────────────────────────────────────────────────────────────────
-const MONTHLY_MERGED_TYPES = [
-  "salario_base",
-  "gratificacao",
-  "hora_extra",
-  "periculosidade",
-  "salario_familia",
-] as const;
-
-const MONTHLY_MERGED_SET = new Set<string>(MONTHLY_MERGED_TYPES);
-
-/** Tipos distintos que compõem a linha, na ordem de exibição — viram as tags. */
-function mergedTypes(merged: PayrollEntryWithCollaborator[]): string[] {
-  return MONTHLY_MERGED_TYPES.filter((t) => merged.some((e) => e.type === t));
+  /** Status da folha. PIX só existe a partir de 'aprovado_diretoria'. */
+  periodStatus?: string;
 }
 
 interface PaymentRecord {
@@ -72,219 +57,146 @@ interface PaymentRecord {
   amount: number;
   paid_at: string | null;
   paid_by: string | null;
+  /** 'manual' = marcado na mão; 'pix_santander' = saiu por PIX e não se desmarca. */
+  method?: string | null;
 }
 
-export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) {
+export function PaymentsTab({
+  periodId,
+  entries,
+  canManage,
+  periodStatus,
+}: PaymentsTabProps) {
   const queryClient = useQueryClient();
 
-  // Lista flat de lançamentos pagáveis, com valores LÍQUIDOS após impostos
-  // e descontos.
-  // Regras:
-  // - só proventos (`isEarning`)
-  // - benefícios entram só se is_payable=true (categoria 'adicional');
-  //   demais benefícios são vouchers/serviços, pagos por outro fluxo
-  // - FGTS fora: é encargo do empregador, não desconta do colaborador
-  // - **Pagamento Mensal**: 1 linha só com salário base, gratificações, hora
-  //   extra, periculosidade e salário-família (MONTHLY_MERGED_TYPES).
-  //   INSS/IRPF regulares + descontos manuais incidem sobre essa base (já
-  //   contabilizados no mesmo período mas SEM o prefixo ferias-).
-  // - **Pagamento de Férias** (entries com external_id LIKE 'ferias-%'):
-  //   linha SEPARADA. Mescla ferias + 1/3 + grat s/Férias + bon s/Férias,
-  //   menos INSS s/Férias e IRRF s/Férias (também com prefixo ferias-).
-  //   É um cheque distinto (CLT art. 145: D-2 do gozo).
-  // - Outros proventos mensais (bonificação/custo de setor, carro agregado,
-  //   benefício pagável) continuam como linhas separadas.
-  // - estornos: par positivo+negativo do mesmo (collab,tipo) somam ≤ 0 → some
-  const { payableEntries, taxBreakdownByEntry } = useMemo(() => {
-    const earningOnly = entries.filter(
-      (e) =>
-        isEarning(e.type) &&
-        (e.type !== "beneficio" || e.is_payable === true),
-    );
+  // Gate do PIX: papel restrito E módulo. É o padrão registrado em
+  // PeriodDetailPage.tsx:131-134 — o toggle "Acesso total" da tela de
+  // Permissões liga todos os módulos de uma vez, então módulo sozinho
+  // transformaria qualquer acesso total em pagador. O terceiro fator
+  // (dispositivo 2FA ativo) é validado no servidor, onde não dá pra burlar.
+  const { hasAnyRole, currentCompany } = useDashboard();
+  const execPermission = usePermissions("folha_pagamento_exec");
+  const podePagar =
+    hasAnyRole(["admin_gc", "diretoria"]) &&
+    (execPermission.canCreate || execPermission.isAdmin);
+  // A folha congela em 'aprovado_diretoria': antes disso o valor ainda muda, e
+  // pagar um número que pode mudar é assinar cheque em branco.
+  const folhaLiberada =
+    periodStatus === "aprovado_diretoria" ||
+    periodStatus === "closed" ||
+    periodStatus === "exported";
 
-    // Detecta pares estornados (positivo + negativo cancelam)
-    const groupSum = new Map<string, number>();
-    for (const e of earningOnly) {
-      const key = `${e.collaborator_id}::${e.type}`;
-      groupSum.set(key, (groupSum.get(key) ?? 0) + Number(e.value));
+  const { data: pixTransfers = [] } = usePixTransfers(periodId);
+  const { checkNow, cancel } = usePixPayment(periodId);
+  const voucher = useVoucher();
+  // Set (não slot único): duas linhas podem gerar comprovante ao mesmo tempo sem
+  // uma apagar o spinner da outra.
+  const [gerandoComprovante, setGerandoComprovante] = useState<Set<string>>(new Set());
+
+  const handleVoucher = async (transferId: string) => {
+    // Abre a aba AGORA, dentro do clique — o gesto do usuário ainda está ativo.
+    // Se esperássemos o await (o banco leva alguns segundos), o Chrome barraria
+    // como pop-up. A aba fica com um aviso e navega pro PDF quando ele sai.
+    const win = window.open("about:blank", "_blank");
+    if (win) {
+      win.opener = null;
+      win.document.write(
+        "<!doctype html><meta charset='utf-8'><title>Comprovante</title>" +
+          "<body style='font-family:system-ui,sans-serif;padding:2rem;color:#444'>" +
+          "Gerando o comprovante… isso pode levar alguns segundos.</body>",
+      );
     }
-
-    const survivors = earningOnly.filter((e) => {
-      const sum = groupSum.get(`${e.collaborator_id}::${e.type}`) ?? 0;
-      if (sum <= 0) return false;
-      return Number(e.value) > 0;
-    });
-
-    // Helper: entry vem do fluxo de férias? (external_id 'ferias-<reqId>-<kind>')
-    const isVacEntry = (e: PayrollEntryWithCollaborator) =>
-      (e.external_id ?? "").startsWith("ferias-");
-
-    // INSS/IRPF agregados por colab, SEPARANDO regular (mensal) de férias
-    type CollabTaxes = { inss: number; irpf: number };
-    const monthlyTaxes = new Map<string, CollabTaxes>();
-    const vacationTaxes = new Map<string, CollabTaxes>();
-    for (const e of entries) {
-      if (e.type !== "inss" && e.type !== "irpf") continue;
-      const cid = e.collaborator_id;
-      const target = isVacEntry(e) ? vacationTaxes : monthlyTaxes;
-      const cur = target.get(cid) ?? { inss: 0, irpf: 0 };
-      if (e.type === "inss") cur.inss += Number(e.value);
-      else cur.irpf += Number(e.value);
-      target.set(cid, cur);
-    }
-
-    // Débitos manuais que reduzem o líquido: desconto (plano de saúde, VT),
-    // adiantamento, falta e empréstimo. INSS/IRPF entram à parte; FGTS é encargo
-    // do empregador (fora). Só aplicam ao pagamento mensal.
-    type Discount = { label: string; value: number };
-    const discountsByCollab = new Map<string, Discount[]>();
-    const MANUAL_DEBIT_SET = new Set<string>(MANUAL_DEBIT_TYPES);
-    for (const e of entries) {
-      if (!MANUAL_DEBIT_SET.has(e.type)) continue;
-      if (isVacEntry(e)) continue; // defensivo: férias não tem débito manual
-      const v = Number(e.value);
-      if (!(v > 0)) continue;
-      const arr = discountsByCollab.get(e.collaborator_id) ?? [];
-      arr.push({
-        label: e.description ?? ENTRY_TYPE_LABELS[e.type] ?? "Desconto",
-        value: v,
+    setGerandoComprovante((s) => new Set(s).add(transferId));
+    try {
+      const { location } = await voucher.mutateAsync(transferId);
+      if (win) win.location.href = location;
+      else window.open(location, "_blank"); // aba barrada na abertura: tenta agora
+    } catch (err) {
+      if (win) win.close();
+      toast.error((err as Error).message ?? "Não deu pra gerar o comprovante.");
+    } finally {
+      setGerandoComprovante((s) => {
+        const n = new Set(s);
+        n.delete(transferId);
+        return n;
       });
-      discountsByCollab.set(e.collaborator_id, arr);
     }
+  };
 
-    type Component = { label: string; value: number };
-    type EntryBreakdown = {
+  const handleCheckNow = async (entryId: string) => {
+    try {
+      await checkNow.mutateAsync(entryId);
+      toast.info("Conferido com o banco. Se ainda estiver validando, o estado atualiza sozinho.");
+    } catch (err) {
+      toast.error((err as Error).message ?? "Não deu pra conferir agora.");
+    }
+  };
+
+  const handleCancel = async (entryId: string) => {
+    try {
+      await cancel.mutateAsync(entryId);
+      toast.success("Transferência cancelada. O lançamento voltou a ficar disponível pra pagar.");
+    } catch (err) {
+      toast.error((err as Error).message ?? "Não deu pra cancelar.");
+    }
+  };
+
+  const transferByEntry = useMemo(() => {
+    const m = new Map<string, PixTransfer>();
+    // A query já vem por created_at DESC: a primeira de cada lançamento é a
+    // tentativa mais recente, que é a que a linha deve refletir.
+    for (const t of pixTransfers) if (!m.has(t.entry_id)) m.set(t.entry_id, t);
+    return m;
+  }, [pixTransfers]);
+
+  const [pagando, setPagando] = useState<string | null>(null);
+
+  // A fórmula do líquido vive em ../lib/buildPaymentLines.ts — extraída daqui
+  // porque o servidor precisa da MESMA conta pra mandar o valor ao banco, e
+  // porque as regras (estorno, partição de férias, mescla, clamp) só existiam
+  // como comentário, sem teste. Aqui sobrou só a adaptação para as formas que
+  // este componente já renderiza.
+  const { payableEntries, taxBreakdownByEntry } = useMemo(() => {
+    const lines = buildPaymentLines(entries);
+    const sourceById = new Map(entries.map((e) => [e.id, e]));
+
+    interface EntryBreakdown {
       inss: number;
       irpf: number;
-      discounts: Discount[];
-      components: Component[];
+      discounts: PaymentLineDiscount[];
+      components: PaymentLineComponent[];
       /** Tipos que a linha somou — viram as tags na listagem. */
       types: string[];
-    };
-    const breakdownByEntry = new Map<string, EntryBreakdown>();
+    }
+
     const adjustedEntries: PayrollEntryWithCollaborator[] = [];
+    const breakdownByEntry = new Map<string, EntryBreakdown>();
 
-    // Agrupa survivors por colaborador
-    const byCollab = new Map<string, PayrollEntryWithCollaborator[]>();
-    for (const e of survivors) {
-      const arr = byCollab.get(e.collaborator_id) ?? [];
-      arr.push(e);
-      byCollab.set(e.collaborator_id, arr);
+    for (const line of lines) {
+      const source = sourceById.get(line.entryId);
+      if (!source) continue;
+
+      if (line.kind === "avulso") {
+        // Linha própria (bonificação, carro agregado, benefício pagável…):
+        // vai como está, sem imposto nem desconto aplicados.
+        adjustedEntries.push(source);
+      } else {
+        adjustedEntries.push({
+          ...source,
+          ...(line.kind === "ferias" ? { type: "ferias" } : {}),
+          description: line.description,
+          value: line.amount,
+        } as PayrollEntryWithCollaborator);
+      }
+
+      breakdownByEntry.set(line.entryId, {
+        inss: line.inss,
+        irpf: line.irpf,
+        discounts: line.discounts,
+        components: line.components,
+        types: line.types,
+      });
     }
-
-    for (const [collabId, list] of byCollab) {
-      // Particiona: vacation vs monthly
-      const vacEntries = list.filter(isVacEntry);
-      const monthlyList = list.filter((e) => !isVacEntry(e));
-
-      // ╔══════════════════════════════════════════════════════════════╗
-      // ║ MONTHLY: salário + grats merge, outros separados             ║
-      // ╚══════════════════════════════════════════════════════════════╝
-      const taxes = monthlyTaxes.get(collabId) ?? { inss: 0, irpf: 0 };
-      const collabDiscounts = discountsByCollab.get(collabId) ?? [];
-      const totalDiscount = collabDiscounts.reduce((s, d) => s + d.value, 0);
-
-      // Ordena pela ordem de MONTHLY_MERGED_TYPES pra o popup sair sempre na
-      // mesma sequência (salário primeiro, depois os adicionais).
-      const merged = MONTHLY_MERGED_TYPES.flatMap((t) =>
-        monthlyList.filter((e) => e.type === t),
-      );
-      const others = monthlyList.filter((e) => !MONTHLY_MERGED_SET.has(e.type));
-
-      if (merged.length > 0) {
-        // Âncora do pagamento: o salário base quando existe — o id dele é o mais
-        // estável entre recálculos, então a marcação de "pago" sobrevive.
-        const primary =
-          merged.find((e) => e.type === "salario_base") ?? merged[0];
-        const components: Component[] = merged.map((e) => ({
-          // Salário base mantém rótulo fixo; os adicionais mostram a descrição
-          // do lançamento (é onde o RH escreve o motivo).
-          label:
-            e.type === "salario_base"
-              ? "Salário Base"
-              : e.description ?? ENTRY_TYPE_LABELS[e.type] ?? e.type,
-          value: Number(e.value),
-        }));
-        const gross = components.reduce((s, c) => s + c.value, 0);
-        const adjusted = gross - taxes.inss - taxes.irpf - totalDiscount;
-        if (adjusted > 0) {
-          adjustedEntries.push({
-            ...primary,
-            // As tags dizem O QUE somou; aqui vai o detalhe de cada lançamento.
-            description: components.map((c) => c.label).join(" · "),
-            value: adjusted,
-          } as PayrollEntryWithCollaborator);
-          breakdownByEntry.set(primary.id, {
-            inss: taxes.inss,
-            irpf: taxes.irpf,
-            discounts: collabDiscounts,
-            components,
-            types: mergedTypes(merged),
-          });
-        }
-      }
-
-      // Fora da mescla (bonificação/custo de setor, carro agregado, benefício
-      // pagável, atestado, VT, salário retroativo): cada um em sua linha.
-      for (const e of others) {
-        adjustedEntries.push(e as PayrollEntryWithCollaborator);
-        breakdownByEntry.set(e.id, {
-          inss: 0,
-          irpf: 0,
-          discounts: [],
-          components: [{
-            label: e.description ?? ENTRY_TYPE_LABELS[e.type] ?? e.type,
-            value: Number(e.value),
-          }],
-          types: [e.type],
-        });
-      }
-
-      // ╔══════════════════════════════════════════════════════════════╗
-      // ║ VACATION: todos os entries 'ferias-*' juntos em 1 linha     ║
-      // ╚══════════════════════════════════════════════════════════════╝
-      if (vacEntries.length > 0) {
-        // Âncora: prefere a entry type='ferias' (provento principal),
-        // senão pega a primeira disponível.
-        const primary = vacEntries.find((e) => e.type === "ferias") ?? vacEntries[0];
-        const vacTax = vacationTaxes.get(collabId) ?? { inss: 0, irpf: 0 };
-
-        const components: Component[] = vacEntries.map((e) => ({
-          label: e.description ?? ENTRY_TYPE_LABELS[e.type] ?? e.type,
-          value: Number(e.value),
-        }));
-        const gross = components.reduce((s, c) => s + c.value, 0);
-        const adjusted = gross - vacTax.inss - vacTax.irpf;
-
-        if (adjusted > 0) {
-          adjustedEntries.push({
-            ...primary,
-            type: "ferias",
-            description: "Pagamento de Férias",
-            value: adjusted,
-          } as PayrollEntryWithCollaborator);
-          breakdownByEntry.set(primary.id, {
-            inss: vacTax.inss,
-            irpf: vacTax.irpf,
-            discounts: [],
-            components,
-            // Férias já se apresenta como um pagamento próprio: 1 tag só, o
-            // detalhe (1/3, grat s/férias) fica no popup.
-            types: ["ferias"],
-          });
-        }
-      }
-    }
-
-    adjustedEntries.sort((a, b) => {
-      const an = a.collaborator?.name ?? "";
-      const bn = b.collaborator?.name ?? "";
-      const cmp = an.localeCompare(bn, "pt-BR");
-      if (cmp !== 0) return cmp;
-      const ad = a.description ?? ENTRY_TYPE_LABELS[a.type] ?? a.type;
-      const bd = b.description ?? ENTRY_TYPE_LABELS[b.type] ?? b.type;
-      return ad.localeCompare(bd, "pt-BR");
-    });
 
     return { payableEntries: adjustedEntries, taxBreakdownByEntry: breakdownByEntry };
   }, [entries]);
@@ -327,28 +239,18 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
       amount: number;
       newPaid: boolean;
     }) => {
-      const existing = paymentByEntry.get(entryId);
-      const { data: userData } = await supabase.auth.getUser();
-      if (existing) {
-        const { error } = await supabase
-          .from("payroll_payments")
-          .update({
-            paid_at: newPaid ? new Date().toISOString() : null,
-            paid_by: newPaid ? userData?.user?.id ?? null : null,
-            amount,
-          })
-          .eq("id", existing.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("payroll_payments").insert({
-          period_id: periodId,
-          entry_id: entryId,
-          amount,
-          paid_at: newPaid ? new Date().toISOString() : null,
-          paid_by: newPaid ? userData?.user?.id ?? null : null,
-        });
-        if (error) throw error;
-      }
+      // Escrita direta em payroll_payments foi revogada na migration
+      // 20260818120400: enquanto o navegador pudesse gravar ali, o 2FA do
+      // pagamento seria contornável com três linhas no console. Agora a
+      // marcação passa por uma função no servidor, que carimba quem marcou e
+      // quando — antes esses dois campos vinham do relógio e da palavra do
+      // cliente.
+      const { error } = await supabase.rpc("payroll_payment_set_manual_paid", {
+        p_entry_id: entryId,
+        p_paid: newPaid,
+        p_amount: amount,
+      });
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payroll-payments", periodId] });
@@ -361,16 +263,22 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
   // Busca por nome do colaborador. Normaliza acento pra "joao" achar "João".
   // ̀-ͯ = bloco de combining diacritics (gerados pelo NFD).
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"todos" | "pendentes" | "pagos">("todos");
   const normalized = (s: string) =>
     s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
   const filteredEntries = useMemo(() => {
     const q = normalized(searchTerm.trim());
-    if (!q) return payableEntries;
-    return payableEntries.filter((e) =>
-      normalized(e.collaborator?.name ?? "").includes(q),
-    );
-  }, [payableEntries, searchTerm]);
+    return payableEntries.filter((e) => {
+      if (q && !normalized(e.collaborator?.name ?? "").includes(q)) return false;
+      if (statusFilter !== "todos") {
+        const pago = !!paymentByEntry.get(e.id)?.paid_at;
+        if (statusFilter === "pagos" && !pago) return false;
+        if (statusFilter === "pendentes" && pago) return false;
+      }
+      return true;
+    });
+  }, [payableEntries, searchTerm, statusFilter, paymentByEntry]);
 
   const total = payableEntries.length;
   const paidCount = payableEntries.filter((e) =>
@@ -383,6 +291,70 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
   }, 0);
   const progressPct = total === 0 ? 0 : Math.round((paidCount / total) * 100);
   const isFiltering = searchTerm.trim().length > 0;
+
+  // ── Seleção pra pagamento em lote ──────────────────────────────────────────
+  // Elegível = dá pra pagar por PIX AGORA: folha liberada, quem pode pagar, sem
+  // pagamento e sem transferência em voo, e com chave PIX. O gate de verdade é no
+  // servidor — isto só evita marcar o que não vai sair.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [batchOpen, setBatchOpen] = useState(false);
+
+  const selectableIds = useMemo(() => {
+    const s = new Set<string>();
+    if (!podePagar || !folhaLiberada) return s;
+    for (const e of filteredEntries) {
+      const isPaid = !!paymentByEntry.get(e.id)?.paid_at;
+      const tx = transferByEntry.get(e.id);
+      const emVoo =
+        !!tx && ["created", "sent", "confirmed", "unknown"].includes(tx.status);
+      if (!isPaid && !emVoo && (e.collaborator?.pix_key ?? null)) s.add(e.id);
+    }
+    return s;
+  }, [filteredEntries, paymentByEntry, transferByEntry, podePagar, folhaLiberada]);
+
+  const toggleSelect = (id: string, on: boolean) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+
+  // Linhas do lote — só as marcadas E ainda elegíveis (uma que virou paga/em voo
+  // some sozinha). Carrega o demonstrativo pro extrato do diálogo.
+  const selectedLines = useMemo<BatchSelectedLine[]>(() => {
+    const out: BatchSelectedLine[] = [];
+    for (const e of payableEntries) {
+      if (!selected.has(e.id) || !selectableIds.has(e.id)) continue;
+      const bd = taxBreakdownByEntry.get(e.id);
+      out.push({
+        entryId: e.id,
+        name: e.collaborator?.name ?? "(sem nome)",
+        pixKey: e.collaborator?.pix_key ?? null,
+        amount: Number(e.value),
+        gross: (bd?.components ?? []).reduce((s, c) => s + c.value, 0),
+        inss: bd?.inss ?? 0,
+        irpf: bd?.irpf ?? 0,
+        components: bd?.components ?? [],
+        discounts: bd?.discounts ?? [],
+      });
+    }
+    return out;
+  }, [payableEntries, selected, selectableIds, taxBreakdownByEntry]);
+
+  const selectedTotal = selectedLines.reduce((s, l) => s + l.amount, 0);
+
+  const allVisibleSelected =
+    selectableIds.size > 0 && [...selectableIds].every((id) => selected.has(id));
+  const toggleSelectAll = () =>
+    setSelected((prev) => {
+      if (allVisibleSelected) {
+        const next = new Set(prev);
+        for (const id of selectableIds) next.delete(id);
+        return next;
+      }
+      return new Set([...prev, ...selectableIds]);
+    });
 
   if (isLoading) {
     return (
@@ -404,92 +376,137 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
 
   return (
     <div className="space-y-4">
-      {/* KPIs desta aba — totais LÍQUIDOS a pagar (sem FGTS, benefícios, estornos) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatBlock label="Pagos" value={`${paidCount}/${total}`} />
-        <StatBlock label="Total a pagar" value={formatCurrency(totalAmount)} accent="emerald" />
-        <StatBlock label="Pago" value={formatCurrency(paidAmount)} accent="emerald" />
-        <StatBlock
-          label="Pendente"
-          value={formatCurrency(totalAmount - paidAmount)}
-          accent={totalAmount - paidAmount > 0 ? "rose" : "emerald"}
-        />
-      </div>
+      {/* Saldo + extrato da conta pagadora. Só pra quem pode pagar (o gate real é
+          no servidor). Dado sensível, então o card nasce com o saldo oculto. */}
+      {podePagar && <AccountBalanceCard companyId={currentCompany?.id} />}
 
-      {/* Progresso */}
-      <div className="space-y-2 px-1">
-        <div className="flex items-center justify-between text-sm">
-          <div className="flex items-center gap-2">
-            <span className="font-medium">
-              {paidCount}/{total} pagos
-            </span>
-            <span className="text-muted-foreground">
-              · {formatCurrency(paidAmount)} de {formatCurrency(totalAmount)}
-            </span>
+      {/* Resumo — totais líquidos + progresso num bloco só. Antes eram 4 KPIs e
+          uma barra de progresso repetindo a mesma contagem. */}
+      <div className="rounded-lg border border-border bg-card p-4 shadow-soft">
+        <div className="grid grid-cols-3 gap-4">
+          <div className="min-w-0">
+            <p className="label-eyebrow">Total a pagar</p>
+            <p className="mono mt-1 text-lg font-semibold leading-tight tracking-[-0.02em] text-foreground truncate">
+              {formatCurrency(totalAmount)}
+            </p>
           </div>
-          <span className="text-muted-foreground tabular-nums">
-            {progressPct}%
+          <div className="min-w-0">
+            <p className="label-eyebrow">Pago</p>
+            <p className="mono mt-1 text-lg font-semibold leading-tight tracking-[-0.02em] text-success truncate">
+              {formatCurrency(paidAmount)}
+            </p>
+          </div>
+          <div className="min-w-0">
+            <p className="label-eyebrow">Pendente</p>
+            <p
+              className={cn(
+                "mono mt-1 text-lg font-semibold leading-tight tracking-[-0.02em] truncate",
+                totalAmount - paidAmount > 0 ? "text-warning" : "text-success",
+              )}
+            >
+              {formatCurrency(totalAmount - paidAmount)}
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 flex items-center gap-3">
+          <Progress value={progressPct} className="h-1.5 flex-1" />
+          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+            {paidCount} de {total} pagos · {progressPct}%
           </span>
         </div>
-        <Progress value={progressPct} className="h-2" />
       </div>
 
-      {/* Busca por colaborador */}
-      <div className="relative">
-        <MagnifyingGlass className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-        <Input
-          type="text"
-          placeholder="Buscar colaborador..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-8 pr-8 h-9"
+      {/* Toolbar — busca + filtro de status, um padrão só (segmented control) */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[220px]">
+          <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <Input
+            type="text"
+            placeholder="Buscar colaborador..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-9 pr-9 h-10"
+          />
+          {isFiltering && (
+            <button
+              type="button"
+              onClick={() => setSearchTerm("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded"
+              aria-label="Limpar busca"
+              title="Limpar busca"
+            >
+              <XIcon className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+        <Segmented
+          ariaLabel="Filtrar por status de pagamento"
+          value={statusFilter}
+          onChange={(v) => setStatusFilter(v as typeof statusFilter)}
+          options={[
+            { value: "todos", label: "Todos", count: total },
+            { value: "pendentes", label: "Pendentes", count: total - paidCount },
+            { value: "pagos", label: "Pagos", count: paidCount },
+          ]}
         />
-        {isFiltering && (
-          <button
-            type="button"
-            onClick={() => setSearchTerm("")}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition focus:outline-none focus:ring-2 focus:ring-primary/40 rounded"
-            aria-label="Limpar busca"
-            title="Limpar busca"
+        {podePagar && folhaLiberada && selectableIds.size > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-10 text-xs"
+            onClick={toggleSelectAll}
           >
-            <XIcon className="w-4 h-4" />
-          </button>
+            {allVisibleSelected
+              ? "Limpar seleção"
+              : `Selecionar pagáveis (${selectableIds.size})`}
+          </Button>
         )}
       </div>
-      {isFiltering && (
-        <p className="text-xs text-muted-foreground px-1 -mt-2">
-          {filteredEntries.length === 0
-            ? "Nenhum colaborador com esse nome."
-            : `Mostrando ${filteredEntries.length} de ${total} lançamento(s).`}
-        </p>
-      )}
 
-      {/* Lista flat de lançamentos */}
-      {filteredEntries.length > 0 && (
-      <div className="border rounded-md divide-y divide-border">
+      {/* Lista de colaboradores */}
+      {filteredEntries.length > 0 ? (
+      <div className="rounded-lg border border-border divide-y divide-border overflow-hidden">
         {filteredEntries.map((entry) => {
           const rec = paymentByEntry.get(entry.id);
           const isPaid = !!rec?.paid_at;
           const value = Number(entry.value);
           const pixKey = entry.collaborator?.pix_key ?? null;
+          const tx = transferByEntry.get(entry.id);
+          const emVoo =
+            !!tx && ["created", "sent", "confirmed", "unknown"].includes(tx.status);
           return (
             <div
               key={entry.id}
               className={`flex items-center gap-3 px-3 py-2.5 transition-colors ${
-                isPaid ? "bg-emerald-50 dark:bg-emerald-950/20" : "hover:bg-muted/30"
+                isPaid ? "bg-success/5 dark:bg-success/15" : "hover:bg-muted/30"
               }`}
             >
-              <Checkbox
-                checked={isPaid}
-                disabled={!canManage || togglePayment.isPending}
-                onCheckedChange={(checked) =>
-                  togglePayment.mutate({
-                    entryId: entry.id,
-                    amount: value,
-                    newPaid: !!checked,
-                  })
-                }
-              />
+              {/* Checkbox = SELEÇÃO pra pagamento em lote. Marcar pago na mão
+                  virou o botão "Validar" à direita. Pago mostra um check; o que
+                  não dá pra pagar agora (sem chave, em voo) fica travado. */}
+              <div className="w-4 flex items-center justify-center shrink-0">
+                {isPaid ? (
+                  <span title="Pago">
+                    <CheckCircle className="w-4 h-4 text-success" weight="fill" />
+                  </span>
+                ) : (
+                  <Checkbox
+                    checked={selected.has(entry.id)}
+                    disabled={!selectableIds.has(entry.id)}
+                    onCheckedChange={(checked) => toggleSelect(entry.id, !!checked)}
+                    aria-label={`Selecionar ${entry.collaborator?.name ?? "colaborador"} pra pagamento`}
+                    title={
+                      selectableIds.has(entry.id)
+                        ? "Selecionar pra pagamento"
+                        : !pixKey
+                          ? "Sem chave PIX cadastrada"
+                          : emVoo
+                            ? "Já está em processamento"
+                            : "Indisponível pra pagar agora"
+                    }
+                  />
+                )}
+              </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <p
@@ -574,7 +591,7 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
                       <HoverCardTrigger asChild>
                         <button
                           type="button"
-                          className="inline-flex items-center justify-center w-4 h-4 rounded-full text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900/30 transition focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                          className="inline-flex items-center justify-center w-4 h-4 rounded-full text-warning hover:bg-warning/15 dark:hover:bg-warning/15 transition focus:outline-none focus:ring-2 focus:ring-warning/30"
                           aria-label="Ver detalhes do líquido"
                           onClick={(ev) => ev.stopPropagation()}
                         >
@@ -606,7 +623,7 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
                             </div>
                           )}
                           {tax.inss > 0 && (
-                            <div className="flex items-center justify-between gap-2 text-rose-700 dark:text-rose-300">
+                            <div className="flex items-center justify-between gap-2 text-destructive dark:text-destructive">
                               <span>− INSS</span>
                               <span className="font-mono">
                                 {formatCurrency(tax.inss)}
@@ -614,7 +631,7 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
                             </div>
                           )}
                           {tax.irpf > 0 && (
-                            <div className="flex items-center justify-between gap-2 text-rose-700 dark:text-rose-300">
+                            <div className="flex items-center justify-between gap-2 text-destructive dark:text-destructive">
                               <span>− IRPF</span>
                               <span className="font-mono">
                                 {formatCurrency(tax.irpf)}
@@ -624,7 +641,7 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
                           {tax.discounts.map((d, i) => (
                             <div
                               key={i}
-                              className="flex items-center justify-between gap-2 text-rose-700 dark:text-rose-300"
+                              className="flex items-center justify-between gap-2 text-destructive dark:text-destructive"
                             >
                               <span className="truncate" title={d.label}>
                                 − {d.label}
@@ -636,7 +653,7 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
                           ))}
                           <div className="border-t border-border pt-1.5 flex items-center justify-between gap-2 font-medium">
                             <span>Líquido</span>
-                            <span className="font-mono text-orange-700 dark:text-orange-300">
+                            <span className="font-mono text-primary dark:text-primary">
                               {formatCurrency(value)}
                             </span>
                           </div>
@@ -652,17 +669,229 @@ export function PaymentsTab({ periodId, entries, canManage }: PaymentsTabProps) 
                 <p
                   className={`font-mono text-sm font-semibold ${
                     isPaid
-                      ? "text-emerald-700 dark:text-emerald-400"
+                      ? "text-success dark:text-success"
                       : "text-foreground"
                   }`}
                 >
                   {formatCurrency(value)}
                 </p>
+
+                {/* Estado do PIX, quando existe tentativa pra esta linha. Badge
+                    em tom suave do DS, não a borda translúcida de antes. */}
+                {tx && tx.status !== "settled" && (
+                  tx.status === "failed" ? (
+                    <Badge
+                      className="border-transparent bg-destructive/12 text-destructive"
+                      title={tx.error_message ?? undefined}
+                    >
+                      Recusado
+                    </Badge>
+                  ) : tx.status === "unknown" ? (
+                    <Badge variant="warning" title={tx.error_message ?? undefined}>
+                      Em conferência
+                    </Badge>
+                  ) : (
+                    <Badge variant="info">Enviando…</Badge>
+                  )
+                )}
+
+                {/* Comprovante do PIX liquidado (PDF do banco). Só aparece pra
+                    quem paga e só em transferência settled — pagamento manual
+                    (checkbox) não tem comprovante do Santander. */}
+                {podePagar && tx?.status === "settled" && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-foreground"
+                    disabled={gerandoComprovante.has(tx.id)}
+                    onClick={() => void handleVoucher(tx.id)}
+                    title="Gerar o comprovante do PIX (PDF)"
+                  >
+                    {gerandoComprovante.has(tx.id) ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Receipt className="w-4 h-4" />
+                    )}
+                    Comprovante
+                  </Button>
+                )}
+
+                {/* Transferência travada em voo: dá ao operador como conferir
+                    agora (sem esperar o cron) e como cancelar pra destravar o
+                    lançamento. No sandbox o banco-fake nunca finaliza, então é
+                    por aqui que o teste sai do "Enviando…". */}
+                {podePagar && emVoo && (
+                  <div className="flex items-center gap-1.5">
+                    {tx && tx.status !== "created" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 gap-1.5 px-2.5 text-xs"
+                        disabled={checkNow.isPending || cancel.isPending}
+                        onClick={() => void handleCheckNow(entry.id)}
+                        title="Perguntar ao banco o estado agora"
+                      >
+                        {checkNow.isPending ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <MagnifyingGlass className="w-4 h-4" />
+                        )}
+                        Conferir
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                      disabled={checkNow.isPending || cancel.isPending}
+                      onClick={() => void handleCancel(entry.id)}
+                      title="Cancelar e liberar o lançamento"
+                    >
+                      {cancel.isPending ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <XIcon className="w-4 h-4" />
+                      )}
+                      Cancelar
+                    </Button>
+                  </div>
+                )}
+
+                {/* Validar = marcar pago NA MÃO (fora do PIX) — o que o checkbox
+                    fazia antes. Some quando saiu por PIX (liquidado não se
+                    desmarca) e quando há transferência em voo. */}
+                {canManage && !emVoo && !(rec?.method === "pix_santander" && isPaid) && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className={cn(
+                      "h-8 gap-1.5 px-2.5 text-xs",
+                      isPaid
+                        ? "border-success/40 text-success hover:bg-success/10 hover:text-success dark:text-success"
+                        : "text-muted-foreground",
+                    )}
+                    disabled={togglePayment.isPending}
+                    title={
+                      isPaid
+                        ? "Pago na mão — clique pra desmarcar"
+                        : "Marcar como pago na mão (fora do PIX)"
+                    }
+                    onClick={() =>
+                      togglePayment.mutate({
+                        entryId: entry.id,
+                        amount: value,
+                        newPaid: !isPaid,
+                      })
+                    }
+                  >
+                    <CheckCircle
+                      className="w-3.5 h-3.5"
+                      weight={isPaid ? "fill" : "regular"}
+                    />
+                    {isPaid ? "Pago" : "Validar"}
+                  </Button>
+                )}
+
+                {/* Botão Pagar — a ação primária da linha (laranja aponta pra
+                    ela). Some quando já pago ou já em voo. */}
+                {podePagar && folhaLiberada && !isPaid && !emVoo && (
+                  <Button
+                    size="sm"
+                    variant={tx?.status === "failed" ? "outline" : "default"}
+                    className="h-8 px-3.5 text-xs"
+                    disabled={!pixKey}
+                    title={pixKey ? undefined : "Colaborador sem chave PIX cadastrada"}
+                    onClick={() => setPagando(entry.id)}
+                  >
+                    {tx?.status === "failed" ? "Tentar de novo" : "Pagar"}
+                  </Button>
+                )}
               </div>
             </div>
           );
         })}
       </div>
+      ) : (
+        <div className="rounded-lg border border-dashed border-border py-12 text-center">
+          <p className="text-sm text-muted-foreground">
+            {searchTerm.trim()
+              ? "Nenhum colaborador com esse nome."
+              : statusFilter === "pagos"
+                ? "Nenhum pagamento concluído ainda."
+                : statusFilter === "pendentes"
+                  ? "Tudo pago por aqui ✓"
+                  : "Sem lançamentos pagáveis."}
+          </p>
+        </div>
+      )}
+
+      {/* Diálogo de pagamento — montado fora da lista pra não remontar a cada
+          re-render das linhas. */}
+      {pagando && (() => {
+        const entry = filteredEntries.find((e) => e.id === pagando);
+        if (!entry) return null;
+        const bd = taxBreakdownByEntry.get(entry.id);
+        return (
+          <PixPaymentDialog
+            open
+            onOpenChange={(o) => !o && setPagando(null)}
+            periodId={periodId}
+            entryId={entry.id}
+            collaboratorName={entry.collaborator?.name ?? ""}
+            pixKey={entry.collaborator?.pix_key ?? null}
+            amount={Number(entry.value)}
+            gross={(bd?.components ?? []).reduce((s, c) => s + c.value, 0)}
+            inss={bd?.inss ?? 0}
+            irpf={bd?.irpf ?? 0}
+            components={bd?.components ?? []}
+            discounts={bd?.discounts ?? []}
+          />
+        );
+      })()}
+
+      {/* Barra flutuante do lote — aparece quando há seleção. Mostra quantos,
+          quanto, e o "Pagar" que abre o extrato do lote. */}
+      {selectedLines.length > 0 && (
+        <div className="fixed inset-x-0 bottom-5 z-40 flex justify-center px-4 pointer-events-none">
+          <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-border bg-card px-4 py-2.5 shadow-lg">
+            <span className="flex items-center gap-1.5 text-sm text-foreground">
+              <Users className="w-4 h-4 text-primary" weight="duotone" />
+              <span className="font-semibold tabular-nums">{selectedLines.length}</span>
+              <span className="text-muted-foreground">
+                selecionado{selectedLines.length === 1 ? "" : "s"}
+              </span>
+            </span>
+            <span className="h-5 w-px bg-border" />
+            <span className="mono text-sm font-semibold tabular-nums text-foreground">
+              {formatCurrency(selectedTotal)}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs"
+              onClick={() => setSelected(new Set())}
+            >
+              Limpar
+            </Button>
+            <Button
+              size="sm"
+              className="h-8 px-4 text-xs"
+              onClick={() => setBatchOpen(true)}
+            >
+              Pagar
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {batchOpen && (
+        <BatchPixDialog
+          open={batchOpen}
+          onOpenChange={(o) => !o && setBatchOpen(false)}
+          periodId={periodId}
+          lines={selectedLines}
+          onExecuted={() => setSelected(new Set())}
+        />
       )}
     </div>
   );

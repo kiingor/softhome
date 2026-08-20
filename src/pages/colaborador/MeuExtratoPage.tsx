@@ -256,7 +256,7 @@ const MeuExtratoPage = () => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Total do Mês</p>
-                <p className="text-xl font-bold text-primary">
+                <p className="mono text-xl font-bold text-primary">
                   {formatCurrency(totals.total)}
                 </p>
               </div>
@@ -270,7 +270,7 @@ const MeuExtratoPage = () => {
                 {type === "beneficio" && <Gift className="w-4 h-4 text-teal-600" />}
                 <p className="text-sm text-muted-foreground">{typeLabels[type]}</p>
               </div>
-              <p className="text-lg font-semibold">{formatCurrency(value)}</p>
+              <p className="mono text-lg font-semibold">{formatCurrency(value)}</p>
             </CardContent>
           </Card>
         ))}
@@ -334,7 +334,7 @@ const MeuExtratoPage = () => {
                       <TableCell className="text-muted-foreground">
                         {entry.description || "-"}
                       </TableCell>
-                      <TableCell className="text-right font-medium">
+                      <TableCell className="mono text-right font-medium">
                         {formatCurrency(Number(entry.value))}
                       </TableCell>
                     </TableRow>
@@ -343,7 +343,7 @@ const MeuExtratoPage = () => {
                     <TableCell colSpan={2} className="font-semibold">
                       Total
                     </TableCell>
-                    <TableCell className="text-right font-bold text-lg">
+                    <TableCell className="mono text-right font-bold text-lg">
                       {formatCurrency(totals.total)}
                     </TableCell>
                   </TableRow>
