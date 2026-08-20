@@ -19,7 +19,8 @@ import {
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/formatters";
-import { StatBlock } from "./StatBlock";
+import { cn } from "@/lib/utils";
+import { Segmented } from "./Segmented";
 import {
   ENTRY_TYPE_LABELS,
   ENTRY_TYPE_COLORS,
@@ -259,16 +260,22 @@ export function PaymentsTab({
   // Busca por nome do colaborador. Normaliza acento pra "joao" achar "João".
   // ̀-ͯ = bloco de combining diacritics (gerados pelo NFD).
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"todos" | "pendentes" | "pagos">("todos");
   const normalized = (s: string) =>
     s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
   const filteredEntries = useMemo(() => {
     const q = normalized(searchTerm.trim());
-    if (!q) return payableEntries;
-    return payableEntries.filter((e) =>
-      normalized(e.collaborator?.name ?? "").includes(q),
-    );
-  }, [payableEntries, searchTerm]);
+    return payableEntries.filter((e) => {
+      if (q && !normalized(e.collaborator?.name ?? "").includes(q)) return false;
+      if (statusFilter !== "todos") {
+        const pago = !!paymentByEntry.get(e.id)?.paid_at;
+        if (statusFilter === "pagos" && !pago) return false;
+        if (statusFilter === "pendentes" && pago) return false;
+      }
+      return true;
+    });
+  }, [payableEntries, searchTerm, statusFilter, paymentByEntry]);
 
   const total = payableEntries.length;
   const paidCount = payableEntries.filter((e) =>
@@ -306,69 +313,80 @@ export function PaymentsTab({
           no servidor). Dado sensível, então o card nasce com o saldo oculto. */}
       {podePagar && <AccountBalanceCard companyId={currentCompany?.id} />}
 
-      {/* KPIs desta aba — totais LÍQUIDOS a pagar (sem FGTS, benefícios, estornos) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatBlock label="Pagos" value={`${paidCount}/${total}`} />
-        <StatBlock label="Total a pagar" value={formatCurrency(totalAmount)} tom="positivo" />
-        <StatBlock label="Pago" value={formatCurrency(paidAmount)} tom="positivo" />
-        <StatBlock
-          label="Pendente"
-          value={formatCurrency(totalAmount - paidAmount)}
-          tom={totalAmount - paidAmount > 0 ? "negativo" : "positivo"}
-        />
-      </div>
-
-      {/* Progresso */}
-      <div className="space-y-2 px-1">
-        <div className="flex items-center justify-between text-sm">
-          <div className="flex items-center gap-2">
-            <span className="font-medium">
-              {paidCount}/{total} pagos
-            </span>
-            <span className="text-muted-foreground">
-              · {formatCurrency(paidAmount)} de {formatCurrency(totalAmount)}
-            </span>
+      {/* Resumo — totais líquidos + progresso num bloco só. Antes eram 4 KPIs e
+          uma barra de progresso repetindo a mesma contagem. */}
+      <div className="rounded-lg border border-border bg-card p-4 shadow-soft">
+        <div className="grid grid-cols-3 gap-4">
+          <div className="min-w-0">
+            <p className="label-eyebrow">Total a pagar</p>
+            <p className="mono mt-1 text-lg font-semibold leading-tight tracking-[-0.02em] text-foreground truncate">
+              {formatCurrency(totalAmount)}
+            </p>
           </div>
-          <span className="text-muted-foreground tabular-nums">
-            {progressPct}%
+          <div className="min-w-0">
+            <p className="label-eyebrow">Pago</p>
+            <p className="mono mt-1 text-lg font-semibold leading-tight tracking-[-0.02em] text-success truncate">
+              {formatCurrency(paidAmount)}
+            </p>
+          </div>
+          <div className="min-w-0">
+            <p className="label-eyebrow">Pendente</p>
+            <p
+              className={cn(
+                "mono mt-1 text-lg font-semibold leading-tight tracking-[-0.02em] truncate",
+                totalAmount - paidAmount > 0 ? "text-warning" : "text-success",
+              )}
+            >
+              {formatCurrency(totalAmount - paidAmount)}
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 flex items-center gap-3">
+          <Progress value={progressPct} className="h-1.5 flex-1" />
+          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+            {paidCount} de {total} pagos · {progressPct}%
           </span>
         </div>
-        <Progress value={progressPct} className="h-2" />
       </div>
 
-      {/* Busca por colaborador */}
-      <div className="relative">
-        <MagnifyingGlass className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-        <Input
-          type="text"
-          placeholder="Buscar colaborador..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-8 pr-8 h-9"
+      {/* Toolbar — busca + filtro de status, um padrão só (segmented control) */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[220px]">
+          <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <Input
+            type="text"
+            placeholder="Buscar colaborador..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-9 pr-9 h-10"
+          />
+          {isFiltering && (
+            <button
+              type="button"
+              onClick={() => setSearchTerm("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded"
+              aria-label="Limpar busca"
+              title="Limpar busca"
+            >
+              <XIcon className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+        <Segmented
+          ariaLabel="Filtrar por status de pagamento"
+          value={statusFilter}
+          onChange={(v) => setStatusFilter(v as typeof statusFilter)}
+          options={[
+            { value: "todos", label: "Todos", count: total },
+            { value: "pendentes", label: "Pendentes", count: total - paidCount },
+            { value: "pagos", label: "Pagos", count: paidCount },
+          ]}
         />
-        {isFiltering && (
-          <button
-            type="button"
-            onClick={() => setSearchTerm("")}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition focus:outline-none focus:ring-2 focus:ring-primary/40 rounded"
-            aria-label="Limpar busca"
-            title="Limpar busca"
-          >
-            <XIcon className="w-4 h-4" />
-          </button>
-        )}
       </div>
-      {isFiltering && (
-        <p className="text-xs text-muted-foreground px-1 -mt-2">
-          {filteredEntries.length === 0
-            ? "Nenhum colaborador com esse nome."
-            : `Mostrando ${filteredEntries.length} de ${total} lançamento(s).`}
-        </p>
-      )}
 
-      {/* Lista flat de lançamentos */}
-      {filteredEntries.length > 0 && (
-      <div className="border rounded-md divide-y divide-border">
+      {/* Lista de colaboradores */}
+      {filteredEntries.length > 0 ? (
+      <div className="rounded-lg border border-border divide-y divide-border overflow-hidden">
         {filteredEntries.map((entry) => {
           const rec = paymentByEntry.get(entry.id);
           const isPaid = !!rec?.paid_at;
@@ -577,25 +595,23 @@ export function PaymentsTab({
                   {formatCurrency(value)}
                 </p>
 
-                {/* Estado do PIX, quando existe tentativa pra esta linha. */}
+                {/* Estado do PIX, quando existe tentativa pra esta linha. Badge
+                    em tom suave do DS, não a borda translúcida de antes. */}
                 {tx && tx.status !== "settled" && (
-                  <Badge
-                    variant="outline"
-                    className={
-                      tx.status === "failed"
-                        ? "border-destructive/40 text-destructive"
-                        : tx.status === "unknown"
-                          ? "border-warning/40 text-warning"
-                          : "border-info/40 text-info"
-                    }
-                    title={tx.error_message ?? undefined}
-                  >
-                    {tx.status === "failed"
-                      ? "Recusado"
-                      : tx.status === "unknown"
-                        ? "Em conferência"
-                        : "Enviando…"}
-                  </Badge>
+                  tx.status === "failed" ? (
+                    <Badge
+                      className="border-transparent bg-destructive/12 text-destructive"
+                      title={tx.error_message ?? undefined}
+                    >
+                      Recusado
+                    </Badge>
+                  ) : tx.status === "unknown" ? (
+                    <Badge variant="warning" title={tx.error_message ?? undefined}>
+                      Em conferência
+                    </Badge>
+                  ) : (
+                    <Badge variant="info">Enviando…</Badge>
+                  )
                 )}
 
                 {/* Comprovante do PIX liquidado (PDF do banco). Só aparece pra
@@ -605,7 +621,7 @@ export function PaymentsTab({
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="gap-1.5 h-8 text-muted-foreground hover:text-foreground"
+                    className="h-8 gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-foreground"
                     disabled={gerandoComprovante.has(tx.id)}
                     onClick={() => void handleVoucher(tx.id)}
                     title="Gerar o comprovante do PIX (PDF)"
@@ -629,7 +645,7 @@ export function PaymentsTab({
                       <Button
                         size="sm"
                         variant="outline"
-                        className="gap-1.5"
+                        className="h-8 gap-1.5 px-2.5 text-xs"
                         disabled={checkNow.isPending || cancel.isPending}
                         onClick={() => void handleCheckNow(entry.id)}
                         title="Perguntar ao banco o estado agora"
@@ -645,7 +661,7 @@ export function PaymentsTab({
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="gap-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                      className="h-8 gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                       disabled={checkNow.isPending || cancel.isPending}
                       onClick={() => void handleCancel(entry.id)}
                       title="Cancelar e liberar o lançamento"
@@ -660,14 +676,13 @@ export function PaymentsTab({
                   </div>
                 )}
 
-                {/* Botão Pagar. Só aparece pra quem pode pagar, em folha
-                    aprovada, e some quando o pagamento já foi feito ou já tem
-                    tentativa em voo — abrir uma segunda o servidor recusaria de
-                    qualquer forma. */}
+                {/* Botão Pagar — a ação primária da linha (laranja aponta pra
+                    ela). Some quando já pago ou já em voo. */}
                 {podePagar && folhaLiberada && !isPaid && !emVoo && (
                   <Button
                     size="sm"
                     variant={tx?.status === "failed" ? "outline" : "default"}
+                    className="h-8 px-3.5 text-xs"
                     disabled={!pixKey}
                     title={pixKey ? undefined : "Colaborador sem chave PIX cadastrada"}
                     onClick={() => setPagando(entry.id)}
@@ -680,6 +695,18 @@ export function PaymentsTab({
           );
         })}
       </div>
+      ) : (
+        <div className="rounded-lg border border-dashed border-border py-12 text-center">
+          <p className="text-sm text-muted-foreground">
+            {searchTerm.trim()
+              ? "Nenhum colaborador com esse nome."
+              : statusFilter === "pagos"
+                ? "Nenhum pagamento concluído ainda."
+                : statusFilter === "pendentes"
+                  ? "Tudo pago por aqui ✓"
+                  : "Sem lançamentos pagáveis."}
+          </p>
+        </div>
       )}
 
       {/* Diálogo de pagamento — montado fora da lista pra não remontar a cada
