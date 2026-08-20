@@ -43,10 +43,11 @@ interface Body {
   receipts_base_url?: string | null;
   debit_branch?: string;
   debit_account?: string;
-  /** create_workspace: conta de débito do novo workspace de PIX. */
+  /** create_workspace/activate_pix: conta de débito e tipo do workspace. */
   branch?: string;
   number?: string;
   description?: string;
+  type?: string;
 }
 
 serve(async (req) => {
@@ -86,9 +87,8 @@ serve(async (req) => {
   try {
     const raw = await req.json();
     const action = String(raw.action ?? "");
-    if (!["get", "save", "discover", "create_workspace", "delete_workspace"].includes(action)) {
-      throw new Error("action inválida");
-    }
+    const valid = ["get", "save", "discover", "create_workspace", "delete_workspace", "activate_pix"];
+    if (!valid.includes(action)) throw new Error("action inválida");
     body = { action: action as Body["action"], ...raw };
   } catch (e) {
     return json({ error: "BAD_REQUEST", message: (e as Error).message }, 400);
@@ -187,6 +187,67 @@ serve(async (req) => {
         user_id: user.id,
         kind: "pix_workspace_created",
         metadata: { environment: String(body.environment ?? ""), branch, number },
+        ip,
+      });
+      return json({ ok: true, workspace: data }, 200);
+    } catch {
+      return json({ error: "GATEWAY_UNREACHABLE", message: "Não deu pra falar com o gateway agora." }, 200);
+    }
+  }
+
+  // ── activate_pix ───────────────────────────────────────────────────────────
+  // Tenta LIGAR o PIX num workspace existente via PATCH (pixPaymentsActive:true).
+  // Se a conta não estiver habilitada pro produto, o Santander recusa — e o erro
+  // é a prova de que é habilitação de conta, não configuração.
+  if (body.action === "activate_pix") {
+    const clientId = str(body.client_id);
+    const clientSecret = String(body.client_secret ?? "");
+    const baseUrl = str(body.base_url);
+    const wsId = str(body.workspace_id);
+    if (!clientId || !clientSecret || !baseUrl || !wsId) {
+      return json({ error: "BAD_REQUEST", message: "Preenche client_id, client_secret, base URL e o workspace." }, 200);
+    }
+    const gwUrl = gwBaseUrl();
+    const gwSecret = Deno.env.get("SANTANDER_GW_SECRET");
+    if (!gwUrl || !gwSecret) {
+      return json({ error: "NOT_CONFIGURED", message: "Gateway indisponível. Fala com o admin." }, 200);
+    }
+    const header = gwCredentialsHeader({
+      client_id: clientId,
+      client_secret: clientSecret,
+      workspace_id: "",
+      base_url: baseUrl.replace(/\/+$/, ""),
+      receipts_base_url: null,
+      debit_branch: "",
+      debit_account: "",
+    });
+    // Manda o pixPaymentsActive + (quando temos) o type e a conta, pra o PATCH
+    // ter contexto se o banco exigir mais que o flag.
+    const patch: Record<string, unknown> = { pixPaymentsActive: true };
+    if (str(body.type)) patch.type = str(body.type);
+    if (str(body.branch) && str(body.number)) {
+      patch.mainDebitAccount = { branch: str(body.branch), number: str(body.number) };
+    }
+    try {
+      const res = await fetch(`${gwUrl}/workspaces/${encodeURIComponent(wsId)}`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${gwSecret}`, "Content-Type": "application/json", ...header },
+        body: JSON.stringify(patch),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        const msg = res.status === 401 || res.status === 403
+          ? "O Santander recusou (sem permissão pra ligar PIX nessa conta) — provavelmente é habilitação do produto."
+          : res.status === 422
+            ? "O Santander recusou ligar o PIX (422) — provavelmente a conta precisa ser habilitada pro produto Pix."
+            : `Não deu pra ligar o PIX agora (HTTP ${res.status}).`;
+        return json({ error: "ACTIVATE_PIX_FAILED", message: msg }, 200);
+      }
+      await sbAdmin.from("payment_2fa_events").insert({
+        company_id: null,
+        user_id: user.id,
+        kind: "pix_workspace_pix_activated",
+        metadata: { environment: String(body.environment ?? ""), workspace_id: wsId },
         ip,
       });
       return json({ ok: true, workspace: data }, 200);

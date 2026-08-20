@@ -18,6 +18,7 @@ import {
   useDiscoverWorkspaces,
   useCreateWorkspace,
   useDeleteWorkspace,
+  useActivatePix,
   type GatewayConfigView,
   type PixEnv,
   type DiscoveredWorkspace,
@@ -58,6 +59,7 @@ export function PixGatewayConfigForm({
   const discover = useDiscoverWorkspaces();
   const createWs = useCreateWorkspace();
   const deleteWs = useDeleteWorkspace();
+  const activatePix = useActivatePix();
   const [workspaces, setWorkspaces] = useState<DiscoveredWorkspace[] | null>(null);
   // Seleção por índice (o sandbox devolve o mesmo workspaceId pros três; casar
   // por id destacaria todos). Só o PIX-ativo é selecionável.
@@ -160,6 +162,26 @@ export function PixGatewayConfigForm({
       await onBuscar();
     } catch (err) {
       toast.error((err as Error).message ?? "Não deu pra criar o workspace.");
+    }
+  };
+
+  const onAtivarPix = async (w: DiscoveredWorkspace) => {
+    if (!w.workspaceId) return;
+    try {
+      await activatePix.mutateAsync({
+        environment,
+        client_id: form.client_id.trim(),
+        client_secret: form.client_secret,
+        base_url: form.base_url.trim(),
+        workspace_id: w.workspaceId,
+        type: w.type ?? undefined,
+        branch: w.mainDebitAccount?.branch ?? undefined,
+        number: w.mainDebitAccount?.number ?? undefined,
+      });
+      toast.success("PIX ativado nesse workspace. Buscando de novo…");
+      await onBuscar();
+    } catch (err) {
+      toast.error((err as Error).message ?? "Não deu pra ativar o PIX.");
     }
   };
 
@@ -282,6 +304,22 @@ export function PixGatewayConfigForm({
                       )}
                     </div>
                   </button>
+                  {!w.pixPaymentsActive && w.workspaceId && (
+                    <button
+                      type="button"
+                      onClick={() => onAtivarPix(w)}
+                      disabled={activatePix.isPending}
+                      title="Tentar ligar o PIX neste workspace"
+                      className="shrink-0 h-7 px-2 flex items-center gap-1 rounded text-[11px] font-medium text-primary hover:bg-primary/10 disabled:opacity-40"
+                    >
+                      {activatePix.isPending ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <CheckCircle className="w-3.5 h-3.5" />
+                      )}
+                      Ativar PIX
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => onExcluir(w)}

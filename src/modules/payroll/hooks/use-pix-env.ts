@@ -169,6 +169,28 @@ export function useCreateWorkspace() {
   });
 }
 
+/** Tenta LIGAR o PIX num workspace (PATCH pixPaymentsActive). Se a conta não
+ *  estiver habilitada, o Santander recusa — e a mensagem diz isso. */
+export function useActivatePix() {
+  return useMutation({
+    mutationFn: async (vars: {
+      environment: PixEnv;
+      client_id: string;
+      client_secret: string;
+      base_url: string;
+      workspace_id: string;
+      type?: string;
+      branch?: string;
+      number?: string;
+    }) => {
+      const { data, error } = await supabase.functions.invoke("pix-gateway-config", {
+        body: { action: "activate_pix", ...vars },
+      });
+      return unwrap<{ ok: boolean }>(error, data);
+    },
+  });
+}
+
 /** Exclui um workspace (ex.: um criado errado no teste). */
 export function useDeleteWorkspace() {
   return useMutation({

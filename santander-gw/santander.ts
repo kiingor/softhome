@@ -1035,6 +1035,35 @@ export async function createWorkspace(
   return view;
 }
 
+/**
+ * Atualiza um workspace (PATCH). Usado pra tentar LIGAR o PIX
+ * (pixPaymentsActive: true) sem recriar. Se a conta não estiver habilitada pro
+ * produto, o banco recusa — e o erro (422/403) é a resposta honesta de que é
+ * habilitação, não configuração. Não move dinheiro.
+ */
+export async function patchWorkspace(
+  cfg: GwConfig,
+  workspaceId: string,
+  patch: Record<string, unknown>,
+): Promise<WorkspaceView> {
+  const { json } = await call({
+    method: "PATCH",
+    url: `${cfg.baseUrl}${WORKSPACES_PATH}/${encodeURIComponent(workspaceId)}`,
+    headers: await authHeaders(cfg),
+    body: patch,
+    timeoutMs: TIMEOUT_POST_MS,
+    retry: false,
+    label: "PATCH workspace",
+  });
+  const view = workspaceViewOf(json);
+  log("info", "workspaces.patch.ok", {
+    workspace_id: workspaceId,
+    pix_active: view.pixPaymentsActive,
+    environment: cfg.environment,
+  });
+  return view;
+}
+
 /** Exclui um workspace. Reversível só recriando; não move dinheiro. */
 export async function deleteWorkspace(
   cfg: GwConfig,

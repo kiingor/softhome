@@ -50,6 +50,7 @@ import {
   listAccounts,
   listReceipts,
   listWorkspaces,
+  patchWorkspace,
   type PixDocument,
   readConfig,
   SantanderError,
@@ -597,6 +598,31 @@ async function handleDeleteWorkspace(cfg: GwConfig, workspaceId: string, request
   return json(200, { ok: true, provider_status: status }, requestId);
 }
 
+// PATCH de workspace — usado pra tentar LIGAR o PIX (pixPaymentsActive). Aceita
+// só os campos conhecidos; nada de pass-through. Body:
+//   { type?, mainDebitAccount?, pixPaymentsActive?, description? }
+async function handlePatchWorkspace(req: Request, cfg: GwConfig, workspaceId: string, requestId: string): Promise<Response> {
+  const body = await readJsonBody(req);
+  const patch: Record<string, unknown> = {};
+  const type = optionalString(body, "type", 40);
+  if (type) patch.type = type.toUpperCase();
+  const rawMain = body.mainDebitAccount ?? body.main_debit_account;
+  if (rawMain !== undefined && rawMain !== null) {
+    const acc = parseDebitAccount(rawMain);
+    if (acc) patch.mainDebitAccount = acc;
+  }
+  if (body.pixPaymentsActive !== undefined) {
+    patch.pixPaymentsActive = body.pixPaymentsActive === true;
+  }
+  const description = optionalString(body, "description", 120);
+  if (description) patch.description = description;
+  if (Object.keys(patch).length === 0) {
+    throw new BadRequest("nada pra atualizar no workspace");
+  }
+  const view = await patchWorkspace(cfg, workspaceId, patch);
+  return json(200, view, requestId);
+}
+
 async function handleBalance(url: URL, cfg: GwConfig, requestId: string): Promise<Response> {
   const { branch, account } = resolveBranchAccount(url, cfg);
   // balance_id da conta Santander é `agência.conta` (ADR 0006 / doc do banco).
@@ -809,9 +835,12 @@ async function handler(req: Request): Promise<Response> {
       return await handleCreateWorkspace(req, cfg, requestId);
     }
 
-    const wsDelMatch = WORKSPACE_BY_ID.exec(path);
-    if (wsDelMatch && req.method === "DELETE") {
-      return await handleDeleteWorkspace(cfg, safeDecode(wsDelMatch[1]), requestId);
+    const wsByIdMatch = WORKSPACE_BY_ID.exec(path);
+    if (wsByIdMatch && req.method === "DELETE") {
+      return await handleDeleteWorkspace(cfg, safeDecode(wsByIdMatch[1]), requestId);
+    }
+    if (wsByIdMatch && req.method === "PATCH") {
+      return await handlePatchWorkspace(req, cfg, safeDecode(wsByIdMatch[1]), requestId);
     }
 
     if (path === "/account/balance" && req.method === "GET") {
