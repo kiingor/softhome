@@ -55,12 +55,15 @@
 // Deploy: npx supabase functions deploy payroll-pix-pay
 // verify_jwt: padrão (true) — de propósito FORA do config.toml, que só lista
 //             as functions públicas. Pagamento não é público.
-// Secrets: PAYMENT_2FA_PEPPER, SANTANDER_GW_URL, SANTANDER_GW_SECRET,
-//          SANTANDER_ENVIRONMENT (sandbox|production),
+// Secrets: PAYMENT_2FA_PEPPER, SANTANDER_GW_URL (gateway sandbox),
+//          SANTANDER_GW_URL_PROD (gateway produção), SANTANDER_GW_SECRET,
 //          EVOLUTION_API_URL, EVOLUTION_API_KEY
+// O ambiente NÃO vem mais de env var: vem da flag pix_environment_settings
+// (../_shared/pix-env.ts). O gateway é escolhido por ambiente (dois containers).
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.0";
+import { activeEnvironment, gwUrlFor, type PixEnv } from "../_shared/pix-env.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -111,10 +114,29 @@ type Row = any;
 
 interface PayBody {
   entry_id: string;
-  action: "challenge" | "execute" | "check" | "cancel";
+  /** Só nas ações de LOTE (challenge_batch). Lista de lançamentos a pagar de uma vez. */
+  entry_ids?: string[];
+  action:
+    | "challenge"
+    | "execute"
+    | "check"
+    | "cancel"
+    | "challenge_batch"
+    | "execute_batch";
   challenge_id?: string;
   code?: string;
 }
+
+// Teto do LOTE. Cada transferência é um POST + um PATCH síncronos ao banco; a
+// borda (Cloudflare) corta a conexão perto de 100s. Com um teto de 50 e o
+// orçamento de relógio abaixo, o request sempre termina dentro da janela. Pra
+// folha inteira (300), o operador paga em blocos — a UI avisa o teto. Escalar
+// isso é envio assíncrono, não um teto maior (ver ADR 0006).
+const MAX_BATCH_SIZE = 50;
+// Freio de relógio: para de INICIAR novas transferências passado disso e devolve
+// o parcial. As que sobraram ficam 'created' (em voo, nada saiu) e voltam num
+// próximo código. Nunca reenvia — 'created' não chamou o banco.
+const BATCH_WALLCLOCK_BUDGET_MS = 80_000;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -129,10 +151,7 @@ serve(async (req) => {
   // descobrir que não há gateway configurado deixaria uma tentativa 'created'
   // ocupando o índice de "em voo" — e travando o lançamento pro próximo clique.
   const pepper = Deno.env.get("PAYMENT_2FA_PEPPER");
-  const gwUrl = (Deno.env.get("SANTANDER_GW_URL") ?? "").replace(/\/$/, "");
   const gwSecret = Deno.env.get("SANTANDER_GW_SECRET");
-  // Default 'sandbox': na dúvida, o ambiente certo é o que não move dinheiro.
-  const environment = Deno.env.get("SANTANDER_ENVIRONMENT") ?? "sandbox";
   const evolutionUrl = Deno.env.get("EVOLUTION_API_URL");
   const evolutionKey = Deno.env.get("EVOLUTION_API_KEY");
 
@@ -142,18 +161,17 @@ serve(async (req) => {
       500,
     );
   }
-  if (!gwUrl || !gwSecret) {
+  if (!gwSecret) {
     return jsonResponse(
       { error: "PAYMENT_NOT_CONFIGURED", message: "Pagamento indisponível. Fala com o admin." },
       500,
     );
   }
-  if (!["sandbox", "production"].includes(environment)) {
-    return jsonResponse(
-      { error: "PAYMENT_NOT_CONFIGURED", message: "Ambiente de pagamento inválido." },
-      500,
-    );
-  }
+  // O gwUrl agora é POR AMBIENTE (dois gateways: sandbox e produção). Não dá pra
+  // validar uma URL única aqui: o ambiente das transferências NOVAS vem da flag
+  // (resolvida após o auth, no banco), e o das já abertas vem do próprio
+  // registro. A checagem "gateway daquele ambiente existe?" mora em cada caminho
+  // que abre/envia — mantendo a promessa de não deixar 'created' órfã.
 
   // ── 1. Auth ────────────────────────────────────────────────────────────────
   const authHeader = req.headers.get("Authorization");
@@ -178,28 +196,109 @@ serve(async (req) => {
   });
   const ip = clientIp(req);
 
+  // Ambiente ATIVO — da flag no banco (pix_environment_settings), não de env var.
+  // Carimba as transferências NOVAS (challenge/challenge_batch). As já abertas
+  // seguem o transfer.environment congelado, mesmo que a flag vire no meio.
+  const environment: PixEnv = await activeEnvironment(sbAdmin);
+
   // ── 2. Body ────────────────────────────────────────────────────────────────
   let body: PayBody;
   try {
     const raw = await req.json();
-    const validActions = ["challenge", "execute", "check", "cancel"];
+    const validActions = [
+      "challenge",
+      "execute",
+      "check",
+      "cancel",
+      "challenge_batch",
+      "execute_batch",
+    ];
+    const act = String(raw.action);
+    if (!validActions.includes(act)) {
+      throw new Error(
+        "action inválida (challenge, execute, check, cancel, challenge_batch, execute_batch)",
+      );
+    }
     body = {
       entry_id: String(raw.entry_id ?? "").trim(),
-      action: validActions.includes(String(raw.action))
-        ? (String(raw.action) as PayBody["action"])
-        : "challenge",
+      entry_ids: Array.isArray(raw.entry_ids)
+        ? [...new Set(raw.entry_ids.map((x: unknown) => String(x).trim()).filter(Boolean))]
+        : undefined,
+      action: act as PayBody["action"],
       challenge_id: raw.challenge_id ? String(raw.challenge_id) : undefined,
       code: raw.code != null ? String(raw.code) : undefined,
     };
-    if (!body.entry_id) throw new Error("entry_id obrigatório");
-    if (!validActions.includes(String(raw.action))) {
-      throw new Error("action precisa ser 'challenge', 'execute', 'check' ou 'cancel'");
+    // Cada ação exige o seu — o lote NÃO manda entry_id único, e execute_batch
+    // não manda lançamento nenhum (paga o conjunto congelado no desafio).
+    if (act === "challenge_batch") {
+      if (!body.entry_ids || body.entry_ids.length === 0) {
+        throw new Error("entry_ids obrigatório no lote");
+      }
+    } else if (act === "execute_batch") {
+      if (!body.challenge_id || !body.code) {
+        throw new Error("challenge_id e code obrigatórios");
+      }
+    } else if (!body.entry_id) {
+      throw new Error("entry_id obrigatório");
     }
   } catch (e) {
     return jsonResponse(
       { error: "BAD_REQUEST", message: "Body inválido: " + (e as Error).message },
       400,
     );
+  }
+
+  // ── 2.5 Lote ───────────────────────────────────────────────────────────────
+  // Ramifica ANTES da resolução de empresa por entry_id único (steps 3-7), que
+  // pressupõe pagamento avulso. Cada handler de lote resolve a própria empresa
+  // (challenge_batch pelo 1º lançamento; execute_batch pelo desafio) e aplica o
+  // MESMO gate triplo por dentro.
+  if (body.action === "challenge_batch") {
+    if (!evolutionUrl || !evolutionKey) {
+      // 200-com-erro: a borda troca 5xx por página sem CORS, e o cliente veria
+      // "Failed to fetch" em vez desta frase.
+      return jsonResponse(
+        {
+          error: "WHATSAPP_UNAVAILABLE",
+          message: "O envio de código está indisponível. Fala com o admin.",
+        },
+        200,
+      );
+    }
+    // O gateway do ambiente ATIVO precisa existir antes de abrir transferências —
+    // senão o lote abriria N 'created' que ninguém consegue pagar.
+    if (!gwUrlFor(environment)) {
+      return jsonResponse(
+        {
+          error: "PAYMENT_NOT_CONFIGURED",
+          message: `O gateway de ${environment} não está configurado. Fala com o admin.`,
+        },
+        200,
+      );
+    }
+    return await handleChallengeBatch({
+      sbUser,
+      sbAdmin,
+      user,
+      entryIds: body.entry_ids ?? [],
+      environment,
+      pepper,
+      evolutionUrl,
+      evolutionKey,
+      ip,
+    });
+  }
+
+  if (body.action === "execute_batch") {
+    return await handleExecuteBatch({
+      sbUser,
+      sbAdmin,
+      user,
+      body,
+      pepper,
+      gwSecret,
+      ip,
+    });
   }
 
   // ── 3. Empresa do lançamento ───────────────────────────────────────────────
@@ -354,6 +453,16 @@ serve(async (req) => {
         503,
       );
     }
+    // Gateway do ambiente ativo tem que existir antes de abrir a transferência.
+    if (!gwUrlFor(environment)) {
+      return jsonResponse(
+        {
+          error: "PAYMENT_NOT_CONFIGURED",
+          message: `O gateway de ${environment} não está configurado. Fala com o admin.`,
+        },
+        500,
+      );
+    }
     return await handleChallenge({
       sbAdmin,
       user,
@@ -375,7 +484,6 @@ serve(async (req) => {
     device,
     body,
     pepper,
-    gwUrl,
     gwSecret,
     ip,
   });
@@ -633,11 +741,10 @@ async function handleExecute(ctx: {
   device: Row;
   body: PayBody;
   pepper: string;
-  gwUrl: string;
   gwSecret: string;
   ip: string | null;
 }): Promise<Response> {
-  const { sbAdmin, user, companyId, device, body, pepper, gwUrl, gwSecret, ip } = ctx;
+  const { sbAdmin, user, companyId, device, body, pepper, gwSecret, ip } = ctx;
 
   if (!body.challenge_id || !body.code) {
     return jsonResponse(
@@ -782,7 +889,104 @@ async function handleExecute(ctx: {
       .eq("id", device.id);
   }
 
-  // 6.3 Corpo do pagamento. Montado SÓ com o snapshot congelado na abertura da
+  // 6.3 → o envio em si (POST + PATCH + liquidação) mora em sendOneTransfer,
+  // fonte ÚNICA que o pagamento avulso e o lote dividem. Manter duas cópias da
+  // lógica que move dinheiro é o erro que este repo evita a todo custo. Aqui só
+  // traduzimos o resultado pra resposta HTTP do avulso (202 no unknown, 200 no
+  // resto), preservando as mesmas frases de antes.
+  const r = await sendOneTransfer({
+    sbAdmin,
+    companyId,
+    userId: user.id,
+    ip,
+    gwSecret,
+    transfer,
+  });
+
+  if (r.status === "unknown") {
+    return jsonResponse(
+      { status: "unknown", transfer_id: r.transfer_id, message: r.message },
+      202,
+    );
+  }
+  if (r.status === "failed") {
+    return jsonResponse({
+      status: "failed",
+      transfer_id: r.transfer_id,
+      message: r.message,
+      error_code: r.error_code ?? null,
+      detail: r.detail ?? null,
+    });
+  }
+  if (r.status === "settled") {
+    return jsonResponse({
+      status: "settled",
+      transfer_id: r.transfer_id,
+      end_to_end_id: r.end_to_end_id ?? null,
+      message: r.message,
+    });
+  }
+  return jsonResponse({
+    status: "confirmed",
+    transfer_id: r.transfer_id,
+    message: r.message,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// sendOneTransfer — o envio de UMA transferência (POST + PATCH + liquidação)
+//
+// Extraído do avulso pra ser a ÚNICA cópia da lógica que move dinheiro. Recebe
+// uma transferência já ABERTA e em 'created' (a autorização — código consumido —
+// aconteceu antes, no avulso ou no lote) e devolve um resultado estruturado, sem
+// montar Response nenhuma. Quem chama decide o HTTP.
+//
+// Toda classificação de erro segue o dogma do arquivo: timeout/5xx = 'unknown'
+// (não sabemos, nunca reenvia), 4xx de negócio = 'failed' (o banco disse não).
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface SendResult {
+  status: "settled" | "confirmed" | "failed" | "unknown";
+  transfer_id: string;
+  entry_id: string;
+  end_to_end_id?: string | null;
+  error_code?: string | null;
+  detail?: string | null;
+  message: string;
+}
+
+async function sendOneTransfer(ctx: {
+  sbAdmin: Sb;
+  companyId: string;
+  userId: string;
+  ip: string | null;
+  gwSecret: string;
+  transfer: Row;
+}): Promise<SendResult> {
+  const { sbAdmin, companyId, userId, ip, gwSecret, transfer } = ctx;
+
+  // O gateway é escolhido pelo AMBIENTE DA TRANSFERÊNCIA (congelado na abertura),
+  // não pela flag atual: uma tentativa aberta em 'production' sempre fala com o
+  // gateway de produção, mesmo que a flag vire pra sandbox no meio. Sem gateway
+  // configurado pra esse ambiente, nada foi enviado → 'failed' determinístico
+  // (config), nunca 'unknown'.
+  const gwUrl = gwUrlFor(transfer.environment as PixEnv);
+  if (!gwUrl) {
+    await sbAdmin.rpc("payroll_pix_fail", {
+      p_id: transfer.id,
+      p_code: "GW_NAO_CONFIGURADO",
+      p_msg: `Gateway de ${transfer.environment} não configurado no servidor.`,
+    });
+    return {
+      status: "failed",
+      transfer_id: transfer.id,
+      entry_id: transfer.entry_id,
+      message: `O gateway de ${transfer.environment} não está configurado. Fala com o admin.`,
+      error_code: "GW_NAO_CONFIGURADO",
+    };
+  }
+
+  // Corpo do pagamento. Montado SÓ com o snapshot congelado na abertura da
   // transferência — nada vem do cliente, nada é relido de collaborators (se
   // alguém trocou a chave depois da aprovação, o dinheiro vai pra onde a
   // diretoria aprovou, e a divergência aparece na conferência).
@@ -821,7 +1025,7 @@ async function handleExecute(ctx: {
     .update({ request_payload: requestPayload })
     .eq("id", transfer.id);
 
-  // ── 6.4 POST: cria o pagamento no banco (READY_TO_PAY). NÃO move dinheiro ──
+  // ── POST: cria o pagamento no banco (READY_TO_PAY). NÃO move dinheiro ──
   const post = await callGateway({
     url: `${gwUrl}/pix/transfer`,
     method: "POST",
@@ -831,27 +1035,21 @@ async function handleExecute(ctx: {
   });
 
   if (post.kind === "unknown") {
-    // Timeout/5xx no POST é o caso BARATO (o POST não move dinheiro), mas ainda
-    // assim é dúvida: o pagamento pode ter sido criado do lado de lá. Reenviar
-    // por conta própria criaria uma segunda ordem — quem resolve é a consulta
-    // (payroll-pix-reconcile) ou uma pessoa.
     await markUnknown(sbAdmin, transfer.id, `POST /pix/transfer: ${post.reason}`);
     await logEvent(sbAdmin, {
       company_id: companyId,
-      user_id: user.id,
+      user_id: userId,
       kind: "payment_unknown",
       metadata: { transfer_id: transfer.id, step: "send", reason: post.reason },
       ip,
     });
-    return jsonResponse(
-      {
-        status: "unknown",
-        transfer_id: transfer.id,
-        message:
-          "O banco não respondeu a tempo. NÃO reenviamos o pagamento — estamos conferindo e o resultado aparece aqui em alguns minutos.",
-      },
-      202,
-    );
+    return {
+      status: "unknown",
+      transfer_id: transfer.id,
+      entry_id: transfer.entry_id,
+      message:
+        "O banco não respondeu a tempo. NÃO reenviamos o pagamento — estamos conferindo e o resultado aparece aqui em alguns minutos.",
+    };
   }
 
   if (post.kind === "failed") {
@@ -864,21 +1062,19 @@ async function handleExecute(ctx: {
     });
     await logEvent(sbAdmin, {
       company_id: companyId,
-      user_id: user.id,
+      user_id: userId,
       kind: "payment_failed",
       metadata: { transfer_id: transfer.id, step: "send", code: post.code },
       ip,
     });
-    return jsonResponse({
+    return {
       status: "failed",
       transfer_id: transfer.id,
+      entry_id: transfer.entry_id,
       message: "O banco recusou esse pagamento.",
-      // Motivo do banco. Volta pro cliente porque quem executa o pagamento já
-      // tem acesso à transferência pela RLS da tabela (é RH/admin) — não é
-      // vazamento, é poupar uma ida ao registro pra descobrir POR QUE recusou.
       error_code: post.code,
       detail: post.detail,
-    });
+    };
   }
 
   const providerPaymentId = pickString(post.data, [
@@ -888,22 +1084,17 @@ async function handleExecute(ctx: {
   ]);
 
   if (!providerPaymentId) {
-    // 2xx sem id é resposta ambígua: pode ter criado lá e perdido o id aqui.
-    // Ambiguidade tem um nome só neste sistema, e é 'unknown'.
     await markUnknown(
       sbAdmin,
       transfer.id,
       "POST /pix/transfer respondeu 2xx sem provider_payment_id",
     );
-    return jsonResponse(
-      {
-        status: "unknown",
-        transfer_id: transfer.id,
-        message:
-          "A resposta do banco veio incompleta. NÃO reenviamos — estamos conferindo.",
-      },
-      202,
-    );
+    return {
+      status: "unknown",
+      transfer_id: transfer.id,
+      entry_id: transfer.entry_id,
+      message: "A resposta do banco veio incompleta. NÃO reenviamos — estamos conferindo.",
+    };
   }
 
   const { error: sentErr } = await sbAdmin.rpc("payroll_pix_mark_sent", {
@@ -914,29 +1105,25 @@ async function handleExecute(ctx: {
     p_http_status: post.status,
   });
   if (sentErr) {
-    // Não conseguimos registrar que o POST foi aceito. O pagamento EXISTE no
-    // banco em READY_TO_PAY e nosso registro está desalinhado: dúvida.
     await markUnknown(
       sbAdmin,
       transfer.id,
       "POST aceito mas payroll_pix_mark_sent falhou",
     );
-    return jsonResponse(
-      {
-        status: "unknown",
-        transfer_id: transfer.id,
-        message: "Registramos uma inconsistência nesse pagamento. Não reenviamos — o financeiro vai conferir.",
-      },
-      202,
-    );
+    return {
+      status: "unknown",
+      transfer_id: transfer.id,
+      entry_id: transfer.entry_id,
+      message:
+        "Registramos uma inconsistência nesse pagamento. Não reenviamos — o financeiro vai conferir.",
+    };
   }
 
-  // ── 6.5 PATCH: a confirmação. É AQUI que o dinheiro anda ────────────────────
+  // ── PATCH: a confirmação. É AQUI que o dinheiro anda ────────────────────────
   // PATCH e não PUT/DELETE: os outros verbos devolvem 502 no sandbox (ADR 0006).
   // O `amount` vai junto porque o Santander exige `paymentValue` na confirmação
-  // (provado contra o sandbox: sem ele o PATCH devolve 400 "Valor do pagamento é
-  // obrigatório"). O gateway o transforma em paymentValue; o status vem do env
-  // do gateway. É o valor CONGELADO da transferência, não um que o cliente mande.
+  // (provado contra o sandbox: sem ele o PATCH devolve 400). É o valor CONGELADO
+  // da transferência, não um que o cliente mande.
   const confirm = await callGateway({
     url: `${gwUrl}/pix/transfer/${encodeURIComponent(providerPaymentId)}/confirm`,
     method: "PATCH",
@@ -951,24 +1138,21 @@ async function handleExecute(ctx: {
 
   if (confirm.kind === "unknown") {
     // O CASO CARO: a confirmação pode ter chegado e o dinheiro estar andando.
-    // 'unknown' é a resposta honesta, e dela ninguém sai por reenvio.
     await markUnknown(sbAdmin, transfer.id, `PATCH confirm: ${confirm.reason}`);
     await logEvent(sbAdmin, {
       company_id: companyId,
-      user_id: user.id,
+      user_id: userId,
       kind: "payment_unknown",
       metadata: { transfer_id: transfer.id, step: "confirm", reason: confirm.reason },
       ip,
     });
-    return jsonResponse(
-      {
-        status: "unknown",
-        transfer_id: transfer.id,
-        message:
-          "O banco não respondeu a tempo. NÃO reenviamos o pagamento — estamos conferindo e o resultado aparece aqui em alguns minutos.",
-      },
-      202,
-    );
+    return {
+      status: "unknown",
+      transfer_id: transfer.id,
+      entry_id: transfer.entry_id,
+      message:
+        "O banco não respondeu a tempo. NÃO reenviamos o pagamento — estamos conferindo e o resultado aparece aqui em alguns minutos.",
+    };
   }
 
   if (confirm.kind === "failed") {
@@ -981,18 +1165,19 @@ async function handleExecute(ctx: {
     });
     await logEvent(sbAdmin, {
       company_id: companyId,
-      user_id: user.id,
+      user_id: userId,
       kind: "payment_failed",
       metadata: { transfer_id: transfer.id, step: "confirm", code: confirm.code },
       ip,
     });
-    return jsonResponse({
+    return {
       status: "failed",
       transfer_id: transfer.id,
+      entry_id: transfer.entry_id,
       message: "O banco recusou a confirmação do pagamento.",
       error_code: confirm.code,
       detail: confirm.detail,
-    });
+    };
   }
 
   await sbAdmin.rpc("payroll_pix_confirm", {
@@ -1002,7 +1187,7 @@ async function handleExecute(ctx: {
     p_http_status: confirm.status,
   });
 
-  // 6.6 endToEnd na própria resposta = liquidação provada, sem esperar o poller.
+  // endToEnd na própria resposta = liquidação provada, sem esperar o poller.
   const endToEnd = extractEndToEnd(confirm.data);
   if (endToEnd) {
     const { error: settleErr } = await sbAdmin.rpc("payroll_pix_settle", {
@@ -1014,17 +1199,18 @@ async function handleExecute(ctx: {
     if (!settleErr) {
       await logEvent(sbAdmin, {
         company_id: companyId,
-        user_id: user.id,
+        user_id: userId,
         kind: "payment_settled",
         metadata: { transfer_id: transfer.id, entry_id: transfer.entry_id },
         ip,
       });
-      return jsonResponse({
+      return {
         status: "settled",
         transfer_id: transfer.id,
+        entry_id: transfer.entry_id,
         end_to_end_id: endToEnd,
         message: "Pagamento concluído.",
-      });
+      };
     }
     // Liquidou no banco mas a projeção falhou: NÃO viramos 'unknown' (o dinheiro
     // saiu, isso é fato). Fica 'confirmed' e a reconciliação fecha o ciclo.
@@ -1032,16 +1218,525 @@ async function handleExecute(ctx: {
 
   await logEvent(sbAdmin, {
     company_id: companyId,
-    user_id: user.id,
+    user_id: userId,
     kind: "payment_confirmed",
     metadata: { transfer_id: transfer.id, entry_id: transfer.entry_id },
     ip,
   });
 
-  return jsonResponse({
+  return {
     status: "confirmed",
     transfer_id: transfer.id,
+    entry_id: transfer.entry_id,
     message: "Enviado. Aguardando a confirmação final do banco.",
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Lote — passo 1: abre uma transferência por lançamento e manda UM código
+//
+// O código nasce amarrado ao CONJUNTO de transferências abertas aqui
+// (batch_transfer_ids). Erro numa linha (pensão, chave inválida, já pago) NÃO
+// derruba o lote: cada open_transfer é uma chamada independente e o que falhou
+// volta em `errors`/`skipped` pra tela mostrar. Nada de 5xx cru — a borda os
+// substitui por página sem CORS e o cliente vê "Failed to fetch"; erro de
+// infra sai como 200 com corpo { error }.
+// ─────────────────────────────────────────────────────────────────────────────
+async function handleChallengeBatch(ctx: {
+  sbUser: Sb;
+  sbAdmin: Sb;
+  user: Row;
+  entryIds: string[];
+  environment: string;
+  pepper: string;
+  evolutionUrl: string;
+  evolutionKey: string;
+  ip: string | null;
+}): Promise<Response> {
+  const {
+    sbUser,
+    sbAdmin,
+    user,
+    entryIds,
+    environment,
+    pepper,
+    evolutionUrl,
+    evolutionKey,
+    ip,
+  } = ctx;
+
+  if (entryIds.length > MAX_BATCH_SIZE) {
+    return jsonResponse(
+      {
+        error: "BATCH_TOO_LARGE",
+        message: `Dá pra pagar até ${MAX_BATCH_SIZE} de uma vez. Divide em blocos menores.`,
+      },
+      400,
+    );
+  }
+
+  // Empresa: do 1º lançamento. O gate é por empresa, e um lote é sempre uma
+  // folha só — lançamento de outra empresa cai fora lá embaixo, por segurança.
+  const companyId = await resolveCompanyId(sbAdmin, entryIds[0]);
+  if (!companyId) {
+    return jsonResponse(
+      { error: "ENTRY_NOT_FOUND", message: "Esse lançamento não existe." },
+      404,
+    );
+  }
+
+  const gate = await checkPaymentGate(sbUser, sbAdmin, user.id, companyId, true);
+  if (!gate.ok) {
+    await logEvent(sbAdmin, {
+      company_id: companyId,
+      user_id: user.id,
+      kind: "payment_denied",
+      metadata: { reason: gate.error, action: "challenge_batch", count: entryIds.length },
+      ip,
+    });
+    return jsonResponse({ error: gate.error, message: gate.message }, 403);
+  }
+  const device = gate.device;
+
+  // Freio de máquina — conta avulso E lote na janela (a mesma instância de
+  // WhatsApp leva os dois).
+  const since = new Date(Date.now() - RATE_WINDOW_MS).toISOString();
+  const { count: recentCount } = await sbAdmin
+    .from("payment_2fa_challenges")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .in("purpose", ["payment", "payment_batch"])
+    .gte("created_at", since);
+  if ((recentCount ?? 0) >= RATE_MAX_CHALLENGES_PER_USER) {
+    await logEvent(sbAdmin, {
+      company_id: companyId,
+      user_id: user.id,
+      kind: "payment_rate_limited",
+      metadata: { action: "challenge_batch", window_minutes: RATE_WINDOW_MS / 60000 },
+      ip,
+    });
+    return jsonResponse(
+      {
+        error: "TOO_MANY_REQUESTS",
+        message: "Muitos códigos pedidos em pouco tempo. Espera alguns minutos.",
+      },
+      429,
+    );
+  }
+
+  // Instância de WhatsApp da empresa — antes de gerar código: código que ninguém
+  // recebe é só um hash esperando ser adivinhado.
+  const { data: instance } = await sbAdmin
+    .from("whatsapp_instances")
+    .select("instance_name")
+    .eq("company_id", companyId)
+    .eq("status", "open")
+    .maybeSingle();
+  if (!instance) {
+    return jsonResponse(
+      {
+        error: "WHATSAPP_UNAVAILABLE",
+        message: "O WhatsApp da empresa está fora do ar. Sem ele não dá pra confirmar pagamento.",
+      },
+      200,
+    );
+  }
+
+  // Abre uma transferência por lançamento. Todas as validações de dinheiro
+  // (período aprovado, pensão, chave, já-pago, já-em-voo) moram em
+  // payroll_pix_open_transfer — de banco de propósito.
+  const lines: {
+    entry_id: string;
+    transfer_id: string;
+    payee_name: string;
+    amount: number;
+    payee_pix_key_masked: string;
+  }[] = [];
+  const errors: { entry_id: string; message: string }[] = [];
+  const skipped: { entry_id: string; status: string; message: string }[] = [];
+  const transferIds: string[] = [];
+
+  for (const entryId of entryIds) {
+    const { data: transfer, error: openErr } = await sbAdmin.rpc(
+      "payroll_pix_open_transfer",
+      { p_entry_id: entryId, p_actor: user.id, p_environment: environment },
+    );
+    if (openErr || !transfer) {
+      errors.push({ entry_id: entryId, message: businessMessage(openErr) });
+      continue;
+    }
+    if (transfer.company_id !== companyId) {
+      errors.push({ entry_id: entryId, message: "Lançamento de outra empresa — fora deste lote." });
+      continue;
+    }
+    // Já em voo (sent/confirmed/unknown) ou liquidada: não entra no lote, mas o
+    // operador precisa saber por quê.
+    if (transfer.status !== "created") {
+      skipped.push({
+        entry_id: entryId,
+        status: transfer.status,
+        message:
+          transfer.status === "settled"
+            ? "Já foi pago."
+            : "Já está em processamento.",
+      });
+      continue;
+    }
+    transferIds.push(transfer.id);
+    lines.push({
+      entry_id: entryId,
+      transfer_id: transfer.id,
+      payee_name: transfer.payee_name,
+      amount: Number(transfer.amount),
+      payee_pix_key_masked: maskPixKey(
+        transfer.payee_pix_key_norm,
+        transfer.payee_pix_key_type,
+      ),
+    });
+  }
+
+  // Nada pronto: resultado SUAVE (não é erro de infra), com o porquê de cada um.
+  // Sem challenge_id, a tela não abre o passo do código — mostra os motivos.
+  if (transferIds.length === 0) {
+    return jsonResponse({
+      challenge_id: null,
+      count: 0,
+      total_amount: 0,
+      lines: [],
+      errors,
+      skipped,
+    });
+  }
+
+  const totalAmount = lines.reduce((s, l) => s + l.amount, 0);
+
+  // UM código pro lote inteiro.
+  const code = generateNumericCode(6);
+  const salt = randomHex(16);
+  const codeHash = await hmacHex(pepper, `${salt}:${code}`);
+  const expiresAt = new Date(Date.now() + CHALLENGE_TTL_MS);
+
+  const { data: challenge, error: chErr } = await sbAdmin
+    .from("payment_2fa_challenges")
+    .insert({
+      company_id: companyId,
+      user_id: user.id,
+      purpose: "payment_batch",
+      factor_type: "whatsapp",
+      device_id: device.id,
+      transfer_id: null,
+      // O conjunto CONGELADO que este código autoriza. A execução paga
+      // exatamente isto — o cliente não manda a lista.
+      batch_transfer_ids: transferIds,
+      salt,
+      code_hash: codeHash,
+      expires_at: expiresAt.toISOString(),
+      sent_to_last4: device.phone_last4,
+    })
+    .select("id")
+    .single();
+
+  if (chErr || !challenge) {
+    return jsonResponse(
+      { error: "CHALLENGE_CREATE_FAILED", message: "Não deu pra gerar o código." },
+      200,
+    );
+  }
+
+  // A mensagem leva CONTAGEM e TOTAL — a conferência item a item é a lista na
+  // tela. Se o total do WhatsApp e o da tela divergem, quem vê os dois percebe.
+  const message =
+    `*Código de pagamento em lote: ${code}*\n\n` +
+    `Você vai pagar *${lines.length}* colaborador(es), total *${formatBRL(totalAmount)}*.\n\n` +
+    `Confere na tela se a lista e o total batem antes de digitar.\n` +
+    `O código vale 5 minutos e serve só pra ESTE lote.\n\n` +
+    `_Se o total não bate com o que você está vendo, NÃO use o código e avisa o RH._`;
+
+  const baseUrl = evolutionUrl.replace(/\/$/, "");
+  let sendOk = false;
+  let sendDetails = "";
+  try {
+    const res = await fetch(`${baseUrl}/message/sendText/${instance.instance_name}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: evolutionKey },
+      body: JSON.stringify({ number: device.phone, text: message }),
+    });
+    sendOk = res.ok;
+    if (!res.ok) sendDetails = String(res.status);
+  } catch (e) {
+    sendDetails = e instanceof Error ? e.name : "network_error";
+  }
+
+  if (!sendOk) {
+    // Mata o desafio (expires_at no passado o torna inconsumível sem apagar a
+    // trilha). As transferências ficam de pé em 'created': não chamaram o banco,
+    // não custam nada, e um próximo código reaproveita as mesmas.
+    await sbAdmin
+      .from("payment_2fa_challenges")
+      .update({ failed_at: new Date().toISOString(), expires_at: new Date().toISOString() })
+      .eq("id", challenge.id);
+    await logEvent(sbAdmin, {
+      company_id: companyId,
+      user_id: user.id,
+      kind: "payment_code_send_failed",
+      metadata: { challenge_id: challenge.id, batch: true, last4: device.phone_last4, details: sendDetails },
+      ip,
+    });
+    return jsonResponse(
+      {
+        error: "WHATSAPP_SEND_FAILED",
+        message: "Não conseguimos mandar o código agora. Tenta de novo em instantes.",
+      },
+      200,
+    );
+  }
+
+  await logEvent(sbAdmin, {
+    company_id: companyId,
+    user_id: user.id,
+    kind: "payment_code_sent",
+    metadata: {
+      challenge_id: challenge.id,
+      batch: true,
+      count: lines.length,
+      last4: device.phone_last4,
+    },
+    ip,
+  });
+
+  return jsonResponse({
+    challenge_id: challenge.id,
+    last4: device.phone_last4,
+    expires_at: expiresAt.toISOString(),
+    count: lines.length,
+    total_amount: totalAmount,
+    lines,
+    errors,
+    skipped,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Lote — passo 2: consome UM código e paga o conjunto congelado
+//
+// O cliente manda só { challenge_id, code } — NUNCA a lista de lançamentos.
+// Quem decide o que é pago é batch_transfer_ids do próprio desafio, gravado no
+// passo 1. É o mesmo princípio do avulso ("o código autoriza a transferência que
+// ELE criou"), estendido pro conjunto: o código não pode ser redirecionado.
+//
+// O código é consumido UMA vez (RPC atômica) antes do laço. Cada transferência
+// segue seu próprio destino em sendOneTransfer (settled/failed/unknown) — o lote
+// é um laço sobre a unidade atômica, nunca uma transação única que "tudo ou
+// nada" (PIX não tem rollback: metade paga é metade paga).
+// ─────────────────────────────────────────────────────────────────────────────
+async function handleExecuteBatch(ctx: {
+  sbUser: Sb;
+  sbAdmin: Sb;
+  user: Row;
+  body: PayBody;
+  pepper: string;
+  gwSecret: string;
+  ip: string | null;
+}): Promise<Response> {
+  const { sbUser, sbAdmin, user, body, pepper, gwSecret, ip } = ctx;
+
+  // Carrega o desafio e o conjunto ANTES de tocar no código. Ler
+  // batch_transfer_ids aqui é seguro: a coluna é imutável depois do INSERT.
+  const { data: challenge } = await sbAdmin
+    .from("payment_2fa_challenges")
+    .select("id, company_id, user_id, purpose, device_id, batch_transfer_ids, salt")
+    .eq("id", body.challenge_id)
+    .maybeSingle();
+
+  if (
+    !challenge ||
+    challenge.user_id !== user.id ||
+    challenge.purpose !== "payment_batch" ||
+    !Array.isArray(challenge.batch_transfer_ids) ||
+    challenge.batch_transfer_ids.length === 0
+  ) {
+    await logEvent(sbAdmin, {
+      company_id: challenge?.company_id ?? null,
+      user_id: user.id,
+      kind: "payment_code_failed",
+      metadata: { reason: "batch_challenge_mismatch", challenge_id: body.challenge_id },
+      ip,
+    });
+    return jsonResponse(GENERIC_INVALID, 400);
+  }
+
+  const companyId = challenge.company_id as string;
+  const gate = await checkPaymentGate(sbUser, sbAdmin, user.id, companyId, true);
+  if (!gate.ok) {
+    await logEvent(sbAdmin, {
+      company_id: companyId,
+      user_id: user.id,
+      kind: "payment_denied",
+      metadata: { reason: gate.error, action: "execute_batch", challenge_id: challenge.id },
+      ip,
+    });
+    return jsonResponse({ error: gate.error, message: gate.message }, 403);
+  }
+  const device = gate.device;
+
+  // Aparelho do desafio precisa ser o ativo: um código que foi pro celular
+  // antigo (revogado numa troca) não autoriza pagamento depois.
+  if (challenge.device_id && challenge.device_id !== device.id) {
+    await logEvent(sbAdmin, {
+      company_id: companyId,
+      user_id: user.id,
+      kind: "payment_code_failed",
+      metadata: { reason: "batch_device_mismatch", challenge_id: challenge.id },
+      ip,
+    });
+    return jsonResponse(GENERIC_INVALID, 400);
+  }
+
+  // Consumo atômico — um código, uma vez. MESMA RPC do avulso; só o purpose
+  // muda. Dois cliques simultâneos: o segundo acha consumed_at preenchido e sai
+  // com 0 linhas (nada paga de novo).
+  const code = String(body.code).replace(/\D/g, "");
+  const codeHash = await hmacHex(pepper, `${challenge.salt}:${code}`);
+  const { data: consumed, error: consumeErr } = await sbAdmin.rpc(
+    "payment_2fa_consume_challenge",
+    { p_id: challenge.id, p_code_hash: codeHash, p_purpose: "payment_batch" },
+  );
+  if (consumeErr) {
+    return jsonResponse(
+      { error: "CONSUME_FAILED", message: "Não deu pra validar o código agora." },
+      200,
+    );
+  }
+  const consumedRow = Array.isArray(consumed) ? consumed[0] : consumed;
+  if (!consumedRow) {
+    const { data: after } = await sbAdmin
+      .from("payment_2fa_challenges")
+      .select("attempts, max_attempts")
+      .eq("id", challenge.id)
+      .maybeSingle();
+    let locked = false;
+    if (after && after.attempts >= after.max_attempts) {
+      await sbAdmin
+        .from("payment_2fa_devices")
+        .update({ locked_until: new Date(Date.now() + DEVICE_LOCK_MS).toISOString() })
+        .eq("id", device.id);
+      locked = true;
+    }
+    await logEvent(sbAdmin, {
+      company_id: companyId,
+      user_id: user.id,
+      kind: "payment_code_failed",
+      metadata: { reason: "invalid_or_expired", challenge_id: challenge.id, batch: true, device_locked: locked },
+      ip,
+    });
+    return jsonResponse(GENERIC_INVALID, 400);
+  }
+  if (device.locked_until) {
+    await sbAdmin
+      .from("payment_2fa_devices")
+      .update({ locked_until: null })
+      .eq("id", device.id);
+  }
+
+  // Paga EXATAMENTE o conjunto congelado. Freio de relógio: para de iniciar
+  // novas transferências passado o orçamento (a borda corta perto de 100s). As
+  // que sobrarem ficam 'created' e voltam num próximo código.
+  const transferIds = challenge.batch_transfer_ids as string[];
+  const startedAt = Date.now();
+  const results: SendResult[] = [];
+  const skipped: {
+    transfer_id: string;
+    entry_id: string | null;
+    status: string;
+    message: string;
+  }[] = [];
+  let budgetHit = false;
+
+  for (const transferId of transferIds) {
+    if (Date.now() - startedAt > BATCH_WALLCLOCK_BUDGET_MS) {
+      budgetHit = true;
+      break;
+    }
+    const { data: transfer } = await sbAdmin
+      .from("payroll_pix_transfers")
+      .select(
+        "id, company_id, period_id, entry_id, collaborator_id, attempt, idempotency_key, amount, " +
+          "payee_name, payee_document, payee_pix_key_norm, payee_pix_key_type, " +
+          "payer_snapshot, environment, status, provider_payment_id",
+      )
+      .eq("id", transferId)
+      .maybeSingle();
+
+    if (!transfer) {
+      skipped.push({ transfer_id: transferId, entry_id: null, status: "missing", message: "Transferência não encontrada." });
+      continue;
+    }
+    if (transfer.company_id !== companyId) {
+      skipped.push({ transfer_id: transferId, entry_id: transfer.entry_id, status: transfer.status, message: "Transferência de outra empresa." });
+      continue;
+    }
+    if (transfer.status !== "created") {
+      // Já saiu daqui por outro caminho (ou reentrega da própria função). NÃO
+      // reenvia — 'created' é a única porta de envio.
+      skipped.push({
+        transfer_id: transferId,
+        entry_id: transfer.entry_id,
+        status: transfer.status,
+        message: transfer.status === "settled" ? "Já liquidada." : "Já estava em processamento.",
+      });
+      continue;
+    }
+    const r = await sendOneTransfer({
+      sbAdmin,
+      companyId,
+      userId: user.id,
+      ip,
+      gwSecret,
+      transfer,
+    });
+    results.push(r);
+  }
+
+  const total = transferIds.length;
+  const processed = results.length + skipped.length;
+  const remainingCount = budgetHit ? Math.max(0, total - processed) : 0;
+
+  await logEvent(sbAdmin, {
+    company_id: companyId,
+    user_id: user.id,
+    kind: "payment_batch_executed",
+    metadata: {
+      challenge_id: challenge.id,
+      total,
+      sent: results.length,
+      skipped: skipped.length,
+      budget_hit: budgetHit,
+      remaining: remainingCount,
+    },
+    ip,
+  });
+
+  const countBy = (s: string) => results.filter((r) => r.status === s).length;
+
+  return jsonResponse({
+    results: results.map((r) => ({
+      entry_id: r.entry_id,
+      transfer_id: r.transfer_id,
+      status: r.status,
+      end_to_end_id: r.end_to_end_id ?? null,
+      message: r.message,
+      error_code: r.error_code ?? null,
+      detail: r.detail ?? null,
+    })),
+    skipped,
+    counts: {
+      settled: countBy("settled"),
+      confirmed: countBy("confirmed"),
+      failed: countBy("failed"),
+      unknown: countBy("unknown"),
+    },
+    budget_hit: budgetHit,
+    remaining_count: remainingCount,
   });
 }
 

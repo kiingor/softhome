@@ -1123,7 +1123,7 @@ function PeriodDetailPageContent() {
                     <TableHead className="w-[120px]">Tipo</TableHead>
                     <TableHead>Descrição</TableHead>
                     <TableHead className="text-right w-[140px] whitespace-nowrap">Valor</TableHead>
-                    <TableHead className="w-[44px] p-0"></TableHead>
+                    <TableHead className="w-[170px] p-0"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1141,19 +1141,6 @@ function PeriodDetailPageContent() {
                         >
                           <TableCell>
                             <div className="flex items-center gap-2 font-medium">
-                              <Checkbox
-                                checked={isReviewed(g.id)}
-                                disabled={!canManage || upsertReview.isPending}
-                                onClick={(e) => e.stopPropagation()}
-                                onCheckedChange={(checked) =>
-                                  upsertReview.mutate({
-                                    collaboratorId: g.id,
-                                    patch: { is_reviewed: !!checked },
-                                  })
-                                }
-                                aria-label={`Marcar ${g.name} como conferido`}
-                                title="Conferido"
-                              />
                               {isOpen ? (
                                 <CaretDown className="w-4 h-4 text-muted-foreground" />
                               ) : (
@@ -1173,7 +1160,7 @@ function PeriodDetailPageContent() {
                             {/* PIX do colaborador — mesma apresentação da aba
                                 Pagamentos, pra quem confere o lançamento não
                                 precisar trocar de aba pra ver a chave. */}
-                            <div className="flex items-center gap-1.5 text-xs mt-1 pl-[3.25rem]">
+                            <div className="flex items-center gap-1.5 text-xs mt-1 pl-6">
                               {g.pixKey ? (
                                 <>
                                   <span className="text-muted-foreground">PIX:</span>
@@ -1217,18 +1204,54 @@ function PeriodDetailPageContent() {
                             {g.net >= 0 ? "+ " : "- "}
                             {formatCurrency(Math.abs(g.net))}
                           </TableCell>
-                          <TableCell className="p-0 pr-1 align-middle">
-                            <ReviewObsButton
-                              hasObs={hasObs(g.id)}
-                              observation={reviewByCollab.get(g.id)?.observation ?? ""}
-                              disabled={!canManage}
-                              onSave={(text) =>
-                                upsertReview.mutate({
-                                  collaboratorId: g.id,
-                                  patch: { observation: text.trim() || null },
-                                })
-                              }
-                            />
+                          <TableCell className="p-0 pr-2 align-middle">
+                            {/* Validar = a antiga marcação "Conferido", agora um
+                                botão explícito (mesmo padrão da aba Pagamentos).
+                                O checkbox saiu — na folha ele virou seleção. */}
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className={cn(
+                                  "h-7 gap-1.5 px-2.5 text-xs",
+                                  isReviewed(g.id)
+                                    ? "border-success/40 text-success hover:bg-success/10 hover:text-success dark:text-success"
+                                    : "text-muted-foreground",
+                                )}
+                                disabled={!canManage || upsertReview.isPending}
+                                title={
+                                  isReviewed(g.id)
+                                    ? "Conferido — clique pra desmarcar"
+                                    : "Marcar como conferido"
+                                }
+                                aria-label={`${isReviewed(g.id) ? "Desmarcar" : "Validar"} ${g.name}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  upsertReview.mutate({
+                                    collaboratorId: g.id,
+                                    patch: { is_reviewed: !isReviewed(g.id) },
+                                  });
+                                }}
+                              >
+                                <CheckCircle
+                                  className="w-3.5 h-3.5"
+                                  weight={isReviewed(g.id) ? "fill" : "regular"}
+                                />
+                                {isReviewed(g.id) ? "Validado" : "Validar"}
+                              </Button>
+                              <ReviewObsButton
+                                hasObs={hasObs(g.id)}
+                                observation={reviewByCollab.get(g.id)?.observation ?? ""}
+                                disabled={!canManage}
+                                onSave={(text) =>
+                                  upsertReview.mutate({
+                                    collaboratorId: g.id,
+                                    patch: { observation: text.trim() || null },
+                                  })
+                                }
+                              />
+                            </div>
                           </TableCell>
                         </TableRow>
                         {isOpen &&

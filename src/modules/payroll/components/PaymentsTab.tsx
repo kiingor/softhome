@@ -15,6 +15,8 @@ import {
   Copy,
   MagnifyingGlass,
   Receipt,
+  CheckCircle,
+  Users,
   X as XIcon,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
@@ -34,6 +36,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PixPaymentDialog } from "./PixPaymentDialog";
+import { BatchPixDialog, type BatchSelectedLine } from "./BatchPixDialog";
 import { AccountBalanceCard } from "./AccountBalanceCard";
 import { usePixTransfers, usePixPayment, useVoucher, type PixTransfer } from "../hooks/use-pix-payment";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -289,6 +292,70 @@ export function PaymentsTab({
   const progressPct = total === 0 ? 0 : Math.round((paidCount / total) * 100);
   const isFiltering = searchTerm.trim().length > 0;
 
+  // ── Seleção pra pagamento em lote ──────────────────────────────────────────
+  // Elegível = dá pra pagar por PIX AGORA: folha liberada, quem pode pagar, sem
+  // pagamento e sem transferência em voo, e com chave PIX. O gate de verdade é no
+  // servidor — isto só evita marcar o que não vai sair.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [batchOpen, setBatchOpen] = useState(false);
+
+  const selectableIds = useMemo(() => {
+    const s = new Set<string>();
+    if (!podePagar || !folhaLiberada) return s;
+    for (const e of filteredEntries) {
+      const isPaid = !!paymentByEntry.get(e.id)?.paid_at;
+      const tx = transferByEntry.get(e.id);
+      const emVoo =
+        !!tx && ["created", "sent", "confirmed", "unknown"].includes(tx.status);
+      if (!isPaid && !emVoo && (e.collaborator?.pix_key ?? null)) s.add(e.id);
+    }
+    return s;
+  }, [filteredEntries, paymentByEntry, transferByEntry, podePagar, folhaLiberada]);
+
+  const toggleSelect = (id: string, on: boolean) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+
+  // Linhas do lote — só as marcadas E ainda elegíveis (uma que virou paga/em voo
+  // some sozinha). Carrega o demonstrativo pro extrato do diálogo.
+  const selectedLines = useMemo<BatchSelectedLine[]>(() => {
+    const out: BatchSelectedLine[] = [];
+    for (const e of payableEntries) {
+      if (!selected.has(e.id) || !selectableIds.has(e.id)) continue;
+      const bd = taxBreakdownByEntry.get(e.id);
+      out.push({
+        entryId: e.id,
+        name: e.collaborator?.name ?? "(sem nome)",
+        pixKey: e.collaborator?.pix_key ?? null,
+        amount: Number(e.value),
+        gross: (bd?.components ?? []).reduce((s, c) => s + c.value, 0),
+        inss: bd?.inss ?? 0,
+        irpf: bd?.irpf ?? 0,
+        components: bd?.components ?? [],
+        discounts: bd?.discounts ?? [],
+      });
+    }
+    return out;
+  }, [payableEntries, selected, selectableIds, taxBreakdownByEntry]);
+
+  const selectedTotal = selectedLines.reduce((s, l) => s + l.amount, 0);
+
+  const allVisibleSelected =
+    selectableIds.size > 0 && [...selectableIds].every((id) => selected.has(id));
+  const toggleSelectAll = () =>
+    setSelected((prev) => {
+      if (allVisibleSelected) {
+        const next = new Set(prev);
+        for (const id of selectableIds) next.delete(id);
+        return next;
+      }
+      return new Set([...prev, ...selectableIds]);
+    });
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -382,6 +449,18 @@ export function PaymentsTab({
             { value: "pagos", label: "Pagos", count: paidCount },
           ]}
         />
+        {podePagar && folhaLiberada && selectableIds.size > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-10 text-xs"
+            onClick={toggleSelectAll}
+          >
+            {allVisibleSelected
+              ? "Limpar seleção"
+              : `Selecionar pagáveis (${selectableIds.size})`}
+          </Button>
+        )}
       </div>
 
       {/* Lista de colaboradores */}
@@ -402,30 +481,32 @@ export function PaymentsTab({
                 isPaid ? "bg-success/5 dark:bg-success/15" : "hover:bg-muted/30"
               }`}
             >
-              {/* Pagamento liquidado por PIX não se desmarca: o dinheiro saiu.
-                  O servidor recusa de qualquer forma — desabilitar aqui é pra o
-                  RH entender antes de clicar, em vez de receber um toast de
-                  erro. */}
-              <Checkbox
-                checked={isPaid}
-                disabled={
-                  !canManage ||
-                  togglePayment.isPending ||
-                  (rec?.method === "pix_santander" && !!rec?.paid_at)
-                }
-                title={
-                  rec?.method === "pix_santander" && rec?.paid_at
-                    ? "Pago por PIX — não dá pra desmarcar"
-                    : undefined
-                }
-                onCheckedChange={(checked) =>
-                  togglePayment.mutate({
-                    entryId: entry.id,
-                    amount: value,
-                    newPaid: !!checked,
-                  })
-                }
-              />
+              {/* Checkbox = SELEÇÃO pra pagamento em lote. Marcar pago na mão
+                  virou o botão "Validar" à direita. Pago mostra um check; o que
+                  não dá pra pagar agora (sem chave, em voo) fica travado. */}
+              <div className="w-4 flex items-center justify-center shrink-0">
+                {isPaid ? (
+                  <span title="Pago">
+                    <CheckCircle className="w-4 h-4 text-success" weight="fill" />
+                  </span>
+                ) : (
+                  <Checkbox
+                    checked={selected.has(entry.id)}
+                    disabled={!selectableIds.has(entry.id)}
+                    onCheckedChange={(checked) => toggleSelect(entry.id, !!checked)}
+                    aria-label={`Selecionar ${entry.collaborator?.name ?? "colaborador"} pra pagamento`}
+                    title={
+                      selectableIds.has(entry.id)
+                        ? "Selecionar pra pagamento"
+                        : !pixKey
+                          ? "Sem chave PIX cadastrada"
+                          : emVoo
+                            ? "Já está em processamento"
+                            : "Indisponível pra pagar agora"
+                    }
+                  />
+                )}
+              </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <p
@@ -676,6 +757,41 @@ export function PaymentsTab({
                   </div>
                 )}
 
+                {/* Validar = marcar pago NA MÃO (fora do PIX) — o que o checkbox
+                    fazia antes. Some quando saiu por PIX (liquidado não se
+                    desmarca) e quando há transferência em voo. */}
+                {canManage && !emVoo && !(rec?.method === "pix_santander" && isPaid) && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className={cn(
+                      "h-8 gap-1.5 px-2.5 text-xs",
+                      isPaid
+                        ? "border-success/40 text-success hover:bg-success/10 hover:text-success dark:text-success"
+                        : "text-muted-foreground",
+                    )}
+                    disabled={togglePayment.isPending}
+                    title={
+                      isPaid
+                        ? "Pago na mão — clique pra desmarcar"
+                        : "Marcar como pago na mão (fora do PIX)"
+                    }
+                    onClick={() =>
+                      togglePayment.mutate({
+                        entryId: entry.id,
+                        amount: value,
+                        newPaid: !isPaid,
+                      })
+                    }
+                  >
+                    <CheckCircle
+                      className="w-3.5 h-3.5"
+                      weight={isPaid ? "fill" : "regular"}
+                    />
+                    {isPaid ? "Pago" : "Validar"}
+                  </Button>
+                )}
+
                 {/* Botão Pagar — a ação primária da linha (laranja aponta pra
                     ela). Some quando já pago ou já em voo. */}
                 {podePagar && folhaLiberada && !isPaid && !emVoo && (
@@ -732,6 +848,51 @@ export function PaymentsTab({
           />
         );
       })()}
+
+      {/* Barra flutuante do lote — aparece quando há seleção. Mostra quantos,
+          quanto, e o "Pagar" que abre o extrato do lote. */}
+      {selectedLines.length > 0 && (
+        <div className="fixed inset-x-0 bottom-5 z-40 flex justify-center px-4 pointer-events-none">
+          <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-border bg-card px-4 py-2.5 shadow-lg">
+            <span className="flex items-center gap-1.5 text-sm text-foreground">
+              <Users className="w-4 h-4 text-primary" weight="duotone" />
+              <span className="font-semibold tabular-nums">{selectedLines.length}</span>
+              <span className="text-muted-foreground">
+                selecionado{selectedLines.length === 1 ? "" : "s"}
+              </span>
+            </span>
+            <span className="h-5 w-px bg-border" />
+            <span className="mono text-sm font-semibold tabular-nums text-foreground">
+              {formatCurrency(selectedTotal)}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs"
+              onClick={() => setSelected(new Set())}
+            >
+              Limpar
+            </Button>
+            <Button
+              size="sm"
+              className="h-8 px-4 text-xs"
+              onClick={() => setBatchOpen(true)}
+            >
+              Pagar
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {batchOpen && (
+        <BatchPixDialog
+          open={batchOpen}
+          onOpenChange={(o) => !o && setBatchOpen(false)}
+          periodId={periodId}
+          lines={selectedLines}
+          onExecuted={() => setSelected(new Set())}
+        />
+      )}
     </div>
   );
 }

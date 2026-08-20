@@ -181,6 +181,101 @@ export function usePixPayment(periodId: string | undefined) {
   return { challenge, execute, checkNow, cancel };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Pagamento em LOTE — um código pro conjunto selecionado.
+//
+// Dois passos, iguais em espírito ao avulso:
+//   challengeBatch(entry_ids) → abre uma transferência por lançamento e manda UM
+//                               código no WhatsApp do pagador. Devolve a lista
+//                               congelada (o que vai ser pago) + o que ficou de
+//                               fora (errors/skipped).
+//   executeBatch(challenge_id, code) → consome o código UMA vez e paga o
+//                               conjunto do desafio. O cliente NÃO manda a lista
+//                               de novo: o código autoriza exatamente o que o
+//                               passo 1 congelou.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface BatchLine {
+  entry_id: string;
+  transfer_id: string;
+  payee_name: string;
+  amount: number;
+  payee_pix_key_masked: string;
+}
+
+export interface BatchChallenge {
+  /** null = nada estava pronto pra pagar (ver errors/skipped). */
+  challenge_id: string | null;
+  last4?: string;
+  expires_at?: string;
+  count: number;
+  total_amount: number;
+  lines: BatchLine[];
+  errors: { entry_id: string; message: string }[];
+  skipped: { entry_id: string; status: string; message: string }[];
+}
+
+export interface BatchResultItem {
+  entry_id: string;
+  transfer_id: string;
+  status: PixTransferStatus;
+  end_to_end_id: string | null;
+  message: string;
+  error_code: string | null;
+  detail: string | null;
+}
+
+export interface BatchExecuteResult {
+  results: BatchResultItem[];
+  skipped: {
+    transfer_id: string;
+    entry_id: string | null;
+    status: string;
+    message: string;
+  }[];
+  counts: { settled: number; confirmed: number; failed: number; unknown: number };
+  /** true = o freio de relógio parou o lote no meio; remaining_count ficaram pendentes. */
+  budget_hit: boolean;
+  remaining_count: number;
+}
+
+export function usePixBatch(periodId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  const invalidar = () => {
+    queryClient.invalidateQueries({ queryKey: ["pix-transfers", periodId] });
+    queryClient.invalidateQueries({ queryKey: ["payroll-payments", periodId] });
+  };
+
+  /** Passo 1: abre as transferências do lote e dispara UM código. */
+  const challengeBatch = useMutation({
+    mutationFn: async (entryIds: string[]) => {
+      const { data, error } = await supabase.functions.invoke("payroll-pix-pay", {
+        body: { action: "challenge_batch", entry_ids: entryIds },
+      });
+      return unwrap<BatchChallenge>(error, data);
+    },
+    onSettled: invalidar,
+  });
+
+  /** Passo 2: consome o código e paga o conjunto congelado no desafio. */
+  const executeBatch = useMutation({
+    mutationFn: async (vars: { challengeId: string; code: string }) => {
+      const { data, error } = await supabase.functions.invoke("payroll-pix-pay", {
+        body: {
+          action: "execute_batch",
+          challenge_id: vars.challengeId,
+          code: vars.code,
+        },
+      });
+      return unwrap<BatchExecuteResult>(error, data);
+    },
+    onSettled: invalidar,
+  });
+
+  return { challengeBatch, executeBatch };
+}
+
 interface VoucherResult {
   status: "available" | "pending";
   location: string | null;
