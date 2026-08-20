@@ -31,7 +31,12 @@
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.0";
-import { gwUrlFor, type PixEnv } from "../_shared/pix-env.ts";
+import {
+  gwBaseUrl,
+  getGatewayConfig,
+  gwCredentialsHeader,
+  type PixEnv,
+} from "../_shared/pix-env.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -127,18 +132,20 @@ serve(async (req) => {
     return jsonResponse({ error: "NO_SETTLE_DATE", message: "Sem data de liquidação registrada." }, 409);
   }
 
-  // O comprovante fala com o gateway do AMBIENTE DA TRANSFERÊNCIA (congelado):
-  // um PIX liquidado em produção só tem recibo no host de produção.
-  const gwUrl = gwUrlFor(transfer.environment as PixEnv);
-  if (!gwUrl) {
+  // As credenciais vêm do AMBIENTE DA TRANSFERÊNCIA (congelado): o recibo de um
+  // PIX de produção só existe no host de produção. Viajam num header pro gateway.
+  const gwUrl = gwBaseUrl();
+  const creds = await getGatewayConfig(sbAdmin, transfer.environment as PixEnv);
+  if (!gwUrl || (transfer.environment === "production" && !creds)) {
     return jsonResponse(
       { error: "VOUCHER_NOT_CONFIGURED", message: "Comprovante indisponível pra esse ambiente. Fala com o admin." },
       200,
     );
   }
+  const credHeader = gwCredentialsHeader(creds);
 
   // ── 1. Acha o comprovante (paymentId) SEMPRE a partir da transferência ────
-  const resolved = await resolveReceipt(transfer, gwUrl, gwSecret);
+  const resolved = await resolveReceipt(transfer, gwUrl, gwSecret, credHeader);
   if (resolved.kind === "gateway_error") {
     return jsonResponse({ error: "GATEWAY_UNREACHABLE", message: gwErrorMessage(resolved.status) }, 200);
   }
@@ -171,6 +178,7 @@ serve(async (req) => {
     `${gwUrl}/receipts/${encodeURIComponent(paymentId)}/file_requests`,
     gwSecret,
     { request_value_date: month },
+    credHeader,
   );
   if (created.kind === "error") {
     return jsonResponse({ error: "GATEWAY_UNREACHABLE", message: gwErrorMessage(null) }, 200);
@@ -191,6 +199,7 @@ serve(async (req) => {
     const file = await gwGet(
       `${gwUrl}/receipts/${encodeURIComponent(paymentId)}/file_requests/${encodeURIComponent(requestId)}`,
       gwSecret,
+      credHeader,
     );
     if (file.kind === "ok" && file.status < 400) last = fileResult(file.data);
   }
@@ -219,6 +228,7 @@ async function resolveReceipt(
   transfer: Row,
   gwUrl: string,
   gwSecret: string,
+  credHeader: Record<string, string>,
 ): Promise<ResolveResult> {
   const settled = new Date(transfer.settled_at);
   const { ymd: settledYmd } = spDateParts(settled);
@@ -232,6 +242,7 @@ async function resolveReceipt(
   const listRes = await gwGet(
     `${gwUrl}/receipts?start_date=${start}&end_date=${end}&category=PIX${docParam}`,
     gwSecret,
+    credHeader,
   );
   if (listRes.kind === "error") return { kind: "gateway_error", status: null };
   if (listRes.status >= 400) return { kind: "gateway_error", status: listRes.status };
@@ -323,11 +334,20 @@ type Gw =
   | { kind: "ok"; status: number; data: Record<string, unknown> }
   | { kind: "error"; reason: string };
 
-async function gwGet(url: string, secret: string): Promise<Gw> {
-  return await gwCall("GET", url, secret);
+async function gwGet(
+  url: string,
+  secret: string,
+  extraHeaders: Record<string, string> = {},
+): Promise<Gw> {
+  return await gwCall("GET", url, secret, undefined, extraHeaders);
 }
-async function gwPost(url: string, secret: string, body: unknown): Promise<Gw> {
-  return await gwCall("POST", url, secret, body);
+async function gwPost(
+  url: string,
+  secret: string,
+  body: unknown,
+  extraHeaders: Record<string, string> = {},
+): Promise<Gw> {
+  return await gwCall("POST", url, secret, body, extraHeaders);
 }
 
 async function gwCall(
@@ -335,6 +355,7 @@ async function gwCall(
   url: string,
   secret: string,
   body?: unknown,
+  extraHeaders: Record<string, string> = {},
 ): Promise<Gw> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), GW_TIMEOUT_MS);
@@ -344,6 +365,7 @@ async function gwCall(
       headers: {
         Authorization: `Bearer ${secret}`,
         Accept: "application/json",
+        ...extraHeaders,
         ...(body === undefined ? {} : { "Content-Type": "application/json" }),
       },
       body: body === undefined ? undefined : JSON.stringify(body),

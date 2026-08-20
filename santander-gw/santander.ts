@@ -226,29 +226,51 @@ export interface GwConfig {
   environment: "sandbox" | "production";
 }
 
-function requireEnv(name: string): string {
-  const value = (Deno.env.get(name) ?? "").trim();
+/**
+ * Credenciais vindas POR REQUEST (header X-Gw-Credentials), decifradas pelo edge
+ * a partir de pix_gateway_credentials. Quando ausente, cada campo cai no env —
+ * o fallback que segura o sandbox durante a virada pro banco como fonte.
+ */
+export interface GwCredsInput {
+  client_id?: string;
+  client_secret?: string;
+  workspace_id?: string;
+  base_url?: string;
+  receipts_base_url?: string | null;
+  debit_branch?: string;
+  debit_account?: string;
+}
+
+/** Valor do override, senão do env; vazio nos dois = erro de config (pré-voo). */
+function pickCred(overrideVal: string | null | undefined, envName: string): string {
+  const value = (overrideVal ?? Deno.env.get(envName) ?? "").trim();
   if (!value) {
-    throw new SantanderError("config", `Falta a variável de ambiente ${name}`);
+    throw new SantanderError("config", `Falta credencial ${envName} (nem no painel nem no env)`);
   }
   return value;
 }
 
-export function readConfig(): GwConfig {
-  const baseUrl = (Deno.env.get("SANTANDER_BASE_URL") ?? DEFAULT_BASE_URL)
+/**
+ * Config da request. Com `override` (credenciais do painel, via header), a
+ * request se auto-descreve — inclusive o ambiente, derivado do base_url. Sem
+ * override, tudo vem do env (o gateway continua funcionando como antes).
+ *
+ * O ambiente É DERIVADO do host, nunca uma fonte separada: duas verdades pro
+ * ambiente é como "ensaiei no sandbox" vira "paguei de verdade". (trust-open-h é
+ * host só de comprovante, então o .includes não confunde homolog com produção.)
+ */
+export function readConfig(override?: GwCredsInput | null): GwConfig {
+  const src = override ?? null;
+  const baseUrl = (src?.base_url ?? Deno.env.get("SANTANDER_BASE_URL") ?? DEFAULT_BASE_URL)
     .trim()
     .replace(/\/+$/, "");
-  // Deriva do host em vez de ser mais uma env: duas fontes de verdade pro
-  // ambiente é como se "ensaiei no sandbox" vira "paguei de verdade".
-  // (trust-open-h não é host de PAGAMENTO — só de comprovante —, então o
-  // .includes não confunde homolog com produção aqui.)
   const environment: "sandbox" | "production" = baseUrl.includes("trust-open")
     ? "production"
     : "sandbox";
-  // `|| default`, não `?? default`: o compose passa string VAZIA quando a env
-  // não é setada (${VAR:-}), e "" não dispara o `??`. Vazio tem que cair no
-  // default derivado do ambiente, senão o host de comprovante ficaria "".
-  const receiptsEnv = (Deno.env.get("SANTANDER_RECEIPTS_BASE_URL") ?? "").trim();
+  // `|| default`, não `?? default`: string vazia (do env do compose, ${VAR:-})
+  // não dispara o `??` e deixaria o host de comprovante em "".
+  const receiptsEnv = (src?.receipts_base_url ?? Deno.env.get("SANTANDER_RECEIPTS_BASE_URL") ?? "")
+    .trim();
   const receiptsBaseUrl = (receiptsEnv ||
     (environment === "production"
       ? DEFAULT_RECEIPTS_BASE_URL_PROD
@@ -257,11 +279,11 @@ export function readConfig(): GwConfig {
   return {
     baseUrl,
     receiptsBaseUrl,
-    clientId: requireEnv("SANTANDER_CLIENT_ID"),
-    clientSecret: requireEnv("SANTANDER_CLIENT_SECRET"),
-    workspaceId: requireEnv("SANTANDER_WORKSPACE_ID"),
-    debitBranch: requireEnv("SANTANDER_DEBIT_BRANCH"),
-    debitAccount: requireEnv("SANTANDER_DEBIT_ACCOUNT"),
+    clientId: pickCred(src?.client_id, "SANTANDER_CLIENT_ID"),
+    clientSecret: pickCred(src?.client_secret, "SANTANDER_CLIENT_SECRET"),
+    workspaceId: pickCred(src?.workspace_id, "SANTANDER_WORKSPACE_ID"),
+    debitBranch: pickCred(src?.debit_branch, "SANTANDER_DEBIT_BRANCH"),
+    debitAccount: pickCred(src?.debit_account, "SANTANDER_DEBIT_ACCOUNT"),
     environment,
   };
 }
@@ -510,8 +532,7 @@ interface CachedToken {
 const tokenCache = new Map<string, CachedToken>();
 const tokenInFlight = new Map<string, Promise<string>>();
 
-async function fetchToken(baseUrl: string): Promise<string> {
-  const cfg = readConfig();
+async function fetchToken(cfg: GwConfig, baseUrl: string): Promise<string> {
   const form = new URLSearchParams({
     client_id: cfg.clientId,
     client_secret: cfg.clientSecret,
@@ -551,16 +572,17 @@ async function fetchToken(baseUrl: string): Promise<string> {
   return token;
 }
 
-/** Token do host pedido (default = host de pagamento). */
-export async function getToken(baseUrl?: string): Promise<string> {
-  const host = baseUrl ?? readConfig().baseUrl;
+/** Token do host pedido (default = host de pagamento do cfg). O cfg carrega as
+ *  credenciais (do painel ou do env); o cache é por host. */
+export async function getToken(cfg: GwConfig, baseUrl?: string): Promise<string> {
+  const host = baseUrl ?? cfg.baseUrl;
   const cached = tokenCache.get(host);
   if (cached && cached.expiresAtMs > Date.now()) return cached.token;
 
   const inflight = tokenInFlight.get(host);
   if (inflight) return await inflight;
 
-  const p = fetchToken(host).finally(() => {
+  const p = fetchToken(cfg, host).finally(() => {
     tokenInFlight.delete(host);
   });
   tokenInFlight.set(host, p);
@@ -570,8 +592,8 @@ export async function getToken(baseUrl?: string): Promise<string> {
 /** Descarta o token em cache do host. Usado quando o provedor devolve 401 num
  *  GET — o relógio dele e o nosso podem discordar. Nunca usado em POST/PATCH:
  *  lá, 401 é resposta final e quem decide o que fazer é o chamador. */
-export function invalidateToken(baseUrl?: string): void {
-  tokenCache.delete(baseUrl ?? readConfig().baseUrl);
+export function invalidateToken(baseUrl: string): void {
+  tokenCache.delete(baseUrl);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -589,7 +611,7 @@ async function authHeaders(
   baseUrl?: string,
 ): Promise<Record<string, string>> {
   // baseUrl opcional: o comprovante fala com outro host e precisa do token DELE.
-  const token = await getToken(baseUrl ?? cfg.baseUrl);
+  const token = await getToken(cfg, baseUrl ?? cfg.baseUrl);
   return {
     authorization: `Bearer ${token}`,
     // O X-Application-Key é o client_id, e é OBRIGATÓRIO junto do Bearer — sem
@@ -722,8 +744,10 @@ export function viewOf(raw: unknown): ProviderPaymentView {
  * POST — cria o pagamento. Devolve READY_TO_PAY e **NÃO move dinheiro**.
  * Sem retry automático: ver CallOpts.retry.
  */
-export async function createPayment(input: PixTransferInput): Promise<ProviderPaymentView> {
-  const cfg = readConfig();
+export async function createPayment(
+  cfg: GwConfig,
+  input: PixTransferInput,
+): Promise<ProviderPaymentView> {
   const payload = buildPaymentPayload(cfg, input);
 
   log("info", "pix.create.start", {
@@ -769,10 +793,10 @@ export async function createPayment(input: PixTransferInput): Promise<ProviderPa
  * sobrescrito por request — descobrir o corpo certo não pode exigir rebuild.
  */
 export async function confirmPayment(
+  cfg: GwConfig,
   paymentId: string,
   opts: { status?: string; amount?: string } = {},
 ): Promise<ProviderPaymentView> {
-  const cfg = readConfig();
   const body: Record<string, unknown> = {
     status: opts.status ?? (Deno.env.get("SANTANDER_CONFIRM_STATUS") ?? "AUTHORIZED").trim(),
   };
@@ -805,8 +829,10 @@ export async function confirmPayment(
 
 /** GET de um pagamento. Único caminho da reconciliação — e o único, junto do
  *  search, que pode repetir à vontade. */
-export async function getPayment(paymentId: string): Promise<ProviderPaymentView> {
-  const cfg = readConfig();
+export async function getPayment(
+  cfg: GwConfig,
+  paymentId: string,
+): Promise<ProviderPaymentView> {
   const url = paymentsUrl(cfg, `/${encodeURIComponent(paymentId)}`);
 
   const run = async () => {
@@ -827,7 +853,7 @@ export async function getPayment(paymentId: string): Promise<ProviderPaymentView
     // 401 num GET normalmente é token que venceu entre a checagem e o uso.
     // Repetir CONSULTA é sempre seguro — ao contrário de repetir pagamento.
     if (err instanceof SantanderError && err.providerStatus === 401) {
-      invalidateToken();
+      invalidateToken(cfg.baseUrl);
       log("warn", "token.retry_after_401", { provider_payment_id: paymentId });
       return await run();
     }
@@ -875,9 +901,9 @@ function matchesKey(payment: Record<string, unknown>, key: string): boolean {
  * transporte e formato. Reconciliação de verdade só em produção.
  */
 export async function searchByIdempotencyKey(
+  cfg: GwConfig,
   key: string,
 ): Promise<{ matches: ProviderPaymentView[]; scanned: number }> {
-  const cfg = readConfig();
   const { json } = await call({
     method: "GET",
     url: paymentsUrl(cfg),
@@ -941,9 +967,9 @@ export interface AccountView {
  * `agência.conta`, e é aqui que se lê o formato exato que o banco reconhece.
  */
 export async function listAccounts(
+  cfg: GwConfig,
   bankId: string = SANTANDER_BANK_ID,
 ): Promise<{ accounts: AccountView[]; hasMore: boolean }> {
-  const cfg = readConfig();
   const { json } = await call({
     method: "GET",
     url: accountInfoUrl(cfg, `/banks/${encodeURIComponent(bankId)}/accounts`),
@@ -986,10 +1012,10 @@ export interface BalanceView {
  * número de tela — e devolver o corpo cru só espalharia dado de conta.
  */
 export async function getBalance(
+  cfg: GwConfig,
   balanceId: string,
   bankId: string = SANTANDER_BANK_ID,
 ): Promise<BalanceView> {
-  const cfg = readConfig();
   const { json } = await call({
     method: "GET",
     url: accountInfoUrl(
@@ -1034,14 +1060,16 @@ export interface StatementEntry {
  * limita no lado do banco (o extrato de grandes volumes é outra API, fora do
  * escopo aqui — este é o síncrono).
  */
-export async function getStatement(params: {
-  branchCode: string;
-  accountNumber: string;
-  initialDate: string;
-  finalDate: string;
-  bankId?: string;
-}): Promise<{ entries: StatementEntry[]; hasMore: boolean }> {
-  const cfg = readConfig();
+export async function getStatement(
+  cfg: GwConfig,
+  params: {
+    branchCode: string;
+    accountNumber: string;
+    initialDate: string;
+    finalDate: string;
+    bankId?: string;
+  },
+): Promise<{ entries: StatementEntry[]; hasMore: boolean }> {
   const bankId = params.bankId ?? SANTANDER_BANK_ID;
   const q = new URLSearchParams({
     branchCode: params.branchCode,
@@ -1151,9 +1179,9 @@ export interface ReceiptFilters {
  *  Quem casa o comprovante com a NOSSA transferência é o chamador (por
  *  valor + beneficiário), porque a listagem não aceita endToEnd nem o nosso id. */
 export async function listReceipts(
+  cfg: GwConfig,
   f: ReceiptFilters,
 ): Promise<{ receipts: ReceiptView[] }> {
-  const cfg = readConfig();
   const q = new URLSearchParams({ start_date: f.startDate, end_date: f.endDate });
   if (f.category) q.set("category", f.category);
   if (f.beneficiaryDocument) q.set("beneficiary_document", f.beneficiaryDocument);
@@ -1205,10 +1233,10 @@ function fileRequestViewOf(raw: unknown): FileRequestView {
  *  retry=false como todo POST — aqui repetir só geraria outro PDF do mesmo
  *  pagamento (inofensivo), mas a regra da casa é POST nunca repetir sozinho. */
 export async function createReceiptFileRequest(
+  cfg: GwConfig,
   paymentId: string,
   requestValueDate: string,
 ): Promise<FileRequestView> {
-  const cfg = readConfig();
   const { json } = await call({
     method: "POST",
     url: receiptsUrl(
@@ -1227,10 +1255,10 @@ export async function createReceiptFileRequest(
 /** GET — pergunta o estado do arquivo. Repetir é seguro (consulta). O chamador
  *  faz o poll até statusCode AVAILABLE (a location vem preenchida aí). */
 export async function getReceiptFileRequest(
+  cfg: GwConfig,
   paymentId: string,
   requestId: string,
 ): Promise<FileRequestView> {
-  const cfg = readConfig();
   const url = receiptsUrl(
     cfg,
     `/payment_receipts/${encodeURIComponent(paymentId)}/file_requests/${

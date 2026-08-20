@@ -56,7 +56,12 @@
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.0";
-import { gwUrlFor, type PixEnv } from "../_shared/pix-env.ts";
+import {
+  gwBaseUrl,
+  getGatewayConfig,
+  gwCredentialsHeader,
+  type PixEnv,
+} from "../_shared/pix-env.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -177,10 +182,12 @@ serve(async (req) => {
     summary.picked++;
 
     // ── 3. Consulta (GET, sempre GET) ────────────────────────────────────────
-    // Gateway pelo AMBIENTE DA LINHA (congelado): um 'unknown' de produção só se
-    // resolve consultando o host de produção. URL vazia (ambiente sem gateway) faz
-    // o lookup falhar e a linha reagenda — nunca uma ação errada.
-    const look = await lookup(gwUrlFor(row.environment as PixEnv), gwSecret, row);
+    // Credenciais pelo AMBIENTE DA LINHA (congelado): um 'unknown' de produção só
+    // se resolve consultando com a credencial de produção. Vão num header pro
+    // gateway. Sem gateway/creds, o lookup falha e a linha reagenda — nunca uma
+    // ação errada (settle exige endToEnd provado, que não vem de host errado).
+    const rowCreds = await getGatewayConfig(sbAdmin, row.environment as PixEnv);
+    const look = await lookup(gwBaseUrl(), gwSecret, row, gwCredentialsHeader(rowCreds));
 
     if (look.kind === "error") {
       // Não conseguimos falar com o gateway. Isso não diz NADA sobre o
@@ -317,11 +324,13 @@ async function lookup(
   gwUrl: string,
   gwSecret: string,
   row: Row,
+  credHeader: Record<string, string>,
 ): Promise<Lookup> {
   if (row.provider_payment_id) {
     const res = await gwGet(
       `${gwUrl}/pix/transfer/${encodeURIComponent(row.provider_payment_id)}`,
       gwSecret,
+      credHeader,
     );
     if (res.kind === "error") return res;
 
@@ -351,6 +360,7 @@ async function lookup(
   const res = await gwGet(
     `${gwUrl}/pix/search?idempotency_key=${encodeURIComponent(row.idempotency_key)}`,
     gwSecret,
+    credHeader,
   );
   if (res.kind === "error") return res;
   if (res.status >= 400) return { kind: "inconclusive", reason: `HTTP ${res.status}` };
@@ -388,13 +398,17 @@ type GwGet =
   | { kind: "ok"; status: number; data: Record<string, unknown> }
   | { kind: "error"; reason: string };
 
-async function gwGet(url: string, secret: string): Promise<GwGet> {
+async function gwGet(
+  url: string,
+  secret: string,
+  extraHeaders: Record<string, string> = {},
+): Promise<GwGet> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), GW_TIMEOUT_MS);
   try {
     const res = await fetch(url, {
       method: "GET",
-      headers: { Authorization: `Bearer ${secret}`, Accept: "application/json" },
+      headers: { Authorization: `Bearer ${secret}`, Accept: "application/json", ...extraHeaders },
       signal: controller.signal,
     });
     const text = await res.text();

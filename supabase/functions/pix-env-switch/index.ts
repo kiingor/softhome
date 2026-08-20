@@ -26,7 +26,14 @@
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.0";
-import { activeEnvironment, gwUrlFor, type PixEnv } from "../_shared/pix-env.ts";
+import {
+  activeEnvironment,
+  gwBaseUrl,
+  getGatewayConfig,
+  gwCredentialsHeader,
+  type GatewayCreds,
+  type PixEnv,
+} from "../_shared/pix-env.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -114,8 +121,8 @@ serve(async (req) => {
   if (body.action === "status") {
     const active = await activeEnvironment(sbAdmin);
     const [sandbox, production] = await Promise.all([
-      probeGateway("sandbox"),
-      probeGateway("production"),
+      probeGateway(sbAdmin, "sandbox"),
+      probeGateway(sbAdmin, "production"),
     ]);
     return json({ active, sandbox, production }, 200);
   }
@@ -181,11 +188,11 @@ async function handleChallenge(ctx: {
 }): Promise<Response> {
   const { sbAdmin, user, pepper, evolutionUrl, evolutionKey, ip } = ctx;
 
-  // Só liga produção se o gateway de produção EXISTE (URL configurada). Sem isso,
-  // o código não teria pra onde levar.
-  if (!gwUrlFor("production")) {
+  // Só liga produção se as CREDENCIAIS de produção existem (configuradas no
+  // painel). Sem elas, o código não teria o que autorizar.
+  if (!(await getGatewayConfig(sbAdmin, "production"))) {
     return json(
-      { error: "PROD_NOT_CONFIGURED", message: "O gateway de produção ainda não está configurado no servidor." },
+      { error: "PROD_NOT_CONFIGURED", message: "As credenciais de produção ainda não estão configuradas no painel." },
       200,
     );
   }
@@ -288,9 +295,10 @@ async function handleSwitchToProduction(ctx: {
 }): Promise<Response> {
   const { sbAdmin, user, body, pepper, gwSecret, ip } = ctx;
 
-  const prodUrl = gwUrlFor("production");
-  if (!prodUrl) {
-    return json({ error: "PROD_NOT_CONFIGURED", message: "O gateway de produção não está configurado." }, 200);
+  const prodCreds = await getGatewayConfig(sbAdmin, "production");
+  const gwUrl = gwBaseUrl();
+  if (!gwUrl || !prodCreds) {
+    return json({ error: "PROD_NOT_CONFIGURED", message: "As credenciais de produção não estão configuradas no painel." }, 200);
   }
 
   const device = await activeDevice(sbAdmin, user.id);
@@ -352,7 +360,7 @@ async function handleSwitchToProduction(ctx: {
   // é read-only (não move dinheiro) e só passa se o token OAuth de produção sai —
   // ou seja, se o cert + as credenciais de produção estão certos. Ligar produção
   // sem essa prova é convidar o "descobri no dia do pagamento".
-  const proof = await proveGateway(prodUrl, gwSecret);
+  const proof = await proveGateway(gwUrl, prodCreds, gwSecret);
   if (!proof.ok) {
     await logEvent(sbAdmin, {
       user_id: user.id,
@@ -394,29 +402,35 @@ async function handleSwitchToProduction(ctx: {
 // Gateway probes
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Reachability barata: pinga /health (rota SEM auth). Não prova credencial. */
+/** Status do ambiente: `configured` = credenciais salvas no painel; `healthy` =
+ *  o gateway (um só) responde no /health (rota SEM auth). /health não prova
+ *  credencial — a prova de credencial de produção é feita ao LIGAR (proveGateway). */
 async function probeGateway(
+  sbAdmin: Sb,
   env: PixEnv,
 ): Promise<{ configured: boolean; healthy: boolean }> {
-  const url = gwUrlFor(env);
-  if (!url) return { configured: false, healthy: false };
+  const configured = !!(await getGatewayConfig(sbAdmin, env));
+  const url = gwBaseUrl();
+  if (!url) return { configured, healthy: false };
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), GW_HEALTH_TIMEOUT_MS);
   try {
     const res = await fetch(`${url}/health`, { signal: ctrl.signal });
     const jsonBody = await res.json().catch(() => null);
-    return { configured: true, healthy: res.ok && jsonBody?.ok === true };
+    return { configured, healthy: res.ok && jsonBody?.ok === true };
   } catch {
-    return { configured: true, healthy: false };
+    return { configured, healthy: false };
   } finally {
     clearTimeout(timer);
   }
 }
 
-/** Prova de credencial: um GET autenticado que força o OAuth do gateway. 200 =
- *  token de produção saiu (cert + creds ok). Qualquer outra coisa = não ligue. */
+/** Prova de credencial: um GET autenticado (com as creds de produção no header)
+ *  que força o OAuth do gateway. 200 = token de produção saiu (cert + creds ok).
+ *  Qualquer outra coisa = não ligue. */
 async function proveGateway(
   url: string,
+  creds: GatewayCreds,
   gwSecret: string | undefined,
 ): Promise<{ ok: boolean; reason: string }> {
   if (!gwSecret) return { ok: false, reason: "gateway sem segredo configurado" };
@@ -424,7 +438,7 @@ async function proveGateway(
   const timer = setTimeout(() => ctrl.abort(), GW_PROOF_TIMEOUT_MS);
   try {
     const res = await fetch(`${url}/account/accounts`, {
-      headers: { Authorization: `Bearer ${gwSecret}` },
+      headers: { Authorization: `Bearer ${gwSecret}`, ...gwCredentialsHeader(creds) },
       signal: ctrl.signal,
     });
     if (res.ok) return { ok: true, reason: "ok" };

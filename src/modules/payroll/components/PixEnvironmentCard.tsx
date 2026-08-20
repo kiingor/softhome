@@ -24,9 +24,13 @@ import { cn } from "@/lib/utils";
 import {
   usePixEnvStatus,
   usePixEnvSwitch,
+  useGatewayConfig,
   type GatewayStatus,
   type EnvChallenge,
+  type PixEnv,
 } from "../hooks/use-pix-env";
+import { PixGatewayConfigForm } from "./PixGatewayConfigForm";
+import { CaretDown } from "@phosphor-icons/react";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Painel do ambiente do PIX — troca sandbox↔produção sem SSH.
@@ -60,7 +64,9 @@ function StatusDot({ s }: { s: GatewayStatus }) {
 
 export function PixEnvironmentCard() {
   const status = usePixEnvStatus();
+  const config = useGatewayConfig();
   const { challenge, doSwitch } = usePixEnvSwitch();
+  const [configOpen, setConfigOpen] = useState<PixEnv | null>(null);
 
   const [prodOpen, setProdOpen] = useState(false);
   const [sandboxOpen, setSandboxOpen] = useState(false);
@@ -220,6 +226,54 @@ export function PixEnvironmentCard() {
             )}
           </>
         ) : null}
+
+        {/* Credenciais do gateway, por ambiente. O certificado já está no gateway
+            (o mesmo pros dois) — aqui vai o resto. O segredo é cifrado no servidor. */}
+        <div className="border-t border-border pt-4 space-y-2">
+          <p className="label-eyebrow">Credenciais do gateway</p>
+          <p className="text-xs text-muted-foreground -mt-1">
+            O certificado já está no gateway (o mesmo pros dois). O client_secret é
+            cifrado no servidor — nunca aparece de volta aqui.
+          </p>
+          {(["sandbox", "production"] as PixEnv[]).map((env) => {
+            const cfg = config.data?.[env] ?? null;
+            const open = configOpen === env;
+            return (
+              <div key={env} className="rounded-lg border border-border overflow-hidden">
+                <button
+                  type="button"
+                  className="w-full flex items-center justify-between px-3 py-2.5 text-sm hover:bg-muted/30 transition-colors"
+                  onClick={() => setConfigOpen(open ? null : env)}
+                >
+                  <span className="flex items-center gap-2">
+                    {env === "production" ? (
+                      <Buildings className="w-4 h-4 text-muted-foreground" />
+                    ) : (
+                      <Flask className="w-4 h-4 text-muted-foreground" />
+                    )}
+                    <span className="font-medium">{env === "production" ? "Produção" : "Sandbox"}</span>
+                    <span
+                      className={cn(
+                        "text-xs",
+                        cfg ? "text-success" : "text-muted-foreground",
+                      )}
+                    >
+                      {cfg ? "configurado" : "não configurado"}
+                    </span>
+                  </span>
+                  <CaretDown
+                    className={cn("w-4 h-4 text-muted-foreground transition-transform", open && "rotate-180")}
+                  />
+                </button>
+                {open && (
+                  <div className="border-t border-border p-3">
+                    <PixGatewayConfigForm environment={env} initial={cfg} />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </CardContent>
 
       {/* Diálogo: LIGAR PRODUÇÃO (aviso → código) */}

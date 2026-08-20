@@ -59,6 +59,67 @@ export function usePixEnvStatus(enabled = true) {
   });
 }
 
+// ── Credenciais do gateway (configuráveis pelo painel) ───────────────────────
+
+export interface GatewayConfigView {
+  client_id: string;
+  workspace_id: string;
+  base_url: string;
+  receipts_base_url: string | null;
+  debit_branch: string;
+  debit_account: string;
+  /** true = já tem segredo salvo (nunca devolvemos o segredo em si). */
+  has_secret: boolean;
+  updated_at: string;
+}
+
+export interface GatewayConfigMap {
+  sandbox: GatewayConfigView | null;
+  production: GatewayConfigView | null;
+}
+
+export function useGatewayConfig(enabled = true) {
+  return useQuery({
+    queryKey: ["pix-gateway-config"],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("pix-gateway-config", {
+        body: { action: "get" },
+      });
+      return unwrap<{ environments: GatewayConfigMap }>(error, data).environments;
+    },
+    enabled,
+    staleTime: 30_000,
+  });
+}
+
+export interface SaveGatewayVars {
+  environment: PixEnv;
+  client_id: string;
+  /** Vazio = mantém o segredo atual (edição sem re-digitar). */
+  client_secret?: string;
+  workspace_id: string;
+  base_url: string;
+  receipts_base_url?: string | null;
+  debit_branch: string;
+  debit_account: string;
+}
+
+export function useSaveGatewayConfig() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: SaveGatewayVars) => {
+      const { data, error } = await supabase.functions.invoke("pix-gateway-config", {
+        body: { action: "save", ...vars },
+      });
+      return unwrap<{ ok: boolean; environment: string }>(error, data);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["pix-gateway-config"] });
+      qc.invalidateQueries({ queryKey: ["pix-env-status"] });
+    },
+  });
+}
+
 export function usePixEnvSwitch() {
   const qc = useQueryClient();
   const invalidate = () => qc.invalidateQueries({ queryKey: ["pix-env-status"] });

@@ -41,6 +41,8 @@ import {
   getPayment,
   getReceiptFileRequest,
   getStatement,
+  type GwConfig,
+  type GwCredsInput,
   hasHttpClientSupport,
   isPixPaymentsDisabled,
   listAccounts,
@@ -376,18 +378,40 @@ function canonicalizeCreateBody(body: Record<string, unknown>): Record<string, u
  * configuração errada em algum dos dois lados — e o momento de descobrir isso é
  * ANTES de mandar, não na conciliação do mês seguinte.
  */
-function assertEnvironmentMatches(body: Record<string, unknown>): void {
+function assertEnvironmentMatches(body: Record<string, unknown>, cfg: GwConfig): void {
   const declared = String(body.environment ?? "").trim().toLowerCase();
   if (!declared) return;
-  const actual = readConfig().environment;
-  if (declared !== actual) {
+  if (declared !== cfg.environment) {
     throw new BadRequest(
-      `ambiente divergente: o chamador pediu '${declared}' e este gateway aponta pra '${actual}'`,
+      `ambiente divergente: o chamador pediu '${declared}' e as credenciais usadas apontam pra '${cfg.environment}'`,
     );
   }
 }
 
-async function handleCreate(req: Request, requestId: string): Promise<Response> {
+/**
+ * Credenciais vindas do edge no header X-Gw-Credentials (base64 JSON), decifradas
+ * lá a partir de pix_gateway_credentials. Ausente/inválido → null, e o
+ * readConfig cai no fallback do env (o que segura o sandbox durante a virada).
+ *
+ * O header NUNCA é logado (o log de request leva método/path/duração, não
+ * headers), então o client_secret não vaza pro docker logs.
+ */
+function parseGwCredentials(req: Request): GwCredsInput | null {
+  const raw = req.headers.get("x-gw-credentials");
+  if (!raw) return null;
+  try {
+    const json = decodeURIComponent(escape(atob(raw.trim())));
+    const obj = JSON.parse(json);
+    if (!obj || typeof obj !== "object") return null;
+    return obj as GwCredsInput;
+  } catch {
+    // Header malformado não vira 500: só ignora e cai no env. Se as credenciais
+    // do env também faltarem, o readConfig lança config (424, pré-voo).
+    return null;
+  }
+}
+
+async function handleCreate(req: Request, cfg: GwConfig, requestId: string): Promise<Response> {
   // Kill-switch lido AQUI, por request: desligar pagamento não pode depender de
   // redeploy nem de rebuild de imagem.
   if (isPixPaymentsDisabled()) {
@@ -404,7 +428,7 @@ async function handleCreate(req: Request, requestId: string): Promise<Response> 
   }
 
   const body = canonicalizeCreateBody(await readJsonBody(req));
-  assertEnvironmentMatches(body);
+  assertEnvironmentMatches(body, cfg);
 
   const idempotencyKey = requireString(body, "idempotency_key", {
     max: 80,
@@ -417,7 +441,7 @@ async function handleCreate(req: Request, requestId: string): Promise<Response> 
   const payeeDocument = optionalString(body, "payee_document", 20);
   const description = optionalString(body, "description", 140);
 
-  const view = await createPayment({
+  const view = await createPayment(cfg, {
     idempotencyKey,
     amount,
     dictCode,
@@ -443,7 +467,7 @@ async function handleCreate(req: Request, requestId: string): Promise<Response> 
   }, requestId);
 }
 
-async function handleConfirm(req: Request, paymentId: string, requestId: string): Promise<Response> {
+async function handleConfirm(req: Request, cfg: GwConfig, paymentId: string, requestId: string): Promise<Response> {
   if (isPixPaymentsDisabled()) {
     log("warn", "pix.confirm.blocked", { request_id: requestId, provider_payment_id: paymentId });
     return json(DISABLED_STATUS, {
@@ -461,7 +485,7 @@ async function handleConfirm(req: Request, paymentId: string, requestId: string)
     ? undefined
     : normalizeAmount(body.amount);
 
-  const view = await confirmPayment(paymentId, {
+  const view = await confirmPayment(cfg, paymentId, {
     status: status ?? undefined,
     amount,
   });
@@ -475,10 +499,10 @@ async function handleConfirm(req: Request, paymentId: string, requestId: string)
   }, requestId);
 }
 
-async function handleGet(paymentId: string, requestId: string): Promise<Response> {
+async function handleGet(cfg: GwConfig, paymentId: string, requestId: string): Promise<Response> {
   // Sem kill-switch: consultar nunca move dinheiro, e é justamente quando os
   // pagamentos estão desligados que mais se precisa saber o que já saiu.
-  const view = await getPayment(paymentId);
+  const view = await getPayment(cfg, paymentId);
   return json(200, {
     provider_payment_id: view.provider_payment_id ?? paymentId,
     status: view.status,
@@ -489,13 +513,13 @@ async function handleGet(paymentId: string, requestId: string): Promise<Response
   }, requestId);
 }
 
-async function handleSearch(url: URL, requestId: string): Promise<Response> {
+async function handleSearch(url: URL, cfg: GwConfig, requestId: string): Promise<Response> {
   const key = (url.searchParams.get("idempotency_key") ?? "").trim();
   if (!IDEMPOTENCY_KEY_PATTERN.test(key)) {
     throw new BadRequest("idempotency_key ausente ou com formato inválido");
   }
 
-  const { matches, scanned } = await searchByIdempotencyKey(key);
+  const { matches, scanned } = await searchByIdempotencyKey(cfg, key);
   return json(200, {
     idempotency_key: key,
     scanned,
@@ -511,7 +535,7 @@ async function handleSearch(url: URL, requestId: string): Promise<Response> {
     // Aviso no corpo, não só na doc: quem estiver resolvendo um 'unknown' às
     // duas da manhã precisa saber que sandbox é MOCK — duas chamadas devolvem
     // ids diferentes e ele não guarda estado. Aqui não se prova reconciliação.
-    warning: readConfig().environment === "sandbox"
+    warning: cfg.environment === "sandbox"
       ? "Ambiente sandbox é mock: resultado prova transporte, nunca reconciliação"
       : null,
   }, requestId);
@@ -531,8 +555,7 @@ const BRANCH_PATTERN = /^\d{1,6}$/;
 const ACCOUNT_PATTERN = /^\d{1,20}$/;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
-function resolveBranchAccount(url: URL): { branch: string; account: string } {
-  const cfg = readConfig();
+function resolveBranchAccount(url: URL, cfg: GwConfig): { branch: string; account: string } {
   const branch = (url.searchParams.get("branch") ?? cfg.debitBranch).trim();
   const account = (url.searchParams.get("account") ?? cfg.debitAccount).trim();
   if (!BRANCH_PATTERN.test(branch) || !ACCOUNT_PATTERN.test(account)) {
@@ -541,26 +564,26 @@ function resolveBranchAccount(url: URL): { branch: string; account: string } {
   return { branch, account };
 }
 
-async function handleAccounts(requestId: string): Promise<Response> {
-  const view = await listAccounts();
+async function handleAccounts(cfg: GwConfig, requestId: string): Promise<Response> {
+  const view = await listAccounts(cfg);
   return json(200, view, requestId);
 }
 
-async function handleBalance(url: URL, requestId: string): Promise<Response> {
-  const { branch, account } = resolveBranchAccount(url);
+async function handleBalance(url: URL, cfg: GwConfig, requestId: string): Promise<Response> {
+  const { branch, account } = resolveBranchAccount(url, cfg);
   // balance_id da conta Santander é `agência.conta` (ADR 0006 / doc do banco).
-  const view = await getBalance(`${branch}.${account}`);
+  const view = await getBalance(cfg, `${branch}.${account}`);
   return json(200, { ...view, branch, account }, requestId);
 }
 
-async function handleStatement(url: URL, requestId: string): Promise<Response> {
-  const { branch, account } = resolveBranchAccount(url);
+async function handleStatement(url: URL, cfg: GwConfig, requestId: string): Promise<Response> {
+  const { branch, account } = resolveBranchAccount(url, cfg);
   const initialDate = (url.searchParams.get("initial_date") ?? "").trim();
   const finalDate = (url.searchParams.get("final_date") ?? "").trim();
   if (!DATE_PATTERN.test(initialDate) || !DATE_PATTERN.test(finalDate)) {
     throw new BadRequest("initial_date/final_date obrigatórios no formato YYYY-MM-DD");
   }
-  const view = await getStatement({
+  const view = await getStatement(cfg, {
     branchCode: branch,
     accountNumber: account,
     initialDate,
@@ -584,7 +607,7 @@ const DOCUMENT_PATTERN = /^\d{11}$|^\d{14}$/;
 // seguros só, pra não deixar nada escapar pra dentro do path da URL do provedor.
 const RECEIPT_ID_PATTERN = /^[A-Za-z0-9._:-]{1,200}$/;
 
-async function handleReceiptsList(url: URL, requestId: string): Promise<Response> {
+async function handleReceiptsList(url: URL, cfg: GwConfig, requestId: string): Promise<Response> {
   const startDate = (url.searchParams.get("start_date") ?? "").trim();
   const endDate = (url.searchParams.get("end_date") ?? "").trim();
   if (!DATE_PATTERN.test(startDate) || !DATE_PATTERN.test(endDate)) {
@@ -601,7 +624,7 @@ async function handleReceiptsList(url: URL, requestId: string): Promise<Response
   const limitRaw = Number(url.searchParams.get("limit") ?? "50");
   const limit = Number.isFinite(limitRaw) ? limitRaw : 50;
 
-  const view = await listReceipts({
+  const view = await listReceipts(cfg, {
     startDate,
     endDate,
     category,
@@ -615,6 +638,7 @@ async function handleReceiptsList(url: URL, requestId: string): Promise<Response
 
 async function handleReceiptFileCreate(
   req: Request,
+  cfg: GwConfig,
   paymentId: string,
   requestId: string,
 ): Promise<Response> {
@@ -633,11 +657,12 @@ async function handleReceiptFileCreate(
   if (!MONTH_PATTERN.test(requestValueDate)) {
     throw new BadRequest("request_value_date obrigatório no formato YYYY-MM");
   }
-  const view = await createReceiptFileRequest(paymentId, requestValueDate);
+  const view = await createReceiptFileRequest(cfg, paymentId, requestValueDate);
   return json(202, view, requestId);
 }
 
 async function handleReceiptFileGet(
+  cfg: GwConfig,
   paymentId: string,
   fileRequestId: string,
   requestId: string,
@@ -645,7 +670,7 @@ async function handleReceiptFileGet(
   if (!RECEIPT_ID_PATTERN.test(paymentId) || !RECEIPT_ID_PATTERN.test(fileRequestId)) {
     throw new BadRequest("payment_id/request_id inválido");
   }
-  const view = await getReceiptFileRequest(paymentId, fileRequestId);
+  const view = await getReceiptFileRequest(cfg, paymentId, fileRequestId);
   return json(200, view, requestId);
 }
 
@@ -714,49 +739,60 @@ async function handler(req: Request): Promise<Response> {
     return json(401, { error: "Não autorizado", kind: "unauthorized", indeterminate: false }, requestId);
   }
 
+  // Credenciais desta request: do painel (header X-Gw-Credentials, decifrado pelo
+  // edge) ou fallback do env. readConfig pode lançar 'config' (424, pré-voo) se
+  // faltar tudo — nada foi enviado ao banco.
+  let cfg: GwConfig;
+  try {
+    cfg = readConfig(parseGwCredentials(req));
+  } catch (err) {
+    return errorResponse(err, requestId, { method: req.method, path });
+  }
+
   try {
     if (path === "/pix/transfer" && req.method === "POST") {
-      return await handleCreate(req, requestId);
+      return await handleCreate(req, cfg, requestId);
     }
 
     const confirmMatch = TRANSFER_CONFIRM.exec(path);
     if (confirmMatch && req.method === "PATCH") {
-      return await handleConfirm(req, safeDecode(confirmMatch[1]), requestId);
+      return await handleConfirm(req, cfg, safeDecode(confirmMatch[1]), requestId);
     }
 
     const byIdMatch = TRANSFER_BY_ID.exec(path);
     if (byIdMatch && req.method === "GET") {
-      return await handleGet(safeDecode(byIdMatch[1]), requestId);
+      return await handleGet(cfg, safeDecode(byIdMatch[1]), requestId);
     }
 
     if (path === "/pix/search" && req.method === "GET") {
-      return await handleSearch(url, requestId);
+      return await handleSearch(url, cfg, requestId);
     }
 
     if (path === "/account/accounts" && req.method === "GET") {
-      return await handleAccounts(requestId);
+      return await handleAccounts(cfg, requestId);
     }
 
     if (path === "/account/balance" && req.method === "GET") {
-      return await handleBalance(url, requestId);
+      return await handleBalance(url, cfg, requestId);
     }
 
     if (path === "/account/statement" && req.method === "GET") {
-      return await handleStatement(url, requestId);
+      return await handleStatement(url, cfg, requestId);
     }
 
     if (path === "/receipts" && req.method === "GET") {
-      return await handleReceiptsList(url, requestId);
+      return await handleReceiptsList(url, cfg, requestId);
     }
 
     const fileCreateMatch = RECEIPT_FILE_REQUESTS.exec(path);
     if (fileCreateMatch && req.method === "POST") {
-      return await handleReceiptFileCreate(req, safeDecode(fileCreateMatch[1]), requestId);
+      return await handleReceiptFileCreate(req, cfg, safeDecode(fileCreateMatch[1]), requestId);
     }
 
     const fileGetMatch = RECEIPT_FILE_REQUEST_BY_ID.exec(path);
     if (fileGetMatch && req.method === "GET") {
       return await handleReceiptFileGet(
+        cfg,
         safeDecode(fileGetMatch[1]),
         safeDecode(fileGetMatch[2]),
         requestId,

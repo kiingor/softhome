@@ -63,7 +63,13 @@
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.0";
-import { activeEnvironment, gwUrlFor, type PixEnv } from "../_shared/pix-env.ts";
+import {
+  activeEnvironment,
+  gwBaseUrl,
+  getGatewayConfig,
+  gwCredentialsHeader,
+  type PixEnv,
+} from "../_shared/pix-env.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -137,6 +143,24 @@ const MAX_BATCH_SIZE = 50;
 // o parcial. As que sobraram ficam 'created' (em voo, nada saiu) e voltam num
 // próximo código. Nunca reenvia — 'created' não chamou o banco.
 const BATCH_WALLCLOCK_BUDGET_MS = 80_000;
+
+/**
+ * O gateway (e, em produção, as credenciais do painel) estão prontos pra pagar
+ * este ambiente? Sandbox aceita creds do painel OU o fallback do env do gateway;
+ * produção exige credencial configurada (não há fallback de env pra produção).
+ */
+async function gatewayReady(sbAdmin: Sb, env: PixEnv): Promise<{ ok: boolean; message: string }> {
+  if (!gwBaseUrl()) {
+    return { ok: false, message: "O gateway do PIX não está configurado. Fala com o admin." };
+  }
+  if (env === "production" && !(await getGatewayConfig(sbAdmin, "production"))) {
+    return {
+      ok: false,
+      message: "As credenciais de produção não estão configuradas no painel.",
+    };
+  }
+  return { ok: true, message: "" };
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -265,16 +289,11 @@ serve(async (req) => {
         200,
       );
     }
-    // O gateway do ambiente ATIVO precisa existir antes de abrir transferências —
-    // senão o lote abriria N 'created' que ninguém consegue pagar.
-    if (!gwUrlFor(environment)) {
-      return jsonResponse(
-        {
-          error: "PAYMENT_NOT_CONFIGURED",
-          message: `O gateway de ${environment} não está configurado. Fala com o admin.`,
-        },
-        200,
-      );
+    // O gateway (e, em produção, as credenciais) precisam existir antes de abrir
+    // transferências — senão o lote abriria N 'created' que ninguém consegue pagar.
+    const ready = await gatewayReady(sbAdmin, environment);
+    if (!ready.ok) {
+      return jsonResponse({ error: "PAYMENT_NOT_CONFIGURED", message: ready.message }, 200);
     }
     return await handleChallengeBatch({
       sbUser,
@@ -453,15 +472,10 @@ serve(async (req) => {
         503,
       );
     }
-    // Gateway do ambiente ativo tem que existir antes de abrir a transferência.
-    if (!gwUrlFor(environment)) {
-      return jsonResponse(
-        {
-          error: "PAYMENT_NOT_CONFIGURED",
-          message: `O gateway de ${environment} não está configurado. Fala com o admin.`,
-        },
-        500,
-      );
+    // Gateway (e credenciais de produção) têm que existir antes de abrir.
+    const readySingle = await gatewayReady(sbAdmin, environment);
+    if (!readySingle.ok) {
+      return jsonResponse({ error: "PAYMENT_NOT_CONFIGURED", message: readySingle.message }, 200);
     }
     return await handleChallenge({
       sbAdmin,
@@ -965,17 +979,19 @@ async function sendOneTransfer(ctx: {
 }): Promise<SendResult> {
   const { sbAdmin, companyId, userId, ip, gwSecret, transfer } = ctx;
 
-  // O gateway é escolhido pelo AMBIENTE DA TRANSFERÊNCIA (congelado na abertura),
-  // não pela flag atual: uma tentativa aberta em 'production' sempre fala com o
-  // gateway de produção, mesmo que a flag vire pra sandbox no meio. Sem gateway
-  // configurado pra esse ambiente, nada foi enviado → 'failed' determinístico
-  // (config), nunca 'unknown'.
-  const gwUrl = gwUrlFor(transfer.environment as PixEnv);
-  if (!gwUrl) {
+  // As CREDENCIAIS vêm do AMBIENTE DA TRANSFERÊNCIA (congelado na abertura), não
+  // da flag atual: uma tentativa aberta em 'production' sempre paga com a
+  // credencial de produção, mesmo que a flag vire pra sandbox no meio. As creds
+  // viajam num header pro gateway (que guarda só o certificado). Sandbox sem
+  // config no painel → creds null → o gateway cai no fallback do env. Produção
+  // sem creds → não dá pra pagar: 'failed' determinístico (nada foi enviado).
+  const gwUrl = gwBaseUrl();
+  const creds = await getGatewayConfig(sbAdmin, transfer.environment as PixEnv);
+  if (!gwUrl || (transfer.environment === "production" && !creds)) {
     await sbAdmin.rpc("payroll_pix_fail", {
       p_id: transfer.id,
       p_code: "GW_NAO_CONFIGURADO",
-      p_msg: `Gateway de ${transfer.environment} não configurado no servidor.`,
+      p_msg: `Gateway/credenciais de ${transfer.environment} não configurados.`,
     });
     return {
       status: "failed",
@@ -985,6 +1001,7 @@ async function sendOneTransfer(ctx: {
       error_code: "GW_NAO_CONFIGURADO",
     };
   }
+  const credHeader = gwCredentialsHeader(creds);
 
   // Corpo do pagamento. Montado SÓ com o snapshot congelado na abertura da
   // transferência — nada vem do cliente, nada é relido de collaborators (se
@@ -1032,6 +1049,7 @@ async function sendOneTransfer(ctx: {
     secret: gwSecret,
     body: requestPayload,
     timeoutMs: GW_TIMEOUT_SEND_MS,
+    extraHeaders: credHeader,
   });
 
   if (post.kind === "unknown") {
@@ -1134,6 +1152,7 @@ async function sendOneTransfer(ctx: {
       amount: String(transfer.amount),
     },
     timeoutMs: GW_TIMEOUT_CONFIRM_MS,
+    extraHeaders: credHeader,
   });
 
   if (confirm.kind === "unknown") {
@@ -1871,6 +1890,8 @@ async function callGateway(args: {
   secret: string;
   body?: unknown;
   timeoutMs: number;
+  /** Credenciais do Santander (X-Gw-Credentials) — o gateway guarda só o cert. */
+  extraHeaders?: Record<string, string>;
 }): Promise<GwResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), args.timeoutMs);
@@ -1880,6 +1901,7 @@ async function callGateway(args: {
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${args.secret}`,
+        ...(args.extraHeaders ?? {}),
       },
       body: args.body === undefined ? undefined : JSON.stringify(args.body),
       signal: controller.signal,

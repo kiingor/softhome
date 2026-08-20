@@ -23,7 +23,12 @@
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.0";
-import { activeEnvironment, gwUrlFor } from "../_shared/pix-env.ts";
+import {
+  activeEnvironment,
+  gwBaseUrl,
+  getGatewayConfig,
+  gwCredentialsHeader,
+} from "../_shared/pix-env.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -73,11 +78,18 @@ serve(async (req) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const sbUser = createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: authHeader } },
   });
   const { data: { user }, error: authErr } = await sbUser.auth.getUser();
   if (authErr || !user) return jsonResponse({ error: "Invalid or expired token" }, 401);
+
+  // service_role pra ler as credenciais do gateway (pix_gateway_credentials é
+  // RLS sem policy — só service_role lê).
+  const sbAdmin = createClient(supabaseUrl, serviceKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
 
   // ── Body ─────────────────────────────────────────────────────────────────
   let body: AccountBody;
@@ -102,15 +114,25 @@ serve(async (req) => {
   const gate = await checkReadGate(sbUser, user.id, body.company_id);
   if (!gate.ok) return jsonResponse({ error: gate.error, message: gate.message }, 403);
 
-  // Gateway do ambiente ATIVO (a flag é global; sbUser lê pela RLS). Assim o
-  // saldo/extrato mostra a conta de produção quando produção está ligada.
-  const gwUrl = gwUrlFor(await activeEnvironment(sbUser));
+  // Credenciais do ambiente ATIVO (flag global). Assim saldo/extrato mostram a
+  // conta de produção quando produção está ligada. Sandbox sem config no painel →
+  // creds null → o gateway cai no fallback do env.
+  const gwUrl = gwBaseUrl();
   if (!gwUrl) {
     return jsonResponse(
-      { error: "ACCOUNT_NOT_CONFIGURED", message: "Consulta de conta indisponível pra esse ambiente. Fala com o admin." },
+      { error: "ACCOUNT_NOT_CONFIGURED", message: "Consulta de conta indisponível. Fala com o admin." },
       200,
     );
   }
+  const env = await activeEnvironment(sbAdmin);
+  const creds = await getGatewayConfig(sbAdmin, env);
+  if (env === "production" && !creds) {
+    return jsonResponse(
+      { error: "ACCOUNT_NOT_CONFIGURED", message: "As credenciais de produção não estão configuradas no painel." },
+      200,
+    );
+  }
+  const credHeader = gwCredentialsHeader(creds);
 
   // ── Chamada ao gateway ─────────────────────────────────────────────────────
   let path: string;
@@ -131,7 +153,7 @@ serve(async (req) => {
     path = `/account/statement?initial_date=${encodeURIComponent(from)}&final_date=${encodeURIComponent(to)}`;
   }
 
-  const gw = await gwGet(`${gwUrl}${path}`, gwSecret);
+  const gw = await gwGet(`${gwUrl}${path}`, gwSecret, credHeader);
   if (gw.kind === "error") {
     return jsonResponse(
       { error: "GATEWAY_UNREACHABLE", message: "Não deu pra falar com o banco agora. Tenta de novo em instantes." },
@@ -214,13 +236,17 @@ type GwGet =
   | { kind: "ok"; status: number; data: Record<string, unknown> }
   | { kind: "error"; reason: string };
 
-async function gwGet(url: string, secret: string): Promise<GwGet> {
+async function gwGet(
+  url: string,
+  secret: string,
+  extraHeaders: Record<string, string> = {},
+): Promise<GwGet> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), GW_TIMEOUT_MS);
   try {
     const res = await fetch(url, {
       method: "GET",
-      headers: { Authorization: `Bearer ${secret}`, Accept: "application/json" },
+      headers: { Authorization: `Bearer ${secret}`, Accept: "application/json", ...extraHeaders },
       signal: controller.signal,
     });
     const text = await res.text();
