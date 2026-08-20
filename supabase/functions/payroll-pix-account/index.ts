@@ -54,9 +54,14 @@ serve(async (req) => {
   const gwUrl = (Deno.env.get("SANTANDER_GW_URL") ?? "").replace(/\/$/, "");
   const gwSecret = Deno.env.get("SANTANDER_GW_SECRET");
   if (!gwUrl || !gwSecret) {
+    // 200 com erro no corpo, não 5xx: o proxy (Cloudflare/envoy) troca respostas
+    // 5xx por uma página sem CORS, e o navegador vê "Failed to send a request"
+    // em vez da mensagem. Todo erro de gateway/banco sai como 200 { error } e o
+    // unwrap do cliente lança a mensagem. (Auth/permissão seguem em 4xx — o proxy
+    // repassa 4xx sem mexer.)
     return jsonResponse(
       { error: "ACCOUNT_NOT_CONFIGURED", message: "Consulta de conta indisponível. Fala com o admin." },
-      500,
+      200,
     );
   }
 
@@ -118,21 +123,22 @@ serve(async (req) => {
   if (gw.kind === "error") {
     return jsonResponse(
       { error: "GATEWAY_UNREACHABLE", message: "Não deu pra falar com o banco agora. Tenta de novo em instantes." },
-      502,
+      200,
     );
   }
   if (gw.status >= 400) {
     // Erro do banco/gateway. Não repassa o corpo cru (pode conter dado de conta);
-    // devolve uma frase e o status pra depuração.
+    // devolve uma frase e o status pra depuração. 200 de propósito — ver o
+    // comentário no ACCOUNT_NOT_CONFIGURED (proxy engole 5xx).
     return jsonResponse(
       {
         error: "ACCOUNT_QUERY_FAILED",
         message: gw.status === 401 || gw.status === 403
           ? "O banco recusou a consulta de conta. Confere as credenciais/ambiente."
-          : "O banco não conseguiu responder a consulta agora.",
+          : "O banco não conseguiu responder a consulta agora (indisponível neste ambiente).",
         provider_status: gw.status,
       },
-      502,
+      200,
     );
   }
 

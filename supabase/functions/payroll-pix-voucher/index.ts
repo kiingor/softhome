@@ -64,9 +64,12 @@ serve(async (req) => {
   const gwUrl = (Deno.env.get("SANTANDER_GW_URL") ?? "").replace(/\/$/, "");
   const gwSecret = Deno.env.get("SANTANDER_GW_SECRET");
   if (!gwUrl || !gwSecret) {
+    // 200 com erro no corpo, não 5xx: o proxy troca 5xx por página sem CORS e o
+    // cliente vê "Failed to send a request" em vez da mensagem. O unwrap lança a
+    // mensagem a partir do corpo 200. (4xx de auth/permissão seguem como estão.)
     return jsonResponse(
       { error: "VOUCHER_NOT_CONFIGURED", message: "Comprovante indisponível. Fala com o admin." },
-      500,
+      200,
     );
   }
 
@@ -125,7 +128,7 @@ serve(async (req) => {
   // ── 1. Acha o comprovante (paymentId) SEMPRE a partir da transferência ────
   const resolved = await resolveReceipt(transfer, gwUrl, gwSecret);
   if (resolved.kind === "gateway_error") {
-    return jsonResponse({ error: "GATEWAY_UNREACHABLE", message: gwErrorMessage(resolved.status) }, 502);
+    return jsonResponse({ error: "GATEWAY_UNREACHABLE", message: gwErrorMessage(resolved.status) }, 200);
   }
   if (resolved.kind === "not_found") {
     return jsonResponse(
@@ -158,15 +161,15 @@ serve(async (req) => {
     { request_value_date: month },
   );
   if (created.kind === "error") {
-    return jsonResponse({ error: "GATEWAY_UNREACHABLE", message: gwErrorMessage(null) }, 502);
+    return jsonResponse({ error: "GATEWAY_UNREACHABLE", message: gwErrorMessage(null) }, 200);
   }
   if (created.status >= 400) {
-    return jsonResponse({ error: "VOUCHER_CREATE_FAILED", message: gwErrorMessage(created.status) }, 502);
+    return jsonResponse({ error: "VOUCHER_CREATE_FAILED", message: gwErrorMessage(created.status) }, 200);
   }
 
   const requestId = String((created.data as Record<string, unknown>).requestId ?? "");
   if (!requestId) {
-    return jsonResponse({ error: "VOUCHER_NO_REQUEST_ID", message: "O banco não devolveu o id do pedido." }, 502);
+    return jsonResponse({ error: "VOUCHER_NO_REQUEST_ID", message: "O banco não devolveu o id do pedido." }, 200);
   }
 
   // ── 3. Poll curto: talvez já esteja pronto ─────────────────────────────────
