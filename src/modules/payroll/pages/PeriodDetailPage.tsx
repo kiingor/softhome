@@ -82,7 +82,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PaymentsTab } from "../components/PaymentsTab";
-import { StatBlock } from "../components/StatBlock";
+import { cn } from "@/lib/utils";
 import { VacationAdvanceDialog } from "../components/VacationAdvanceDialog";
 import { PayrollValidationButton } from "../components/validation/PayrollValidationButton";
 import { toast } from "sonner";
@@ -789,58 +789,80 @@ function PeriodDetailPageContent() {
         )}
 
         <TabsContent value="lancamentos">
-          {/* KPIs desta aba — totais dos lançamentos (exclui bonificação/custo-setor).
-              Estagiários (por cargo) saem dos totais principais e ganham bloco à parte. */}
-          {/* Empilhado, não lado a lado: 8 cards de moeda numa linha só (o antigo
-              flex-[3]/flex-[2]) espremia os valores e cortava dígitos. Cada
-              grupo ocupa a largura cheia, então cada card tem folga pro número. */}
-          <div className="flex flex-col gap-4 mb-4">
-            <div className="min-w-0 space-y-1.5">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">
+          {/* Resumo dos lançamentos — mesmo padrão de card da aba Pagamentos.
+              Antes eram 8 cards grandes (principais + estagiários) tomando meia
+              tela; agora é um bloco coeso por grupo, com os números em mono. */}
+          <div className="space-y-3 mb-4">
+            <div className="rounded-lg border border-border bg-card p-4 shadow-soft">
+              <p className="label-eyebrow mb-3">
                 {lancamentoStats.intern.collaborators > 0 ? "Folha — sem estagiários" : "Folha"}
               </p>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                <StatBlock label="Pessoas" value={String(lancamentoStats.main.collaborators)} />
-                <StatBlock
-                  label="Proventos"
-                  value={formatCurrency(lancamentoStats.main.earnings)}
-                  tom="positivo"
-                />
-                <StatBlock
-                  label="Descontos"
-                  value={formatCurrency(lancamentoStats.main.deductions)}
-                  tom="negativo"
-                />
-                <StatBlock
-                  label="Líquido"
-                  value={formatCurrency(lancamentoStats.main.net)}
-                  tom={lancamentoStats.main.net >= 0 ? "positivo" : "negativo"}
-                />
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="min-w-0">
+                  <p className="label-eyebrow">Pessoas</p>
+                  <p className="mono mt-1 text-lg font-semibold leading-tight tracking-[-0.02em] text-foreground">
+                    {lancamentoStats.main.collaborators}
+                  </p>
+                </div>
+                <div className="min-w-0">
+                  <p className="label-eyebrow">Proventos</p>
+                  <p className="mono mt-1 text-lg font-semibold leading-tight tracking-[-0.02em] text-success truncate">
+                    {formatCurrency(lancamentoStats.main.earnings)}
+                  </p>
+                </div>
+                <div className="min-w-0">
+                  <p className="label-eyebrow">Descontos</p>
+                  <p className="mono mt-1 text-lg font-semibold leading-tight tracking-[-0.02em] text-destructive truncate">
+                    {formatCurrency(lancamentoStats.main.deductions)}
+                  </p>
+                </div>
+                <div className="min-w-0">
+                  <p className="label-eyebrow">Líquido</p>
+                  <p
+                    className={cn(
+                      "mono mt-1 text-lg font-semibold leading-tight tracking-[-0.02em] truncate",
+                      lancamentoStats.main.net >= 0 ? "text-success" : "text-destructive",
+                    )}
+                  >
+                    {formatCurrency(lancamentoStats.main.net)}
+                  </p>
+                </div>
               </div>
             </div>
 
             {lancamentoStats.intern.collaborators > 0 && (
-              <div className="min-w-0 space-y-1.5 border-t border-border pt-4">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">
-                  Estagiários
-                </p>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                  <StatBlock label="Pessoas" value={String(lancamentoStats.intern.collaborators)} />
-                  <StatBlock
-                    label="Proventos"
-                    value={formatCurrency(lancamentoStats.intern.earnings)}
-                    tom="positivo"
-                  />
-                  <StatBlock
-                    label="Descontos"
-                    value={formatCurrency(lancamentoStats.intern.deductions)}
-                    tom="negativo"
-                  />
-                  <StatBlock
-                    label="Líquido"
-                    value={formatCurrency(lancamentoStats.intern.net)}
-                    tom={lancamentoStats.intern.net >= 0 ? "positivo" : "negativo"}
-                  />
+              <div className="rounded-lg border border-border bg-card p-4 shadow-soft">
+                <p className="label-eyebrow mb-3">Estagiários</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="min-w-0">
+                    <p className="label-eyebrow">Pessoas</p>
+                    <p className="mono mt-1 text-lg font-semibold leading-tight tracking-[-0.02em] text-foreground">
+                      {lancamentoStats.intern.collaborators}
+                    </p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="label-eyebrow">Proventos</p>
+                    <p className="mono mt-1 text-lg font-semibold leading-tight tracking-[-0.02em] text-success truncate">
+                      {formatCurrency(lancamentoStats.intern.earnings)}
+                    </p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="label-eyebrow">Descontos</p>
+                    <p className="mono mt-1 text-lg font-semibold leading-tight tracking-[-0.02em] text-destructive truncate">
+                      {formatCurrency(lancamentoStats.intern.deductions)}
+                    </p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="label-eyebrow">Líquido</p>
+                    <p
+                      className={cn(
+                        "mono mt-1 text-lg font-semibold leading-tight tracking-[-0.02em] truncate",
+                        lancamentoStats.intern.net >= 0 ? "text-success" : "text-destructive",
+                      )}
+                    >
+                      {formatCurrency(lancamentoStats.intern.net)}
+                    </p>
+                  </div>
                 </div>
               </div>
             )}
@@ -871,19 +893,19 @@ function PeriodDetailPageContent() {
                       Colaborador
                     </label>
                     <div className="relative">
-                      <MagnifyingGlass className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                      <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                       <Input
                         type="text"
                         placeholder="Buscar colaborador..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-[220px] pl-8 pr-8 h-9"
+                        className="w-[240px] pl-9 pr-9 h-10"
                       />
                       {isSearching && (
                         <button
                           type="button"
                           onClick={() => setSearchTerm("")}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition focus:outline-none focus:ring-2 focus:ring-primary/40 rounded"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded"
                           aria-label="Limpar busca"
                           title="Limpar busca"
                         >
@@ -900,7 +922,7 @@ function PeriodDetailPageContent() {
                       value={reviewFilter}
                       onValueChange={(v) => setReviewFilter(v as typeof reviewFilter)}
                     >
-                      <SelectTrigger className="w-[170px] h-9">
+                      <SelectTrigger className="w-[180px] h-10">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -918,7 +940,7 @@ function PeriodDetailPageContent() {
                       value={obsFilter}
                       onValueChange={(v) => setObsFilter(v as typeof obsFilter)}
                     >
-                      <SelectTrigger className="w-[170px] h-9">
+                      <SelectTrigger className="w-[180px] h-10">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -936,7 +958,7 @@ function PeriodDetailPageContent() {
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
-                          className="w-[190px] h-9 justify-between font-normal"
+                          className="w-[190px] h-10 justify-between font-normal"
                         >
                           <span className="truncate">
                             {positionFilter.size === 0
