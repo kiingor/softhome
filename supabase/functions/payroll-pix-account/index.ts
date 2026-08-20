@@ -161,15 +161,23 @@ serve(async (req) => {
     );
   }
   if (gw.status >= 400) {
-    // Erro do banco/gateway. Não repassa o corpo cru (pode conter dado de conta);
-    // devolve uma frase e o status pra depuração. 200 de propósito — ver o
-    // comentário no ACCOUNT_NOT_CONFIGURED (proxy engole 5xx).
+    // Erro do banco/gateway. Não repassa o corpo cru (pode conter dado de conta),
+    // mas AGORA mostra o HTTP real + uma dica — antes a frase era genérica e
+    // escondia que o problema é o produto de conta, não o pagamento. 200 de
+    // propósito (proxy engole 5xx).
+    const base = gw.status === 401 || gw.status === 403
+      ? "O banco recusou a consulta de conta (credenciais/permissão)"
+      : "O banco recusou a consulta de conta";
+    // Saldo/extrato vêm da API bank_account_information — produto SEPARADO do PIX.
+    // 422/404 quase sempre = essa API não está habilitada nessas credenciais (o
+    // PIX segue funcionando; é outra API).
+    const hint = gw.status === 422 || gw.status === 404
+      ? " — a API de saldo/extrato é um produto à parte no Santander e pode não estar habilitada nessas credenciais (o PIX não depende dela)"
+      : "";
     return jsonResponse(
       {
         error: "ACCOUNT_QUERY_FAILED",
-        message: gw.status === 401 || gw.status === 403
-          ? "O banco recusou a consulta de conta. Confere as credenciais/ambiente."
-          : "O banco não conseguiu responder a consulta agora (indisponível neste ambiente).",
+        message: `${base} (HTTP ${gw.status})${hint}.`,
         provider_status: gw.status,
       },
       200,
