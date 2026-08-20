@@ -17,10 +17,13 @@
 //
 // Deploy: npx supabase functions deploy payroll-pix-account
 // verify_jwt: padrão (true) — leitura de conta não é pública.
-// Secrets: SANTANDER_GW_URL, SANTANDER_GW_SECRET
+// Secrets: SANTANDER_GW_URL (sandbox), SANTANDER_GW_URL_PROD (produção), SANTANDER_GW_SECRET
+// O saldo/extrato seguem o AMBIENTE ATIVO (flag pix_environment_settings), pra a
+// tela mostrar a conta de produção quando produção estiver ligada.
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.0";
+import { activeEnvironment, gwUrlFor } from "../_shared/pix-env.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -51,9 +54,8 @@ serve(async (req) => {
     return jsonResponse({ error: "Method not allowed" }, 405);
   }
 
-  const gwUrl = (Deno.env.get("SANTANDER_GW_URL") ?? "").replace(/\/$/, "");
   const gwSecret = Deno.env.get("SANTANDER_GW_SECRET");
-  if (!gwUrl || !gwSecret) {
+  if (!gwSecret) {
     // 200 com erro no corpo, não 5xx: o proxy (Cloudflare/envoy) troca respostas
     // 5xx por uma página sem CORS, e o navegador vê "Failed to send a request"
     // em vez da mensagem. Todo erro de gateway/banco sai como 200 { error } e o
@@ -99,6 +101,16 @@ serve(async (req) => {
   // ── Gate: papel + módulo (sem dispositivo — não move dinheiro) ────────────
   const gate = await checkReadGate(sbUser, user.id, body.company_id);
   if (!gate.ok) return jsonResponse({ error: gate.error, message: gate.message }, 403);
+
+  // Gateway do ambiente ATIVO (a flag é global; sbUser lê pela RLS). Assim o
+  // saldo/extrato mostra a conta de produção quando produção está ligada.
+  const gwUrl = gwUrlFor(await activeEnvironment(sbUser));
+  if (!gwUrl) {
+    return jsonResponse(
+      { error: "ACCOUNT_NOT_CONFIGURED", message: "Consulta de conta indisponível pra esse ambiente. Fala com o admin." },
+      200,
+    );
+  }
 
   // ── Chamada ao gateway ─────────────────────────────────────────────────────
   let path: string;

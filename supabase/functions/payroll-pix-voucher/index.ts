@@ -25,10 +25,13 @@
 //
 // Deploy: npx supabase functions deploy payroll-pix-voucher
 // verify_jwt: padrão (true) — comprovante não é público.
-// Secrets: SANTANDER_GW_URL, SANTANDER_GW_SECRET
+// Secrets: SANTANDER_GW_URL (sandbox), SANTANDER_GW_URL_PROD (produção), SANTANDER_GW_SECRET
+// O gateway é escolhido pelo transfer.environment (o recibo de um PIX de produção
+// só existe no host de produção).
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.0";
+import { gwUrlFor, type PixEnv } from "../_shared/pix-env.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -61,9 +64,8 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS_HEADERS });
   if (req.method !== "POST") return jsonResponse({ error: "Method not allowed" }, 405);
 
-  const gwUrl = (Deno.env.get("SANTANDER_GW_URL") ?? "").replace(/\/$/, "");
   const gwSecret = Deno.env.get("SANTANDER_GW_SECRET");
-  if (!gwUrl || !gwSecret) {
+  if (!gwSecret) {
     // 200 com erro no corpo, não 5xx: o proxy troca 5xx por página sem CORS e o
     // cliente vê "Failed to send a request" em vez da mensagem. O unwrap lança a
     // mensagem a partir do corpo 200. (4xx de auth/permissão seguem como estão.)
@@ -103,7 +105,7 @@ serve(async (req) => {
   // ── Transferência (fonte da verdade do que pode gerar comprovante) ────────
   const { data: transfer } = await sbAdmin
     .from("payroll_pix_transfers")
-    .select("id, company_id, status, amount, settled_at, payee_name, payee_document")
+    .select("id, company_id, status, amount, settled_at, payee_name, payee_document, environment")
     .eq("id", body.transfer_id)
     .maybeSingle();
 
@@ -123,6 +125,16 @@ serve(async (req) => {
   }
   if (!transfer.settled_at) {
     return jsonResponse({ error: "NO_SETTLE_DATE", message: "Sem data de liquidação registrada." }, 409);
+  }
+
+  // O comprovante fala com o gateway do AMBIENTE DA TRANSFERÊNCIA (congelado):
+  // um PIX liquidado em produção só tem recibo no host de produção.
+  const gwUrl = gwUrlFor(transfer.environment as PixEnv);
+  if (!gwUrl) {
+    return jsonResponse(
+      { error: "VOUCHER_NOT_CONFIGURED", message: "Comprovante indisponível pra esse ambiente. Fala com o admin." },
+      200,
+    );
   }
 
   // ── 1. Acha o comprovante (paymentId) SEMPRE a partir da transferência ────

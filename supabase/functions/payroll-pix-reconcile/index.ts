@@ -50,10 +50,13 @@
 // qualquer portador de um JWT válido dispare a reconciliação.
 //
 // Deploy: npx supabase functions deploy payroll-pix-reconcile
-// Secrets: PIX_RECONCILE_SECRET, SANTANDER_GW_URL, SANTANDER_GW_SECRET
+// Secrets: PIX_RECONCILE_SECRET, SANTANDER_GW_URL (sandbox),
+//          SANTANDER_GW_URL_PROD (produção), SANTANDER_GW_SECRET
+// Gateway escolhido por linha (transfer.environment congelado).
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.0";
+import { gwUrlFor, type PixEnv } from "../_shared/pix-env.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -95,11 +98,12 @@ serve(async (req) => {
   }
 
   const reconcileSecret = Deno.env.get("PIX_RECONCILE_SECRET");
-  const gwUrl = (Deno.env.get("SANTANDER_GW_URL") ?? "").replace(/\/$/, "");
   const gwSecret = Deno.env.get("SANTANDER_GW_SECRET");
 
-  if (!reconcileSecret || !gwUrl || !gwSecret) {
-    // Sem secret configurado a function NÃO vira aberta: ela para.
+  if (!reconcileSecret || !gwSecret) {
+    // Sem secret configurado a function NÃO vira aberta: ela para. O gwUrl é
+    // por-ambiente (escolhido por linha, pelo transfer.environment) — não dá
+    // pra exigir uma URL única aqui.
     return jsonResponse({ error: "RECONCILE_NOT_CONFIGURED" }, 500);
   }
 
@@ -173,7 +177,10 @@ serve(async (req) => {
     summary.picked++;
 
     // ── 3. Consulta (GET, sempre GET) ────────────────────────────────────────
-    const look = await lookup(gwUrl, gwSecret, row);
+    // Gateway pelo AMBIENTE DA LINHA (congelado): um 'unknown' de produção só se
+    // resolve consultando o host de produção. URL vazia (ambiente sem gateway) faz
+    // o lookup falhar e a linha reagenda — nunca uma ação errada.
+    const look = await lookup(gwUrlFor(row.environment as PixEnv), gwSecret, row);
 
     if (look.kind === "error") {
       // Não conseguimos falar com o gateway. Isso não diz NADA sobre o

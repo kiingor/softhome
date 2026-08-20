@@ -17,6 +17,7 @@ import { useIsCompanyAdmin, usePermissions } from "@/hooks/usePermissions";
 import WhatsAppConfigTab from "@/components/whatsapp/WhatsAppConfigTab";
 import AuditoriaTab from "@/modules/audit/pages/AuditoriaTab";
 import { MfaLoginCard } from "@/components/security/MfaLoginCard";
+import { PixEnvironmentCard } from "@/modules/payroll/components/PixEnvironmentCard";
 
 const ConfiguracoesPage = () => {
   const { currentCompany, hasAnyRole } = useDashboard();
@@ -472,6 +473,9 @@ const ConfiguracoesPage = () => {
             <TabsContent value="seguranca" className="space-y-6">
               <MfaLoginCard />
               {(isAdmin || canExecutePayment) && <SecurityTab />}
+              {/* Ambiente do PIX (sandbox↔produção): só admin_gc / diretoria — é o
+                  botão que liga pagamentos reais. */}
+              {(isAdmin || hasAnyRole(["admin_gc", "diretoria"])) && <PixEnvironmentCard />}
             </TabsContent>
           )}
 
