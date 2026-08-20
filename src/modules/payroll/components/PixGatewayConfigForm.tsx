@@ -9,6 +9,7 @@ import {
   MagnifyingGlass,
   CheckCircle,
   Plus,
+  Trash,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -16,6 +17,7 @@ import {
   useSaveGatewayConfig,
   useDiscoverWorkspaces,
   useCreateWorkspace,
+  useDeleteWorkspace,
   type GatewayConfigView,
   type PixEnv,
   type DiscoveredWorkspace,
@@ -55,6 +57,7 @@ export function PixGatewayConfigForm({
   const save = useSaveGatewayConfig();
   const discover = useDiscoverWorkspaces();
   const createWs = useCreateWorkspace();
+  const deleteWs = useDeleteWorkspace();
   const [workspaces, setWorkspaces] = useState<DiscoveredWorkspace[] | null>(null);
   // Seleção por índice (o sandbox devolve o mesmo workspaceId pros três; casar
   // por id destacaria todos). Só o PIX-ativo é selecionável.
@@ -67,6 +70,7 @@ export function PixGatewayConfigForm({
     base_url: initial?.base_url ?? BASE_DEFAULTS[environment],
     debit_branch: initial?.debit_branch ?? "",
     debit_account: initial?.debit_account ?? "",
+    ws_description: "DNA Softcom",
   });
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -150,11 +154,30 @@ export function PixGatewayConfigForm({
         base_url: form.base_url.trim(),
         branch: form.debit_branch.trim(),
         number: form.debit_account.trim(),
+        description: form.ws_description.trim() || undefined,
       });
       toast.success("Workspace de PIX criado. Buscando de novo…");
       await onBuscar();
     } catch (err) {
       toast.error((err as Error).message ?? "Não deu pra criar o workspace.");
+    }
+  };
+
+  const onExcluir = async (w: DiscoveredWorkspace) => {
+    if (!w.workspaceId) return;
+    if (!window.confirm(`Excluir o workspace "${w.description || w.type || w.workspaceId}"?`)) return;
+    try {
+      await deleteWs.mutateAsync({
+        environment,
+        client_id: form.client_id.trim(),
+        client_secret: form.client_secret,
+        base_url: form.base_url.trim(),
+        workspace_id: w.workspaceId,
+      });
+      toast.success("Workspace excluído.");
+      await onBuscar();
+    } catch (err) {
+      toast.error((err as Error).message ?? "Não deu pra excluir.");
     }
   };
 
@@ -222,40 +245,53 @@ export function PixGatewayConfigForm({
               const selectable = w.pixPaymentsActive;
               const selected = selectedIdx === i;
               return (
-                <button
+                <div
                   key={i}
-                  type="button"
-                  onClick={() => pickWorkspace(w, i)}
-                  disabled={!selectable}
-                  title={selectable ? undefined : "Esse workspace não tem PIX ativo — não dá pra pagar por ele."}
                   className={cn(
-                    "w-full text-left rounded-md border px-3 py-2 transition-colors",
-                    selected
-                      ? "border-primary/50 bg-primary/5"
-                      : selectable
-                        ? "border-border hover:bg-muted/40"
-                        : "border-border opacity-50 cursor-not-allowed",
+                    "flex items-center gap-1 rounded-md border transition-colors",
+                    selected ? "border-primary/50 bg-primary/5" : "border-border",
                   )}
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="flex items-center gap-2 min-w-0">
-                      {selected && <CheckCircle className="w-4 h-4 text-primary shrink-0" weight="fill" />}
-                      <span className="text-sm font-medium truncate">
-                        {w.description || w.type || "Workspace"}
-                      </span>
-                      {w.pixPaymentsActive ? (
-                        <Badge variant="success" className="shrink-0">PIX ativo</Badge>
-                      ) : (
-                        <Badge variant="warning" className="shrink-0">sem PIX</Badge>
-                      )}
-                    </span>
-                    {w.mainDebitAccount && (
-                      <span className="mono text-[11px] text-muted-foreground shrink-0">
-                        ag {w.mainDebitAccount.branch} · {w.mainDebitAccount.number}
-                      </span>
+                  <button
+                    type="button"
+                    onClick={() => pickWorkspace(w, i)}
+                    disabled={!selectable}
+                    title={selectable ? undefined : "Esse workspace não tem PIX ativo — não dá pra pagar por ele."}
+                    className={cn(
+                      "flex-1 min-w-0 text-left px-3 py-2 rounded-l-md transition-colors",
+                      selectable && !selected && "hover:bg-muted/40",
+                      !selectable && "opacity-50 cursor-not-allowed",
                     )}
-                  </div>
-                </button>
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="flex items-center gap-2 min-w-0">
+                        {selected && <CheckCircle className="w-4 h-4 text-primary shrink-0" weight="fill" />}
+                        <span className="text-sm font-medium truncate">
+                          {w.description || w.type || "Workspace"}
+                        </span>
+                        {w.pixPaymentsActive ? (
+                          <Badge variant="success" className="shrink-0">PIX ativo</Badge>
+                        ) : (
+                          <Badge variant="warning" className="shrink-0">sem PIX</Badge>
+                        )}
+                      </span>
+                      {w.mainDebitAccount && (
+                        <span className="mono text-[11px] text-muted-foreground shrink-0">
+                          ag {w.mainDebitAccount.branch} · {w.mainDebitAccount.number}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onExcluir(w)}
+                    disabled={!w.workspaceId || deleteWs.isPending}
+                    title="Excluir este workspace"
+                    className="shrink-0 h-8 w-8 mr-1 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-40"
+                  >
+                    <Trash className="w-4 h-4" />
+                  </button>
+                </div>
               );
             })}
           </div>
@@ -288,6 +324,12 @@ export function PixGatewayConfigForm({
               inputMode="numeric"
             />
           </div>
+          <Input
+            className="h-8"
+            value={form.ws_description}
+            onChange={(e) => set("ws_description", e.target.value)}
+            placeholder="Nome do workspace (ex.: DNA Softcom)"
+          />
           <Button
             size="sm"
             variant="outline"

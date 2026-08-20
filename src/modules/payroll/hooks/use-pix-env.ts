@@ -169,6 +169,24 @@ export function useCreateWorkspace() {
   });
 }
 
+/** Exclui um workspace (ex.: um criado errado no teste). */
+export function useDeleteWorkspace() {
+  return useMutation({
+    mutationFn: async (vars: {
+      environment: PixEnv;
+      client_id: string;
+      client_secret: string;
+      base_url: string;
+      workspace_id: string;
+    }) => {
+      const { data, error } = await supabase.functions.invoke("pix-gateway-config", {
+        body: { action: "delete_workspace", ...vars },
+      });
+      return unwrap<{ ok: boolean }>(error, data);
+    },
+  });
+}
+
 export function usePixEnvSwitch() {
   const qc = useQueryClient();
   const invalidate = () => qc.invalidateQueries({ queryKey: ["pix-env-status"] });

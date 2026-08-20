@@ -390,7 +390,7 @@ export function certDaysLeft(): number {
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface CallOpts {
-  method: "GET" | "POST" | "PATCH";
+  method: "GET" | "POST" | "PATCH" | "DELETE";
   url: string;
   headers: Record<string, string>;
   /** Corpo JSON. */
@@ -1033,6 +1033,23 @@ export async function createWorkspace(
     environment: cfg.environment,
   });
   return view;
+}
+
+/** Exclui um workspace. Reversível só recriando; não move dinheiro. */
+export async function deleteWorkspace(
+  cfg: GwConfig,
+  workspaceId: string,
+): Promise<{ status: number }> {
+  const { status } = await call({
+    method: "DELETE",
+    url: `${cfg.baseUrl}${WORKSPACES_PATH}/${encodeURIComponent(workspaceId)}`,
+    headers: await authHeaders(cfg),
+    timeoutMs: TIMEOUT_POST_MS,
+    retry: false,
+    label: "DELETE workspace",
+  });
+  log("info", "workspaces.delete.ok", { workspace_id: workspaceId, environment: cfg.environment });
+  return { status };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

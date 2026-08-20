@@ -34,6 +34,7 @@ import {
   confirmPayment,
   createPayment,
   createWorkspace,
+  deleteWorkspace,
   DICT_CODE_TYPES,
   type DictCodeType,
   createReceiptFileRequest,
@@ -591,6 +592,11 @@ async function handleCreateWorkspace(req: Request, cfg: GwConfig, requestId: str
   return json(201, view, requestId);
 }
 
+async function handleDeleteWorkspace(cfg: GwConfig, workspaceId: string, requestId: string): Promise<Response> {
+  const { status } = await deleteWorkspace(cfg, workspaceId);
+  return json(200, { ok: true, provider_status: status }, requestId);
+}
+
 async function handleBalance(url: URL, cfg: GwConfig, requestId: string): Promise<Response> {
   const { branch, account } = resolveBranchAccount(url, cfg);
   // balance_id da conta Santander é `agência.conta` (ADR 0006 / doc do banco).
@@ -731,6 +737,7 @@ function existsSync(path: string): boolean {
 // Servidor
 // ─────────────────────────────────────────────────────────────────────────────
 
+const WORKSPACE_BY_ID = /^\/workspaces\/([^/]{1,80})$/;
 const TRANSFER_CONFIRM = /^\/pix\/transfer\/([^/]{1,120})\/confirm$/;
 const TRANSFER_BY_ID = /^\/pix\/transfer\/([^/]{1,120})$/;
 const RECEIPT_FILE_REQUESTS = /^\/receipts\/([^/]{1,200})\/file_requests$/;
@@ -800,6 +807,11 @@ async function handler(req: Request): Promise<Response> {
 
     if (path === "/workspaces" && req.method === "POST") {
       return await handleCreateWorkspace(req, cfg, requestId);
+    }
+
+    const wsDelMatch = WORKSPACE_BY_ID.exec(path);
+    if (wsDelMatch && req.method === "DELETE") {
+      return await handleDeleteWorkspace(cfg, safeDecode(wsDelMatch[1]), requestId);
     }
 
     if (path === "/account/balance" && req.method === "GET") {
