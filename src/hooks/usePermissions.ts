@@ -101,7 +101,14 @@ export const MODULE_GROUPS: ModuleGroup[] = [
 
 export const ALL_MODULES: ModuleType[] = MODULE_GROUPS.flatMap((g) => g.modules);
 
-export const usePermissions = (module: ModuleType): ModulePermissions => {
+export const usePermissions = (
+  module: ModuleType,
+  // Quando true, o atalho "is_company_admin libera tudo" NÃO se aplica: a
+  // permissão passa a respeitar só o explícito (e o DONO, que já vem all-true do
+  // get_user_permissions). Usado por módulos sensíveis — pagamento — que não
+  // podem ser liberados só por alguém ter o papel admin_gc.
+  ignoreCompanyAdmin = false,
+): ModulePermissions => {
   const { user, currentCompany } = useDashboard();
 
   const { data: isAdmin, isLoading: isAdminLoading } = useQuery({
@@ -150,8 +157,13 @@ export const usePermissions = (module: ModuleType): ModulePermissions => {
   const isLoading = isAdminLoading || isPermissionsLoading;
   const userIsAdmin = isAdmin ?? false;
 
-  // Admin has all permissions
-  if (userIsAdmin) {
+  // Admin (dono OU admin_gc) libera tudo — EXCETO quando ignoreCompanyAdmin: aí a
+  // permissão respeita só o explícito. O DONO continua liberado porque o próprio
+  // get_user_permissions devolve all-true pra ele (cláusula de dono na RPC); quem
+  // perde o atalho é o admin_gc, que precisa da permissão marcada. Usado por
+  // módulos sensíveis (pagamento) — ter o papel admin_gc não pode, sozinho,
+  // liberar a aba de dinheiro.
+  if (userIsAdmin && !ignoreCompanyAdmin) {
     return {
       canView: true,
       canCreate: true,
