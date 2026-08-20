@@ -559,13 +559,29 @@ const BRANCH_PATTERN = /^\d{1,6}$/;
 const ACCOUNT_PATTERN = /^\d{1,20}$/;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
-function resolveBranchAccount(url: URL, cfg: GwConfig): { branch: string; account: string } {
-  const branch = (url.searchParams.get("branch") ?? cfg.debitBranch).trim();
-  const account = (url.searchParams.get("account") ?? cfg.debitAccount).trim();
-  if (!BRANCH_PATTERN.test(branch) || !ACCOUNT_PATTERN.test(account)) {
-    throw new BadRequest("branch/account precisam ser numéricos (agência até 6, conta até 20 dígitos)");
+// Agência/conta que a API bank_account_information reconhece. Com ?branch=&account=
+// na query, respeita o override (útil pra depurar). Sem override, DESCOBRE pelo
+// /accounts — de propósito NÃO usa a conta de débito do PIX (cfg.debitAccount): o
+// workspace de pagamento e a conta do produto de informação têm identificadores
+// DIFERENTES (a de débito devolve 422 no /balances). O balanceId é
+// `${branchCode}.${number}${checkDigit}` — exatamente o que o /accounts devolve.
+async function resolveInfoAccount(url: URL, cfg: GwConfig): Promise<{ branch: string; account: string }> {
+  const qBranch = url.searchParams.get("branch");
+  const qAccount = url.searchParams.get("account");
+  if (qBranch && qAccount) {
+    const branch = qBranch.trim();
+    const account = qAccount.trim();
+    if (!BRANCH_PATTERN.test(branch) || !ACCOUNT_PATTERN.test(account)) {
+      throw new BadRequest("branch/account precisam ser numéricos (agência até 6, conta até 20 dígitos)");
+    }
+    return { branch, account };
   }
-  return { branch, account };
+  const { accounts } = await listAccounts(cfg);
+  const first = accounts[0];
+  if (!first || !first.branchCode || !first.number) {
+    throw new BadRequest("A API de informações de conta não retornou nenhuma conta pra essas credenciais.");
+  }
+  return { branch: first.branchCode, account: `${first.number}${first.checkDigit ?? ""}` };
 }
 
 async function handleAccounts(cfg: GwConfig, requestId: string): Promise<Response> {
@@ -624,14 +640,14 @@ async function handlePatchWorkspace(req: Request, cfg: GwConfig, workspaceId: st
 }
 
 async function handleBalance(url: URL, cfg: GwConfig, requestId: string): Promise<Response> {
-  const { branch, account } = resolveBranchAccount(url, cfg);
+  const { branch, account } = await resolveInfoAccount(url, cfg);
   // balance_id da conta Santander é `agência.conta` (ADR 0006 / doc do banco).
   const view = await getBalance(cfg, `${branch}.${account}`);
   return json(200, { ...view, branch, account }, requestId);
 }
 
 async function handleStatement(url: URL, cfg: GwConfig, requestId: string): Promise<Response> {
-  const { branch, account } = resolveBranchAccount(url, cfg);
+  const { branch, account } = await resolveInfoAccount(url, cfg);
   const initialDate = (url.searchParams.get("initial_date") ?? "").trim();
   const finalDate = (url.searchParams.get("final_date") ?? "").trim();
   if (!DATE_PATTERN.test(initialDate) || !DATE_PATTERN.test(finalDate)) {

@@ -1089,13 +1089,15 @@ export async function deleteWorkspace(
 // (Bearer + X-Application-Key). São todas GET: retry é seguro (consultar não move
 // dinheiro), não há kill-switch e nenhum estado 'unknown' nasce daqui.
 //
-// bank_id 33 = Santander (a doc aceita 0033 ou o CNPJ do banco). É constante
-// porque a conta pagadora da folha é sempre Santander; deixo sobrescrever por
-// parâmetro pra não travar um teste futuro contra outra instituição.
+// bank_id = CNPJ do Santander (90400888000142). A doc "aceita 0033 ou o CNPJ",
+// mas na prática o path /banks/{bank_id}/... só responde com o CNPJ — com "33"
+// o banco devolve 422. É constante porque a conta pagadora da folha é sempre
+// Santander; deixo sobrescrever por parâmetro pra não travar um teste futuro
+// contra outra instituição.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const ACCOUNT_INFO_PATH = "/bank_account_information/v1";
-export const SANTANDER_BANK_ID = "33";
+export const SANTANDER_BANK_ID = "90400888000142";
 
 function accountInfoUrl(cfg: GwConfig, suffix: string): string {
   return `${cfg.baseUrl}${ACCOUNT_INFO_PATH}${suffix}`;
