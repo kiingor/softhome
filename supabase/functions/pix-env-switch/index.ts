@@ -371,9 +371,7 @@ async function handleSwitchToProduction(ctx: {
     return json(
       {
         error: "PROD_GATEWAY_UNPROVEN",
-        message:
-          "O gateway de produção não autenticou no Santander (" + proof.reason +
-          "). Confere o certificado e as credenciais de produção antes de ligar.",
+        message: "Não dá pra ligar produção: " + proof.reason + ".",
       },
       200,
     );
@@ -425,26 +423,59 @@ async function probeGateway(
   }
 }
 
-/** Prova de credencial: um GET autenticado (com as creds de produção no header)
- *  que força o OAuth do gateway. 200 = token de produção saiu (cert + creds ok).
- *  Qualquer outra coisa = não ligue. */
+/**
+ * Prova de credencial ANTES de ligar produção. Testa pela API de PIX
+ * (`/workspaces`) — a que a folha realmente usa e que força o OAuth de produção.
+ * NÃO usa a de saldo/extrato (bank_account_information): é outro produto, pode
+ * nem estar habilitado, e daria falso negativo (o 422 que apareceu).
+ *
+ * Além de OAuth + acesso, confere que o workspace CONFIGURADO existe e tem PIX
+ * ativo — ligar produção apontando pra um workspace sem PIX só produziria
+ * pagamento recusado.
+ */
 async function proveGateway(
   url: string,
   creds: GatewayCreds,
   gwSecret: string | undefined,
 ): Promise<{ ok: boolean; reason: string }> {
-  if (!gwSecret) return { ok: false, reason: "gateway sem segredo configurado" };
+  if (!gwSecret) return { ok: false, reason: "gateway sem segredo configurado (fala com o admin)" };
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), GW_PROOF_TIMEOUT_MS);
   try {
-    const res = await fetch(`${url}/account/accounts`, {
+    const res = await fetch(`${url}/workspaces`, {
       headers: { Authorization: `Bearer ${gwSecret}`, ...gwCredentialsHeader(creds) },
       signal: ctrl.signal,
     });
-    if (res.ok) return { ok: true, reason: "ok" };
-    return { ok: false, reason: `HTTP ${res.status}` };
+    if (!res.ok) {
+      const reason = res.status === 401 || res.status === 403
+        ? "o Santander recusou as credenciais de produção (confere client_id/secret e o certificado)"
+        : `o Santander recusou a consulta de produção (HTTP ${res.status})`;
+      return { ok: false, reason };
+    }
+    const data = await res.json().catch(() => null);
+    // deno-lint-ignore no-explicit-any
+    const list: any[] = Array.isArray(data?.workspaces) ? data.workspaces : [];
+    const mine = list.find((w) => w?.workspaceId === creds.workspace_id);
+    if (!mine) {
+      return {
+        ok: false,
+        reason: "o workspace configurado não aparece na conta de produção — reconfigura no painel",
+      };
+    }
+    if (mine.pixPaymentsActive !== true) {
+      return {
+        ok: false,
+        reason: "o workspace configurado está SEM PIX ativo — ativa o PIX (ou configura um que tenha) antes de ligar",
+      };
+    }
+    return { ok: true, reason: "ok" };
   } catch (e) {
-    return { ok: false, reason: (e as Error).name === "AbortError" ? "timeout" : "rede/TLS" };
+    return {
+      ok: false,
+      reason: (e as Error).name === "AbortError"
+        ? "timeout falando com o Santander"
+        : "falha de rede/TLS com o Santander",
+    };
   } finally {
     clearTimeout(timer);
   }
