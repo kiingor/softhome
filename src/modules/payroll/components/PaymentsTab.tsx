@@ -14,6 +14,7 @@ import {
   Info,
   Copy,
   MagnifyingGlass,
+  Receipt,
   X as XIcon,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
@@ -32,7 +33,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PixPaymentDialog } from "./PixPaymentDialog";
-import { usePixTransfers, usePixPayment, type PixTransfer } from "../hooks/use-pix-payment";
+import { AccountBalanceCard } from "./AccountBalanceCard";
+import { usePixTransfers, usePixPayment, useVoucher, type PixTransfer } from "../hooks/use-pix-payment";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useDashboard } from "@/contexts/DashboardContext";
 
@@ -68,7 +70,7 @@ export function PaymentsTab({
   // Permissões liga todos os módulos de uma vez, então módulo sozinho
   // transformaria qualquer acesso total em pagador. O terceiro fator
   // (dispositivo 2FA ativo) é validado no servidor, onde não dá pra burlar.
-  const { hasAnyRole } = useDashboard();
+  const { hasAnyRole, currentCompany } = useDashboard();
   const execPermission = usePermissions("folha_pagamento_exec");
   const podePagar =
     hasAnyRole(["admin_gc", "diretoria"]) &&
@@ -82,6 +84,40 @@ export function PaymentsTab({
 
   const { data: pixTransfers = [] } = usePixTransfers(periodId);
   const { checkNow, cancel } = usePixPayment(periodId);
+  const voucher = useVoucher();
+  // Set (não slot único): duas linhas podem gerar comprovante ao mesmo tempo sem
+  // uma apagar o spinner da outra.
+  const [gerandoComprovante, setGerandoComprovante] = useState<Set<string>>(new Set());
+
+  const handleVoucher = async (transferId: string) => {
+    // Abre a aba AGORA, dentro do clique — o gesto do usuário ainda está ativo.
+    // Se esperássemos o await (o banco leva alguns segundos), o Chrome barraria
+    // como pop-up. A aba fica com um aviso e navega pro PDF quando ele sai.
+    const win = window.open("about:blank", "_blank");
+    if (win) {
+      win.opener = null;
+      win.document.write(
+        "<!doctype html><meta charset='utf-8'><title>Comprovante</title>" +
+          "<body style='font-family:system-ui,sans-serif;padding:2rem;color:#444'>" +
+          "Gerando o comprovante… isso pode levar alguns segundos.</body>",
+      );
+    }
+    setGerandoComprovante((s) => new Set(s).add(transferId));
+    try {
+      const { location } = await voucher.mutateAsync(transferId);
+      if (win) win.location.href = location;
+      else window.open(location, "_blank"); // aba barrada na abertura: tenta agora
+    } catch (err) {
+      if (win) win.close();
+      toast.error((err as Error).message ?? "Não deu pra gerar o comprovante.");
+    } finally {
+      setGerandoComprovante((s) => {
+        const n = new Set(s);
+        n.delete(transferId);
+        return n;
+      });
+    }
+  };
 
   const handleCheckNow = async (entryId: string) => {
     try {
@@ -266,6 +302,10 @@ export function PaymentsTab({
 
   return (
     <div className="space-y-4">
+      {/* Saldo + extrato da conta pagadora. Só pra quem pode pagar (o gate real é
+          no servidor). Dado sensível, então o card nasce com o saldo oculto. */}
+      {podePagar && <AccountBalanceCard companyId={currentCompany?.id} />}
+
       {/* KPIs desta aba — totais LÍQUIDOS a pagar (sem FGTS, benefícios, estornos) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatBlock label="Pagos" value={`${paidCount}/${total}`} />
@@ -556,6 +596,27 @@ export function PaymentsTab({
                         ? "Em conferência"
                         : "Enviando…"}
                   </Badge>
+                )}
+
+                {/* Comprovante do PIX liquidado (PDF do banco). Só aparece pra
+                    quem paga e só em transferência settled — pagamento manual
+                    (checkbox) não tem comprovante do Santander. */}
+                {podePagar && tx?.status === "settled" && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="gap-1.5 h-8 text-muted-foreground hover:text-foreground"
+                    disabled={gerandoComprovante.has(tx.id)}
+                    onClick={() => void handleVoucher(tx.id)}
+                    title="Gerar o comprovante do PIX (PDF)"
+                  >
+                    {gerandoComprovante.has(tx.id) ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Receipt className="w-4 h-4" />
+                    )}
+                    Comprovante
+                  </Button>
                 )}
 
                 {/* Transferência travada em voo: dá ao operador como conferir

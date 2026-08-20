@@ -20,3 +20,11 @@ verify_jwt = false
 
 [functions.whatsapp-webhook]
 verify_jwt = false
+
+# Webhook de retorno de pagamento do Santander: o banco não manda JWT do
+# Supabase, então é pública. A tranca é o PIX_WEBHOOK_SECRET, e a segurança do
+# dinheiro não depende dela — o webhook nunca liquida, só dispara a reconciliação
+# verificada. Na VPS, além disto, o nome precisa entrar em FUNCTIONS_PUBLICAS do
+# dispatcher (o edge-runtime self-hosted ignora este verify_jwt por função).
+[functions.payroll-pix-webhook]
+verify_jwt = false

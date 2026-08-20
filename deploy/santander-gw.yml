@@ -49,6 +49,12 @@ services:
       # "sandbox/produção", porque duas fontes de verdade pro ambiente é como
       # "ensaiei" vira "paguei".
       SANTANDER_BASE_URL: ${SANTANDER_BASE_URL:-https://trust-sandbox.api.santander.com.br}
+      # Host do serviço de COMPROVANTE (consult_payment_receipts). Separado
+      # porque essa API não existe no sandbox — só trust-open (produção) e
+      # trust-open-h (homologação). Se não setar, o gateway deriva do ambiente:
+      # produção→trust-open, resto→trust-open-h. Saldo/extrato e comprovante têm
+      # tokens OAuth por host (o token de um host não vale no outro).
+      SANTANDER_RECEIPTS_BASE_URL: ${SANTANDER_RECEIPTS_BASE_URL:-}
       # Só o workspace com pixPaymentsActive=true aceita PIX (no sandbox, o
       # PAYMENTS). Escolher errado é erro silencioso de configuração.
       SANTANDER_WORKSPACE_ID: ${SANTANDER_WORKSPACE_ID}

@@ -53,6 +53,11 @@ const PROVIDER_BODY_MAX = 300;
 const REMITTANCE_MAX = 140;
 
 const DEFAULT_BASE_URL = "https://trust-sandbox.api.santander.com.br";
+// O comprovante NÃO tem sandbox: a doc só publica trust-open (produção) e
+// trust-open-h (homologação). Por isso ele tem host próprio, separado do de
+// pagamento — e o default acompanha o ambiente derivado do host de pagamento.
+const DEFAULT_RECEIPTS_BASE_URL_PROD = "https://trust-open.api.santander.com.br";
+const DEFAULT_RECEIPTS_BASE_URL_HOMOLOG = "https://trust-open-h.api.santander.com.br";
 const DEFAULT_CERT_PATH = "/certs/client.crt";
 const DEFAULT_KEY_PATH = "/certs/client.key";
 
@@ -209,6 +214,9 @@ export function isPixPaymentsDisabled(): boolean {
 
 export interface GwConfig {
   baseUrl: string;
+  /** Host do serviço de comprovante (consult_payment_receipts). Separado porque
+   *  essa API não existe no sandbox — só trust-open / trust-open-h. */
+  receiptsBaseUrl: string;
   clientId: string;
   clientSecret: string;
   workspaceId: string;
@@ -230,16 +238,31 @@ export function readConfig(): GwConfig {
   const baseUrl = (Deno.env.get("SANTANDER_BASE_URL") ?? DEFAULT_BASE_URL)
     .trim()
     .replace(/\/+$/, "");
+  // Deriva do host em vez de ser mais uma env: duas fontes de verdade pro
+  // ambiente é como se "ensaiei no sandbox" vira "paguei de verdade".
+  // (trust-open-h não é host de PAGAMENTO — só de comprovante —, então o
+  // .includes não confunde homolog com produção aqui.)
+  const environment: "sandbox" | "production" = baseUrl.includes("trust-open")
+    ? "production"
+    : "sandbox";
+  // `|| default`, não `?? default`: o compose passa string VAZIA quando a env
+  // não é setada (${VAR:-}), e "" não dispara o `??`. Vazio tem que cair no
+  // default derivado do ambiente, senão o host de comprovante ficaria "".
+  const receiptsEnv = (Deno.env.get("SANTANDER_RECEIPTS_BASE_URL") ?? "").trim();
+  const receiptsBaseUrl = (receiptsEnv ||
+    (environment === "production"
+      ? DEFAULT_RECEIPTS_BASE_URL_PROD
+      : DEFAULT_RECEIPTS_BASE_URL_HOMOLOG))
+    .replace(/\/+$/, "");
   return {
     baseUrl,
+    receiptsBaseUrl,
     clientId: requireEnv("SANTANDER_CLIENT_ID"),
     clientSecret: requireEnv("SANTANDER_CLIENT_SECRET"),
     workspaceId: requireEnv("SANTANDER_WORKSPACE_ID"),
     debitBranch: requireEnv("SANTANDER_DEBIT_BRANCH"),
     debitAccount: requireEnv("SANTANDER_DEBIT_ACCOUNT"),
-    // Deriva do host em vez de ser mais uma env: duas fontes de verdade pro
-    // ambiente é como se "ensaiei no sandbox" vira "paguei de verdade".
-    environment: baseUrl.includes("trust-open") ? "production" : "sandbox",
+    environment,
   };
 }
 
@@ -474,13 +497,20 @@ interface CachedToken {
   expiresAtMs: number;
 }
 
-let cachedToken: CachedToken | null = null;
-/** Mutex simples: enquanto uma renovação está em voo, todo mundo espera A MESMA
- *  promise. Sem isso, uma folha de 300 colaboradores dispararia 300 requests de
- *  token no primeiro segundo — e o Santander responderia com 429. */
-let tokenInFlight: Promise<string> | null = null;
+/**
+ * Cache e mutex por HOST.
+ *
+ * Pagamento e comprovante vivem em hosts diferentes (pix em trust-sandbox/
+ * trust-open; comprovante só em trust-open/trust-open-h — não há sandbox). Um
+ * token do host A não é aceito no host B, então o cache é keyed por baseUrl.
+ * O mutex também: enquanto uma renovação de um host está em voo, todo mundo que
+ * pede AQUELE host espera a MESMA promise — sem isso, uma folha de 300
+ * colaboradores dispararia 300 requests de token e o Santander responderia 429.
+ */
+const tokenCache = new Map<string, CachedToken>();
+const tokenInFlight = new Map<string, Promise<string>>();
 
-async function fetchToken(): Promise<string> {
+async function fetchToken(baseUrl: string): Promise<string> {
   const cfg = readConfig();
   const form = new URLSearchParams({
     client_id: cfg.clientId,
@@ -490,7 +520,7 @@ async function fetchToken(): Promise<string> {
 
   const { json } = await call({
     method: "POST",
-    url: `${cfg.baseUrl}/auth/oauth/v2/token`,
+    url: `${baseUrl}/auth/oauth/v2/token`,
     headers: {
       "content-type": "application/x-www-form-urlencoded",
       accept: "application/json",
@@ -510,32 +540,38 @@ async function fetchToken(): Promise<string> {
   const ttl = Number(payload.expires_in);
   const ttlSeconds = Number.isFinite(ttl) && ttl > 0 ? ttl : TOKEN_DEFAULT_TTL_S;
 
-  cachedToken = {
+  tokenCache.set(baseUrl, {
     token,
     // Math.max: se o provedor um dia devolver um TTL menor que a margem, o
     // cache viraria "sempre vencido" e cada request pediria token de novo.
     expiresAtMs: Date.now() + Math.max(ttlSeconds * 1000 - TOKEN_SAFETY_MARGIN_MS, 30_000),
-  };
+  });
 
-  log("info", "token.renewed", { expires_in_s: ttlSeconds, environment: cfg.environment });
+  log("info", "token.renewed", { expires_in_s: ttlSeconds, host: baseUrl });
   return token;
 }
 
-export async function getToken(): Promise<string> {
-  if (cachedToken && cachedToken.expiresAtMs > Date.now()) return cachedToken.token;
-  if (tokenInFlight) return await tokenInFlight;
+/** Token do host pedido (default = host de pagamento). */
+export async function getToken(baseUrl?: string): Promise<string> {
+  const host = baseUrl ?? readConfig().baseUrl;
+  const cached = tokenCache.get(host);
+  if (cached && cached.expiresAtMs > Date.now()) return cached.token;
 
-  tokenInFlight = fetchToken().finally(() => {
-    tokenInFlight = null;
+  const inflight = tokenInFlight.get(host);
+  if (inflight) return await inflight;
+
+  const p = fetchToken(host).finally(() => {
+    tokenInFlight.delete(host);
   });
-  return await tokenInFlight;
+  tokenInFlight.set(host, p);
+  return await p;
 }
 
-/** Descarta o token em cache. Usado quando o provedor devolve 401 num GET — o
- *  relógio dele e o nosso podem discordar. Nunca usado em POST/PATCH: lá, 401 é
- *  resposta final e quem decide o que fazer é o chamador. */
-export function invalidateToken(): void {
-  cachedToken = null;
+/** Descarta o token em cache do host. Usado quando o provedor devolve 401 num
+ *  GET — o relógio dele e o nosso podem discordar. Nunca usado em POST/PATCH:
+ *  lá, 401 é resposta final e quem decide o que fazer é o chamador. */
+export function invalidateToken(baseUrl?: string): void {
+  tokenCache.delete(baseUrl ?? readConfig().baseUrl);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -548,8 +584,12 @@ function paymentsUrl(cfg: GwConfig, suffix = ""): string {
   }/pix_payments${suffix}`;
 }
 
-async function authHeaders(cfg: GwConfig): Promise<Record<string, string>> {
-  const token = await getToken();
+async function authHeaders(
+  cfg: GwConfig,
+  baseUrl?: string,
+): Promise<Record<string, string>> {
+  // baseUrl opcional: o comprovante fala com outro host e precisa do token DELE.
+  const token = await getToken(baseUrl ?? cfg.baseUrl);
   return {
     authorization: `Bearer ${token}`,
     // O X-Application-Key é o client_id, e é OBRIGATÓRIO junto do Bearer — sem
@@ -856,4 +896,370 @@ export async function searchByIdempotencyKey(
     environment: cfg.environment,
   });
   return { matches, scanned: list.length };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bank Account Information — saldo e extrato (SÓ LEITURA)
+//
+// Outra API do MESMO host do pagamento (base /bank_account_information/v1), então
+// reusa o mesmo cliente mTLS, o mesmo token e o mesmo par de headers
+// (Bearer + X-Application-Key). São todas GET: retry é seguro (consultar não move
+// dinheiro), não há kill-switch e nenhum estado 'unknown' nasce daqui.
+//
+// bank_id 33 = Santander (a doc aceita 0033 ou o CNPJ do banco). É constante
+// porque a conta pagadora da folha é sempre Santander; deixo sobrescrever por
+// parâmetro pra não travar um teste futuro contra outra instituição.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ACCOUNT_INFO_PATH = "/bank_account_information/v1";
+export const SANTANDER_BANK_ID = "33";
+
+function accountInfoUrl(cfg: GwConfig, suffix: string): string {
+  return `${cfg.baseUrl}${ACCOUNT_INFO_PATH}${suffix}`;
+}
+
+/** Number OU string viram string. O extrato devolve `amount` ora como número
+ *  (-0.1 no exemplo da doc) ora como string — o `str()` acima descarta número,
+ *  então o valor precisa deste caminho pra não sumir. */
+function amountToStr(value: unknown): string | null {
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return str(value);
+}
+
+export interface AccountView {
+  branchCode: string | null;
+  number: string | null;
+  checkDigit: string | null;
+  accountId: string | null;
+  type: string | null;
+  brandName: string | null;
+}
+
+/**
+ * Lista as contas do titular. Serve pra DESCOBRIR a agência/conta certa na hora
+ * de configurar — o extrato pede `accountNumber` com dígito e o saldo pede
+ * `agência.conta`, e é aqui que se lê o formato exato que o banco reconhece.
+ */
+export async function listAccounts(
+  bankId: string = SANTANDER_BANK_ID,
+): Promise<{ accounts: AccountView[]; hasMore: boolean }> {
+  const cfg = readConfig();
+  const { json } = await call({
+    method: "GET",
+    url: accountInfoUrl(cfg, `/banks/${encodeURIComponent(bankId)}/accounts`),
+    headers: await authHeaders(cfg),
+    timeoutMs: TIMEOUT_GET_MS,
+    retry: true,
+    label: "GET accounts",
+  });
+
+  const p = (json ?? {}) as Record<string, unknown>;
+  const content = Array.isArray(p._content) ? p._content : [];
+  const pageable = (p._pageable ?? {}) as Record<string, unknown>;
+  log("info", "account.list.done", { count: content.length, environment: cfg.environment });
+  return {
+    accounts: content.map((a) => {
+      const acc = (a ?? {}) as Record<string, unknown>;
+      return {
+        branchCode: str(acc.branchCode),
+        number: str(acc.number),
+        checkDigit: str(acc.checkDigit),
+        accountId: str(acc.accountId),
+        type: str(acc.type),
+        brandName: str(acc.brandName),
+      };
+    }),
+    hasMore: pageable._moreElements === true,
+  };
+}
+
+export interface BalanceView {
+  available: string | null;
+  blocked: string | null;
+  invested: string | null;
+  currency: string | null;
+}
+
+/**
+ * Saldo da conta. `balanceId` é `agência.conta` pra conta Santander
+ * (ex: `0001.000100200300`). Sem `raw`: saldo não é prova de liquidação, é
+ * número de tela — e devolver o corpo cru só espalharia dado de conta.
+ */
+export async function getBalance(
+  balanceId: string,
+  bankId: string = SANTANDER_BANK_ID,
+): Promise<BalanceView> {
+  const cfg = readConfig();
+  const { json } = await call({
+    method: "GET",
+    url: accountInfoUrl(
+      cfg,
+      `/banks/${encodeURIComponent(bankId)}/balances/${encodeURIComponent(balanceId)}`,
+    ),
+    headers: await authHeaders(cfg),
+    timeoutMs: TIMEOUT_GET_MS,
+    retry: true,
+    label: "GET balance",
+  });
+
+  const p = (json ?? {}) as Record<string, unknown>;
+  log("info", "account.balance.done", { environment: cfg.environment });
+  return {
+    available: amountToStr(p.availableAmount),
+    blocked: amountToStr(p.blockedAmount),
+    invested: amountToStr(p.automaticallyInvestedAmount),
+    currency: str(p.availableAmountCurrency) ?? "BRL",
+  };
+}
+
+export interface StatementEntry {
+  transactionId: string | null;
+  date: string | null;
+  /** PIX, TED, DOC… (campo `type` do banco). */
+  type: string | null;
+  /** CREDITO / DEBITO. */
+  creditDebit: string | null;
+  /** "Você transferiu para…" — descrição pronta do banco. */
+  name: string | null;
+  amount: string | null;
+  currency: string | null;
+  /** Documento da contraparte. É o extrato da PRÓPRIA empresa, então mostrar o
+   *  documento de quem recebeu/pagou é legítimo e é o que permite conciliar. */
+  partyDocument: string | null;
+}
+
+/**
+ * Extrato por intervalo. `accountNumber` é o número da conta COM dígito
+ * (ex: `000000025002`). Intervalo é de datas YYYY-MM-DD; a janela grande a doc
+ * limita no lado do banco (o extrato de grandes volumes é outra API, fora do
+ * escopo aqui — este é o síncrono).
+ */
+export async function getStatement(params: {
+  branchCode: string;
+  accountNumber: string;
+  initialDate: string;
+  finalDate: string;
+  bankId?: string;
+}): Promise<{ entries: StatementEntry[]; hasMore: boolean }> {
+  const cfg = readConfig();
+  const bankId = params.bankId ?? SANTANDER_BANK_ID;
+  const q = new URLSearchParams({
+    branchCode: params.branchCode,
+    accountNumber: params.accountNumber,
+    initialDate: params.initialDate,
+    finalDate: params.finalDate,
+  });
+
+  const { json } = await call({
+    method: "GET",
+    url: accountInfoUrl(cfg, `/banks/${encodeURIComponent(bankId)}/statements?${q.toString()}`),
+    headers: await authHeaders(cfg),
+    timeoutMs: TIMEOUT_GET_MS,
+    retry: true,
+    label: "GET statement",
+  });
+
+  const p = (json ?? {}) as Record<string, unknown>;
+  const content = Array.isArray(p._content) ? p._content : [];
+  const pageable = (p._pageable ?? {}) as Record<string, unknown>;
+  log("info", "account.statement.done", {
+    count: content.length,
+    environment: cfg.environment,
+  });
+  return {
+    entries: content.map((t) => {
+      const tx = (t ?? {}) as Record<string, unknown>;
+      return {
+        transactionId: str(tx.transactionId),
+        date: str(tx.transactionDate),
+        type: str(tx.type),
+        creditDebit: str(tx.creditDebitType),
+        name: str(tx.transactionName),
+        amount: amountToStr(tx.amount),
+        currency: str(tx.transactionCurrency) ?? "BRL",
+        partyDocument: str(tx.partieCnpjCpf),
+      };
+    }),
+    hasMore: pageable._moreElements === true,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Comprovantes (Consult Payment Receipts) — reemissão do recibo do PIX
+//
+// Outro HOST (cfg.receiptsBaseUrl) e outra base (/consult_payment_receipts/v2),
+// com token PRÓPRIO (getToken(receiptsBaseUrl)) porque o token de um host não
+// vale no outro. Fluxo assíncrono de 3 passos:
+//   1. listReceipts        — acha o comprovante por data/categoria/beneficiário → paymentId
+//   2. createFileRequest   — POST pede a geração do PDF (202, assíncrono)       → requestId
+//   3. getFileRequest      — GET pergunta até statusCode AVAILABLE              → location (PDF)
+//
+// SEM SANDBOX: a API só existe em trust-open/-h. Com credencial de sandbox isso
+// provavelmente responde 401/403 até a virada de produção — por isso o
+// comprovante é "montado agora, verificado na produção". Nada aqui move dinheiro.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const RECEIPTS_PATH = "/consult_payment_receipts/v2";
+
+function receiptsUrl(cfg: GwConfig, suffix: string): string {
+  return `${cfg.receiptsBaseUrl}${RECEIPTS_PATH}${suffix}`;
+}
+
+export interface ReceiptView {
+  paymentId: string | null;
+  payeeName: string | null;
+  payerDocument: string | null;
+  amount: string | null;
+  dateTime: string | null;
+  category: string | null;
+  channel: string | null;
+}
+
+function receiptViewOf(raw: unknown): ReceiptView {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  const payment = (r.payment ?? {}) as Record<string, unknown>;
+  const payer = (payment.payer ?? {}) as Record<string, unknown>;
+  const payerPerson = (payer.person ?? {}) as Record<string, unknown>;
+  const payerDoc = (payerPerson.document ?? {}) as Record<string, unknown>;
+  const payee = (payment.payee ?? {}) as Record<string, unknown>;
+  const amountInfo = (payment.paymentAmountInfo ?? {}) as Record<string, unknown>;
+  const direct = (amountInfo.direct ?? {}) as Record<string, unknown>;
+  const category = (r.category ?? {}) as Record<string, unknown>;
+  const channel = (r.channel ?? {}) as Record<string, unknown>;
+  return {
+    paymentId: str(payment.paymentId),
+    payeeName: str(payee.name),
+    payerDocument: str(payerDoc.documentNumber),
+    amount: amountToStr(direct.amount),
+    dateTime: str(payment.requestValueDateTime),
+    category: str(category.code),
+    channel: str(channel.code),
+  };
+}
+
+export interface ReceiptFilters {
+  startDate: string;
+  endDate: string;
+  category?: string | null;
+  beneficiaryDocument?: string | null;
+  accountAgency?: string | null;
+  accountNumber?: string | null;
+  limit?: number;
+}
+
+/** Lista comprovantes por filtro. Janela máxima de 30 dias (limite do banco).
+ *  Quem casa o comprovante com a NOSSA transferência é o chamador (por
+ *  valor + beneficiário), porque a listagem não aceita endToEnd nem o nosso id. */
+export async function listReceipts(
+  f: ReceiptFilters,
+): Promise<{ receipts: ReceiptView[] }> {
+  const cfg = readConfig();
+  const q = new URLSearchParams({ start_date: f.startDate, end_date: f.endDate });
+  if (f.category) q.set("category", f.category);
+  if (f.beneficiaryDocument) q.set("beneficiary_document", f.beneficiaryDocument);
+  if (f.accountAgency) q.set("account_agency", f.accountAgency);
+  if (f.accountNumber) q.set("account_number", f.accountNumber);
+  q.set("_limit", String(Math.min(Math.max(f.limit ?? 50, 1), 50)));
+
+  const { json } = await call({
+    method: "GET",
+    url: receiptsUrl(cfg, `/payment_receipts?${q.toString()}`),
+    headers: await authHeaders(cfg, cfg.receiptsBaseUrl),
+    timeoutMs: TIMEOUT_GET_MS,
+    retry: true,
+    label: "GET receipts",
+  });
+
+  const p = (json ?? {}) as Record<string, unknown>;
+  const list = Array.isArray(p.paymentsReceipts) ? p.paymentsReceipts : [];
+  log("info", "receipts.list.done", { count: list.length, environment: cfg.environment });
+  return { receipts: list.map(receiptViewOf) };
+}
+
+export interface FileRequestView {
+  requestId: string | null;
+  /** URL de download do PDF (blob com validade). Só vem quando AVAILABLE. */
+  location: string | null;
+  mimeType: string | null;
+  statusCode: string | null;
+  expirationDate: string | null;
+}
+
+function fileRequestViewOf(raw: unknown): FileRequestView {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  const request = (r.request ?? {}) as Record<string, unknown>;
+  const file = (r.file ?? {}) as Record<string, unknown>;
+  const repo = (file.fileRepository ?? {}) as Record<string, unknown>;
+  const statusInfo = (file.statusInfo ?? {}) as Record<string, unknown>;
+  return {
+    requestId: str(request.requestId),
+    location: str(repo.location),
+    mimeType: str(file.mimeType),
+    statusCode: str(statusInfo.statusCode),
+    expirationDate: str(file.expirationDate),
+  };
+}
+
+/** POST — pede a geração do arquivo. Assíncrono (202): devolve requestId e, se já
+ *  pronto, a location. `requestValueDate` é o mês do pagamento no formato YYYY-MM.
+ *  retry=false como todo POST — aqui repetir só geraria outro PDF do mesmo
+ *  pagamento (inofensivo), mas a regra da casa é POST nunca repetir sozinho. */
+export async function createReceiptFileRequest(
+  paymentId: string,
+  requestValueDate: string,
+): Promise<FileRequestView> {
+  const cfg = readConfig();
+  const { json } = await call({
+    method: "POST",
+    url: receiptsUrl(
+      cfg,
+      `/payment_receipts/${encodeURIComponent(paymentId)}/file_requests`,
+    ),
+    headers: await authHeaders(cfg, cfg.receiptsBaseUrl),
+    body: { payment: { requestValueDate } },
+    timeoutMs: TIMEOUT_POST_MS,
+    retry: false,
+    label: "POST receipt file_request",
+  });
+  return fileRequestViewOf(json);
+}
+
+/** GET — pergunta o estado do arquivo. Repetir é seguro (consulta). O chamador
+ *  faz o poll até statusCode AVAILABLE (a location vem preenchida aí). */
+export async function getReceiptFileRequest(
+  paymentId: string,
+  requestId: string,
+): Promise<FileRequestView> {
+  const cfg = readConfig();
+  const url = receiptsUrl(
+    cfg,
+    `/payment_receipts/${encodeURIComponent(paymentId)}/file_requests/${
+      encodeURIComponent(requestId)
+    }`,
+  );
+
+  const run = async () => {
+    const { json } = await call({
+      method: "GET",
+      url,
+      headers: await authHeaders(cfg, cfg.receiptsBaseUrl),
+      timeoutMs: TIMEOUT_GET_MS,
+      retry: true,
+      label: "GET receipt file_request",
+    });
+    return fileRequestViewOf(json);
+  };
+
+  try {
+    return await run();
+  } catch (err) {
+    // 401 num GET costuma ser token vencido entre a checagem e o uso — descarta
+    // o do host de comprovante e tenta uma vez. Consulta pode repetir à vontade.
+    if (err instanceof SantanderError && err.providerStatus === 401) {
+      invalidateToken(cfg.receiptsBaseUrl);
+      log("warn", "receipts.token.retry_after_401", { payment_id: paymentId });
+      return await run();
+    }
+    throw err;
+  }
 }

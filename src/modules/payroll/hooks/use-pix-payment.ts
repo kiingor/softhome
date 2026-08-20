@@ -180,3 +180,36 @@ export function usePixPayment(periodId: string | undefined) {
 
   return { challenge, execute, checkNow, cancel };
 }
+
+interface VoucherResult {
+  status: "available" | "pending";
+  location: string | null;
+  mime_type: string | null;
+}
+
+/**
+ * Comprovante (PDF) de um PIX liquidado. O fluxo do banco é assíncrono: a edge
+ * dispara o pedido e faz um poll curto no servidor; se o PDF ainda não saiu,
+ * responde 'pending' e a gente chama de novo (a edge é idempotente — só manda
+ * transfer_id, e ela mesma rederiva o pagamento a partir da transferência).
+ * Devolve a URL de download — o componente abre numa aba.
+ *
+ * Só funciona em produção: a API de comprovante do Santander não tem sandbox.
+ */
+export function useVoucher() {
+  return useMutation({
+    mutationFn: async (transferId: string): Promise<{ location: string; mime: string | null }> => {
+      for (let tries = 0; tries < 8; tries++) {
+        const r = await supabase.functions.invoke("payroll-pix-voucher", {
+          body: { transfer_id: transferId },
+        });
+        const res = unwrap<VoucherResult>(r.error, r.data);
+        if (res.status === "available" && res.location) {
+          return { location: res.location, mime: res.mime_type };
+        }
+        await new Promise((r2) => setTimeout(r2, 2500));
+      }
+      throw new Error("O comprovante ainda está sendo gerado. Tenta de novo em instantes.");
+    },
+  });
+}

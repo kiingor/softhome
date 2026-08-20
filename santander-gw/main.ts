@@ -35,10 +35,16 @@ import {
   createPayment,
   DICT_CODE_TYPES,
   type DictCodeType,
+  createReceiptFileRequest,
   DISABLED_STATUS,
+  getBalance,
   getPayment,
+  getReceiptFileRequest,
+  getStatement,
   hasHttpClientSupport,
   isPixPaymentsDisabled,
+  listAccounts,
+  listReceipts,
   type PixDocument,
   readConfig,
   SantanderError,
@@ -107,6 +113,23 @@ async function isAuthorized(req: Request): Promise<boolean> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class BadRequest extends Error {}
+
+/**
+ * decodeURIComponent que não explode em 500.
+ *
+ * Um `%` solto ou escape inválido (`%GG`) no path faz o decodeURIComponent
+ * lançar URIError — que, fora de BadRequest/SantanderError, virava um 500
+ * `indeterminate: true` (semanticamente errado: nada foi enviado ao banco, e é
+ * rota de leitura). Aqui vira o mesmo 400 `bad_request` que a validação de
+ * formato daria.
+ */
+function safeDecode(segment: string): string {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    throw new BadRequest("identificador na URL com codificação inválida");
+  }
+}
 
 function requireString(
   body: Record<string, unknown>,
@@ -494,6 +517,138 @@ async function handleSearch(url: URL, requestId: string): Promise<Response> {
   }, requestId);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Saldo e extrato (Bank Account Information) — SÓ LEITURA
+//
+// Sem kill-switch (consultar não move dinheiro) e sem `environment` a bater: são
+// GET. A conta pagadora configurada é o default; a query pode sobrescrever
+// agência/conta pra testar o formato certo (o saldo quer `agência.conta`, o
+// extrato quer o número COM dígito — descobre-se com /account/accounts) sem
+// redeploy.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const BRANCH_PATTERN = /^\d{1,6}$/;
+const ACCOUNT_PATTERN = /^\d{1,20}$/;
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function resolveBranchAccount(url: URL): { branch: string; account: string } {
+  const cfg = readConfig();
+  const branch = (url.searchParams.get("branch") ?? cfg.debitBranch).trim();
+  const account = (url.searchParams.get("account") ?? cfg.debitAccount).trim();
+  if (!BRANCH_PATTERN.test(branch) || !ACCOUNT_PATTERN.test(account)) {
+    throw new BadRequest("branch/account precisam ser numéricos (agência até 6, conta até 20 dígitos)");
+  }
+  return { branch, account };
+}
+
+async function handleAccounts(requestId: string): Promise<Response> {
+  const view = await listAccounts();
+  return json(200, view, requestId);
+}
+
+async function handleBalance(url: URL, requestId: string): Promise<Response> {
+  const { branch, account } = resolveBranchAccount(url);
+  // balance_id da conta Santander é `agência.conta` (ADR 0006 / doc do banco).
+  const view = await getBalance(`${branch}.${account}`);
+  return json(200, { ...view, branch, account }, requestId);
+}
+
+async function handleStatement(url: URL, requestId: string): Promise<Response> {
+  const { branch, account } = resolveBranchAccount(url);
+  const initialDate = (url.searchParams.get("initial_date") ?? "").trim();
+  const finalDate = (url.searchParams.get("final_date") ?? "").trim();
+  if (!DATE_PATTERN.test(initialDate) || !DATE_PATTERN.test(finalDate)) {
+    throw new BadRequest("initial_date/final_date obrigatórios no formato YYYY-MM-DD");
+  }
+  const view = await getStatement({
+    branchCode: branch,
+    accountNumber: account,
+    initialDate,
+    finalDate,
+  });
+  return json(200, { ...view, branch, account }, requestId);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Comprovante (Consult Payment Receipts) — SÓ LEITURA / reemissão
+//
+// Fluxo em 3 chamadas, orquestrado pela edge (que tem a data/valor/beneficiário
+// da transferência): lista → cria pedido de arquivo → consulta até AVAILABLE.
+// O gateway só expõe as três primitivas, validadas; a lógica de casar o
+// comprovante com a NOSSA transferência fica na edge.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MONTH_PATTERN = /^\d{4}-\d{2}$/;
+const DOCUMENT_PATTERN = /^\d{11}$|^\d{14}$/;
+// paymentId do banco (ex: BGZC6H2023-03-0116255385) e requestId (uuid): caracteres
+// seguros só, pra não deixar nada escapar pra dentro do path da URL do provedor.
+const RECEIPT_ID_PATTERN = /^[A-Za-z0-9._:-]{1,200}$/;
+
+async function handleReceiptsList(url: URL, requestId: string): Promise<Response> {
+  const startDate = (url.searchParams.get("start_date") ?? "").trim();
+  const endDate = (url.searchParams.get("end_date") ?? "").trim();
+  if (!DATE_PATTERN.test(startDate) || !DATE_PATTERN.test(endDate)) {
+    throw new BadRequest("start_date/end_date obrigatórios no formato YYYY-MM-DD");
+  }
+  const category = (url.searchParams.get("category") ?? "").trim() || null;
+  const beneficiaryDocument = (url.searchParams.get("beneficiary_document") ?? "")
+    .replace(/\D+/g, "") || null;
+  if (beneficiaryDocument && !DOCUMENT_PATTERN.test(beneficiaryDocument)) {
+    throw new BadRequest("beneficiary_document precisa ter 11 (CPF) ou 14 (CNPJ) dígitos");
+  }
+  const accountAgency = (url.searchParams.get("account_agency") ?? "").trim() || null;
+  const accountNumber = (url.searchParams.get("account_number") ?? "").trim() || null;
+  const limitRaw = Number(url.searchParams.get("limit") ?? "50");
+  const limit = Number.isFinite(limitRaw) ? limitRaw : 50;
+
+  const view = await listReceipts({
+    startDate,
+    endDate,
+    category,
+    beneficiaryDocument,
+    accountAgency,
+    accountNumber,
+    limit,
+  });
+  return json(200, view, requestId);
+}
+
+async function handleReceiptFileCreate(
+  req: Request,
+  paymentId: string,
+  requestId: string,
+): Promise<Response> {
+  if (!RECEIPT_ID_PATTERN.test(paymentId)) {
+    throw new BadRequest("payment_id inválido");
+  }
+  const body = await readJsonBody(req);
+  // Aceita tanto o formato canônico da doc ({payment:{requestValueDate}}) quanto
+  // um `request_value_date` no topo, pra a edge não ter que aninhar.
+  const nestedPayment = (body.payment && typeof body.payment === "object")
+    ? body.payment as Record<string, unknown>
+    : {};
+  const requestValueDate = String(
+    body.request_value_date ?? nestedPayment.requestValueDate ?? "",
+  ).trim();
+  if (!MONTH_PATTERN.test(requestValueDate)) {
+    throw new BadRequest("request_value_date obrigatório no formato YYYY-MM");
+  }
+  const view = await createReceiptFileRequest(paymentId, requestValueDate);
+  return json(202, view, requestId);
+}
+
+async function handleReceiptFileGet(
+  paymentId: string,
+  fileRequestId: string,
+  requestId: string,
+): Promise<Response> {
+  if (!RECEIPT_ID_PATTERN.test(paymentId) || !RECEIPT_ID_PATTERN.test(fileRequestId)) {
+    throw new BadRequest("payment_id/request_id inválido");
+  }
+  const view = await getReceiptFileRequest(paymentId, fileRequestId);
+  return json(200, view, requestId);
+}
+
 function handleHealth(requestId: string): Response {
   const daysLeft = certDaysLeft();
   const { cert, key } = certPaths();
@@ -531,6 +686,8 @@ function existsSync(path: string): boolean {
 
 const TRANSFER_CONFIRM = /^\/pix\/transfer\/([^/]{1,120})\/confirm$/;
 const TRANSFER_BY_ID = /^\/pix\/transfer\/([^/]{1,120})$/;
+const RECEIPT_FILE_REQUESTS = /^\/receipts\/([^/]{1,200})\/file_requests$/;
+const RECEIPT_FILE_REQUEST_BY_ID = /^\/receipts\/([^/]{1,200})\/file_requests\/([^/]{1,200})$/;
 
 async function handler(req: Request): Promise<Response> {
   const requestId = crypto.randomUUID().slice(0, 8);
@@ -564,16 +721,46 @@ async function handler(req: Request): Promise<Response> {
 
     const confirmMatch = TRANSFER_CONFIRM.exec(path);
     if (confirmMatch && req.method === "PATCH") {
-      return await handleConfirm(req, decodeURIComponent(confirmMatch[1]), requestId);
+      return await handleConfirm(req, safeDecode(confirmMatch[1]), requestId);
     }
 
     const byIdMatch = TRANSFER_BY_ID.exec(path);
     if (byIdMatch && req.method === "GET") {
-      return await handleGet(decodeURIComponent(byIdMatch[1]), requestId);
+      return await handleGet(safeDecode(byIdMatch[1]), requestId);
     }
 
     if (path === "/pix/search" && req.method === "GET") {
       return await handleSearch(url, requestId);
+    }
+
+    if (path === "/account/accounts" && req.method === "GET") {
+      return await handleAccounts(requestId);
+    }
+
+    if (path === "/account/balance" && req.method === "GET") {
+      return await handleBalance(url, requestId);
+    }
+
+    if (path === "/account/statement" && req.method === "GET") {
+      return await handleStatement(url, requestId);
+    }
+
+    if (path === "/receipts" && req.method === "GET") {
+      return await handleReceiptsList(url, requestId);
+    }
+
+    const fileCreateMatch = RECEIPT_FILE_REQUESTS.exec(path);
+    if (fileCreateMatch && req.method === "POST") {
+      return await handleReceiptFileCreate(req, safeDecode(fileCreateMatch[1]), requestId);
+    }
+
+    const fileGetMatch = RECEIPT_FILE_REQUEST_BY_ID.exec(path);
+    if (fileGetMatch && req.method === "GET") {
+      return await handleReceiptFileGet(
+        safeDecode(fileGetMatch[1]),
+        safeDecode(fileGetMatch[2]),
+        requestId,
+      );
     }
 
     return json(404, { error: "Rota inexistente", kind: "not_found", indeterminate: false }, requestId);
@@ -617,6 +804,7 @@ function boot(): void {
     const cfg = readConfig();
     log("info", "boot.config", {
       base_url: cfg.baseUrl,
+      receipts_base_url: cfg.receiptsBaseUrl,
       environment: cfg.environment,
       workspace_id: cfg.workspaceId,
       debit_branch: cfg.debitBranch,

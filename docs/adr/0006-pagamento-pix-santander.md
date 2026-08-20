@@ -139,6 +139,36 @@ pass-through). A chave privada nunca vira variável de ambiente.
   verificável; o repo já tem essa dívida aberta com o `whatsapp-webhook`.
   Reconciliação começa por polling.
 
+## Extensão (2026-08-19): saldo, extrato, comprovante e webhook
+
+Mesma arquitetura de transporte (o `santander-gw` com o mTLS), estendida com três
+APIs novas e um webhook.
+
+**Saldo e extrato** (`bank_account_information/v1`, GET, mesmo host de pagamento):
+- `GET /banks/{bank_id}/accounts` — lista contas (bank_id 33 = Santander)
+- `GET /banks/{bank_id}/balances/{agência.conta}` — saldo
+- `GET /banks/{bank_id}/statements?branchCode=&accountNumber=&initialDate=&finalDate=` — extrato
+
+Expostos pelo gateway como `/account/accounts|balance|statement` e consumidos
+pela edge `payroll-pix-account` (gate papel+módulo, sem dispositivo — leitura não
+move dinheiro). UI: card no topo da aba Pagamentos, saldo oculto por padrão.
+
+**Comprovante** (`consult_payment_receipts/v2`) — fluxo assíncrono de 3 passos
+(lista por data/valor/beneficiário → POST cria arquivo → GET consulta até
+`AVAILABLE` → PDF numa `location` do Azure). Orquestrado pela edge
+`payroll-pix-voucher` (casa o comprovante com a transferência por valor +
+beneficiário). **Só existe em `trust-open`/`trust-open-h` — sem sandbox**, então o
+token OAuth passou a ser **por host** (o de um host não vale no outro) e há uma
+`SANTANDER_RECEIPTS_BASE_URL` separada. Montado agora, verificado na produção.
+
+**Webhook** (`payroll-pix-webhook`, pública) — o `webhookURL` do workspace aponta
+pra ela e ela ACELERA a reconciliação. **Nunca liquida pelo corpo**: extrai o
+identificador, acha a transferência em voo e dispara o `payroll-pix-reconcile`,
+que só liquida com identidade provada. Assim, mesmo com autenticação de webhook
+fraca, o pior que um webhook forjado consegue é uma consulta a mais — a segurança
+do dinheiro não depende de confiar no chamador. O polling continua de rede de
+segurança.
+
 ## Pendências
 
 - Vincular o certificado ao ClientId **de produção** quando for a hora (o de

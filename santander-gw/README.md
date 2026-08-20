@@ -110,6 +110,32 @@ Se o corpo trouxer `environment`, ele tem que bater com o host configurado —
 divergência vira 400 antes de qualquer chamada. É a trava que separa "ensaiei"
 de "paguei".
 
+## Rotas de leitura: saldo, extrato e comprovante
+
+Todas SÓ LEITURA (GET, exceto o POST que só pede a geração de um PDF) e sem
+kill-switch — consultar nunca move dinheiro. Mesmo `GW_SHARED_SECRET`, mesmo
+mTLS. Saldo/extrato falam com o host de pagamento; comprovante fala com
+`SANTANDER_RECEIPTS_BASE_URL` (token OAuth próprio por host).
+
+| Rota | O que faz |
+|---|---|
+| `GET /account/accounts` | lista as contas do titular (descobrir agência/conta na config) |
+| `GET /account/balance` | saldo da conta pagadora (query `branch`/`account` sobrescrevem o default) |
+| `GET /account/statement?initial_date=&final_date=` | extrato por intervalo (YYYY-MM-DD) |
+| `GET /receipts?start_date=&end_date=&category=PIX&beneficiary_document=` | lista comprovantes → `paymentId` |
+| `POST /receipts/{payment_id}/file_requests` | pede a geração do PDF (assíncrono) → `requestId` |
+| `GET /receipts/{payment_id}/file_requests/{request_id}` | consulta até `statusCode=AVAILABLE` → `location` (PDF) |
+
+⚠️ **Comprovante não tem sandbox.** A API `consult_payment_receipts` só existe em
+`trust-open`/`trust-open-h`. Com credencial de sandbox ela provavelmente responde
+401/403 até a virada de produção — por isso o recurso está pronto mas é validado
+lá. Saldo/extrato, prove com um curl de dentro da `bank_net`:
+
+```bash
+curl -s http://santander-gw:8080/account/balance \
+  -H "Authorization: Bearer $GW_SHARED_SECRET" | jq
+```
+
 ## Kill-switch
 
 `PIX_PAYMENTS_DISABLED=true` bloqueia **POST e PATCH** (criar e confirmar). É
@@ -146,6 +172,7 @@ Santander**. Se o token voltar `{"httpStatus":"Unauthorized hash","errorCode":40
 | `SANTANDER_CLIENT_ID` | sim | também vai no header `X-Application-Key` |
 | `SANTANDER_CLIENT_SECRET` | sim | |
 | `SANTANDER_BASE_URL` | não | default sandbox; `trust-open` = produção (e o serviço deriva o ambiente daqui) |
+| `SANTANDER_RECEIPTS_BASE_URL` | não | host do comprovante (consult_payment_receipts). Sem sandbox: default deriva do ambiente (produção→`trust-open`, resto→`trust-open-h`). Token OAuth é por host |
 | `SANTANDER_WORKSPACE_ID` | sim | só o workspace com `pixPaymentsActive: true` aceita PIX |
 | `SANTANDER_DEBIT_BRANCH` / `SANTANDER_DEBIT_ACCOUNT` | sim | conta padrão; a request pode sobrescrever (multi-CNPJ) |
 | `GW_SHARED_SECRET` | sim | ≥ 24 chars |
