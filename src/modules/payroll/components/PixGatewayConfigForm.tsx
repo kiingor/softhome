@@ -53,6 +53,9 @@ export function PixGatewayConfigForm({
   const save = useSaveGatewayConfig();
   const discover = useDiscoverWorkspaces();
   const [workspaces, setWorkspaces] = useState<DiscoveredWorkspace[] | null>(null);
+  // Seleção por índice (o sandbox devolve o mesmo workspaceId pros três; casar
+  // por id destacaria todos). Só o PIX-ativo é selecionável.
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
   const [form, setForm] = useState({
     client_id: initial?.client_id ?? "",
@@ -76,13 +79,24 @@ export function PixGatewayConfigForm({
         base_url: form.base_url.trim(),
       });
       setWorkspaces(list);
-      if (list.length === 0) toast.info("Nenhum workspace retornou pra essas credenciais.");
+      setSelectedIdx(null);
+      if (list.length === 0) {
+        toast.info("Nenhum workspace retornou pra essas credenciais.");
+      } else {
+        // Auto-seleciona o (primeiro) PIX-ativo — que é o único que paga.
+        const activeIdx = list.findIndex((w) => w.pixPaymentsActive);
+        if (activeIdx >= 0) pickWorkspace(list[activeIdx], activeIdx);
+        else toast.warning("Nenhum workspace com PIX ativo. Confere no portal do Santander.");
+      }
     } catch (err) {
       toast.error((err as Error).message ?? "Não deu pra buscar.");
     }
   };
 
-  const pickWorkspace = (w: DiscoveredWorkspace) => {
+  const pickWorkspace = (w: DiscoveredWorkspace, idx: number) => {
+    // Só o PIX-ativo paga — os outros não são selecionáveis.
+    if (!w.pixPaymentsActive) return;
+    setSelectedIdx(idx);
     setForm((f) => ({
       ...f,
       workspace_id: w.workspaceId ?? f.workspace_id,
@@ -170,17 +184,22 @@ export function PixGatewayConfigForm({
           </Label>
           <div className="space-y-1">
             {workspaces.map((w, i) => {
-              const selected = form.workspace_id === w.workspaceId;
+              const selectable = w.pixPaymentsActive;
+              const selected = selectedIdx === i;
               return (
                 <button
-                  key={w.workspaceId ?? i}
+                  key={i}
                   type="button"
-                  onClick={() => pickWorkspace(w)}
+                  onClick={() => pickWorkspace(w, i)}
+                  disabled={!selectable}
+                  title={selectable ? undefined : "Esse workspace não tem PIX ativo — não dá pra pagar por ele."}
                   className={cn(
                     "w-full text-left rounded-md border px-3 py-2 transition-colors",
                     selected
                       ? "border-primary/50 bg-primary/5"
-                      : "border-border hover:bg-muted/40",
+                      : selectable
+                        ? "border-border hover:bg-muted/40"
+                        : "border-border opacity-50 cursor-not-allowed",
                   )}
                 >
                   <div className="flex items-center justify-between gap-2">
