@@ -68,13 +68,14 @@ CREATE TRIGGER trg_pix_environment_settings_updated_at
   BEFORE UPDATE ON public.pix_environment_settings
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
--- Auditoria: trocar o ambiente é evento de segurança. Sem company_id (é global),
--- então a linha do audit nasce com company_id NULL → visível a admin_gc, que é
--- exatamente quem pode trocar. A edge também grava em payment_2fa_events.
+-- SEM audit_log_trigger aqui, de propósito: o audit_log_trigger da casa assume
+-- que TODA tabela tem `id uuid` (ele faz record_id := NEW.id::uuid). Esta tabela
+-- usa `id boolean` como guarda de linha única, então o trigger quebraria toda
+-- troca de ambiente com "invalid input syntax for type uuid: true". A troca já é
+-- auditada em payment_2fa_events (a edge pix-env-switch grava pix_env_switched,
+-- com quem e pra onde), então não se perde a trilha — só o trigger genérico, que
+-- não serve a uma PK não-uuid.
 DROP TRIGGER IF EXISTS audit_pix_environment_settings ON public.pix_environment_settings;
-CREATE TRIGGER audit_pix_environment_settings
-  AFTER INSERT OR UPDATE OR DELETE ON public.pix_environment_settings
-  FOR EACH ROW EXECUTE FUNCTION public.audit_log_trigger();
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 3. RLS — leitura pra quem opera folha; escrita só por RPC
