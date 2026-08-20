@@ -20,6 +20,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.0";
 import { encryptSecret, isCryptoConfigured } from "../_shared/pix-crypto.ts";
+import { gwBaseUrl, gwCredentialsHeader } from "../_shared/pix-env.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -33,7 +34,7 @@ type Sb = any;
 const ENVIRONMENTS = ["sandbox", "production"] as const;
 
 interface Body {
-  action: "get" | "save";
+  action: "get" | "save" | "discover";
   environment?: string;
   client_id?: string;
   client_secret?: string;
@@ -81,10 +82,55 @@ serve(async (req) => {
   try {
     const raw = await req.json();
     const action = String(raw.action ?? "");
-    if (!["get", "save"].includes(action)) throw new Error("action precisa ser 'get' ou 'save'");
+    if (!["get", "save", "discover"].includes(action)) {
+      throw new Error("action precisa ser 'get', 'save' ou 'discover'");
+    }
     body = { action: action as Body["action"], ...raw };
   } catch (e) {
     return json({ error: "BAD_REQUEST", message: (e as Error).message }, 400);
+  }
+
+  // ── discover ─────────────────────────────────────────────────────────────
+  // Lista os workspaces (com conta + flag de PIX ativo) usando as credenciais
+  // DIGITADAS no formulário — ainda não salvas. Assim dá pra ESCOLHER o workspace
+  // e a conta antes de gravar. As creds vão transitórias pro gateway (header),
+  // nada é armazenado aqui.
+  if (body.action === "discover") {
+    const clientId = str(body.client_id);
+    const clientSecret = String(body.client_secret ?? "");
+    const baseUrl = str(body.base_url);
+    if (!clientId || !clientSecret || !baseUrl) {
+      return json({ error: "BAD_REQUEST", message: "Pra buscar, preenche client_id, client_secret e base URL." }, 200);
+    }
+    const gwUrl = gwBaseUrl();
+    const gwSecret = Deno.env.get("SANTANDER_GW_SECRET");
+    if (!gwUrl || !gwSecret) {
+      return json({ error: "NOT_CONFIGURED", message: "Gateway indisponível. Fala com o admin." }, 200);
+    }
+    const header = gwCredentialsHeader({
+      client_id: clientId,
+      client_secret: clientSecret,
+      workspace_id: "",
+      base_url: baseUrl.replace(/\/+$/, ""),
+      receipts_base_url: null,
+      debit_branch: "",
+      debit_account: "",
+    });
+    try {
+      const res = await fetch(`${gwUrl}/workspaces`, {
+        headers: { Authorization: `Bearer ${gwSecret}`, ...header },
+      });
+      const data = (await res.json().catch(() => null)) as { workspaces?: unknown } | null;
+      if (!res.ok) {
+        const msg = res.status === 401 || res.status === 403
+          ? "O Santander recusou essas credenciais. Confere client_id/secret/base URL (e se o certificado é o desse ambiente)."
+          : `Não deu pra listar os workspaces agora (HTTP ${res.status}).`;
+        return json({ error: "DISCOVER_FAILED", message: msg }, 200);
+      }
+      return json({ workspaces: Array.isArray(data?.workspaces) ? data!.workspaces : [] }, 200);
+    } catch {
+      return json({ error: "GATEWAY_UNREACHABLE", message: "Não deu pra falar com o gateway agora." }, 200);
+    }
   }
 
   // ── get ────────────────────────────────────────────────────────────────────

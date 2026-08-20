@@ -250,6 +250,13 @@ function pickCred(overrideVal: string | null | undefined, envName: string): stri
   return value;
 }
 
+/** Como pickCred, mas NÃO lança se faltar. Só client_id/secret são essenciais pra
+ *  QUALQUER chamada (o OAuth). Workspace e conta são exigidos só pelo pagamento —
+ *  a descoberta (listar workspaces/contas) roda sem eles, então aqui são soft. */
+function softCred(overrideVal: string | null | undefined, envName: string): string {
+  return (overrideVal ?? Deno.env.get(envName) ?? "").trim();
+}
+
 /**
  * Config da request. Com `override` (credenciais do painel, via header), a
  * request se auto-descreve — inclusive o ambiente, derivado do base_url. Sem
@@ -281,9 +288,11 @@ export function readConfig(override?: GwCredsInput | null): GwConfig {
     receiptsBaseUrl,
     clientId: pickCred(src?.client_id, "SANTANDER_CLIENT_ID"),
     clientSecret: pickCred(src?.client_secret, "SANTANDER_CLIENT_SECRET"),
-    workspaceId: pickCred(src?.workspace_id, "SANTANDER_WORKSPACE_ID"),
-    debitBranch: pickCred(src?.debit_branch, "SANTANDER_DEBIT_BRANCH"),
-    debitAccount: pickCred(src?.debit_account, "SANTANDER_DEBIT_ACCOUNT"),
+    // Soft: a descoberta (listar workspaces/contas) não usa estes. O pagamento
+    // usa, mas aí a config vem completa do banco (colunas NOT NULL) ou do env.
+    workspaceId: softCred(src?.workspace_id, "SANTANDER_WORKSPACE_ID"),
+    debitBranch: softCred(src?.debit_branch, "SANTANDER_DEBIT_BRANCH"),
+    debitAccount: softCred(src?.debit_account, "SANTANDER_DEBIT_ACCOUNT"),
     environment,
   };
 }
@@ -922,6 +931,57 @@ export async function searchByIdempotencyKey(
     environment: cfg.environment,
   });
   return { matches, scanned: list.length };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Workspaces — descoberta pra configuração (SÓ LEITURA)
+//
+// Lista os workspaces da aplicação. Cada um carrega o mainDebitAccount
+// {branch, number} e as flags *PaymentsActive (ADR 0006), então é daqui que o
+// painel monta o seletor: escolher o workspace já traz a agência/conta e diz
+// qual tem PIX ativo. NÃO usa workspaceId (é a listagem), então roda com só
+// client_id + secret — o que permite descobrir ANTES de salvar a config.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const WORKSPACES_PATH = "/management_payments_partners/v1/workspaces";
+
+export interface WorkspaceView {
+  workspaceId: string | null;
+  type: string | null;
+  description: string | null;
+  pixPaymentsActive: boolean;
+  mainDebitAccount: { branch: string | null; number: string | null } | null;
+  webhookUrl: string | null;
+}
+
+function workspaceViewOf(raw: unknown): WorkspaceView {
+  const w = (raw ?? {}) as Record<string, unknown>;
+  const main = (w.mainDebitAccount ?? {}) as Record<string, unknown>;
+  const hasMain = main.branch != null || main.number != null;
+  return {
+    workspaceId: str(w.id) ?? str(w.workspaceId),
+    type: str(w.type),
+    description: str(w.description) ?? str(w.name),
+    pixPaymentsActive: w.pixPaymentsActive === true,
+    mainDebitAccount: hasMain
+      ? { branch: str(main.branch), number: str(main.number) }
+      : null,
+    webhookUrl: str(w.webhookURL) ?? str(w.webhookUrl),
+  };
+}
+
+export async function listWorkspaces(cfg: GwConfig): Promise<{ workspaces: WorkspaceView[] }> {
+  const { json } = await call({
+    method: "GET",
+    url: `${cfg.baseUrl}${WORKSPACES_PATH}`,
+    headers: await authHeaders(cfg),
+    timeoutMs: TIMEOUT_GET_MS,
+    retry: true,
+    label: "GET workspaces",
+  });
+  const list = extractList(json);
+  log("info", "workspaces.list.done", { count: list.length, environment: cfg.environment });
+  return { workspaces: list.map(workspaceViewOf) };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

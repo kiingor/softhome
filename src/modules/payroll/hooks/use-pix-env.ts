@@ -120,6 +120,34 @@ export function useSaveGatewayConfig() {
   });
 }
 
+export interface DiscoveredWorkspace {
+  workspaceId: string | null;
+  type: string | null;
+  description: string | null;
+  pixPaymentsActive: boolean;
+  mainDebitAccount: { branch: string | null; number: string | null } | null;
+  webhookUrl: string | null;
+}
+
+/** Lista os workspaces (com conta + flag de PIX ativo) usando as credenciais
+ *  DIGITADAS no formulário (ainda não salvas), pra o usuário escolher em vez de
+ *  digitar workspace/agência/conta no escuro. */
+export function useDiscoverWorkspaces() {
+  return useMutation({
+    mutationFn: async (vars: {
+      environment: PixEnv;
+      client_id: string;
+      client_secret: string;
+      base_url: string;
+    }) => {
+      const { data, error } = await supabase.functions.invoke("pix-gateway-config", {
+        body: { action: "discover", ...vars },
+      });
+      return unwrap<{ workspaces: DiscoveredWorkspace[] }>(error, data).workspaces;
+    },
+  });
+}
+
 export function usePixEnvSwitch() {
   const qc = useQueryClient();
   const invalidate = () => qc.invalidateQueries({ queryKey: ["pix-env-status"] });

@@ -47,6 +47,7 @@ import {
   isPixPaymentsDisabled,
   listAccounts,
   listReceipts,
+  listWorkspaces,
   type PixDocument,
   readConfig,
   SantanderError,
@@ -569,6 +570,11 @@ async function handleAccounts(cfg: GwConfig, requestId: string): Promise<Respons
   return json(200, view, requestId);
 }
 
+async function handleWorkspaces(cfg: GwConfig, requestId: string): Promise<Response> {
+  const view = await listWorkspaces(cfg);
+  return json(200, view, requestId);
+}
+
 async function handleBalance(url: URL, cfg: GwConfig, requestId: string): Promise<Response> {
   const { branch, account } = resolveBranchAccount(url, cfg);
   // balance_id da conta Santander é `agência.conta` (ADR 0006 / doc do banco).
@@ -770,6 +776,10 @@ async function handler(req: Request): Promise<Response> {
 
     if (path === "/account/accounts" && req.method === "GET") {
       return await handleAccounts(cfg, requestId);
+    }
+
+    if (path === "/workspaces" && req.method === "GET") {
+      return await handleWorkspaces(cfg, requestId);
     }
 
     if (path === "/account/balance" && req.method === "GET") {
