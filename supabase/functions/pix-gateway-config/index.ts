@@ -34,7 +34,7 @@ type Sb = any;
 const ENVIRONMENTS = ["sandbox", "production"] as const;
 
 interface Body {
-  action: "get" | "save" | "discover";
+  action: "get" | "save" | "discover" | "create_workspace";
   environment?: string;
   client_id?: string;
   client_secret?: string;
@@ -43,6 +43,10 @@ interface Body {
   receipts_base_url?: string | null;
   debit_branch?: string;
   debit_account?: string;
+  /** create_workspace: conta de débito do novo workspace de PIX. */
+  branch?: string;
+  number?: string;
+  description?: string;
 }
 
 serve(async (req) => {
@@ -82,8 +86,8 @@ serve(async (req) => {
   try {
     const raw = await req.json();
     const action = String(raw.action ?? "");
-    if (!["get", "save", "discover"].includes(action)) {
-      throw new Error("action precisa ser 'get', 'save' ou 'discover'");
+    if (!["get", "save", "discover", "create_workspace"].includes(action)) {
+      throw new Error("action inválida");
     }
     body = { action: action as Body["action"], ...raw };
   } catch (e) {
@@ -128,6 +132,64 @@ serve(async (req) => {
         return json({ error: "DISCOVER_FAILED", message: msg }, 200);
       }
       return json({ workspaces: Array.isArray(data?.workspaces) ? data!.workspaces : [] }, 200);
+    } catch {
+      return json({ error: "GATEWAY_UNREACHABLE", message: "Não deu pra falar com o gateway agora." }, 200);
+    }
+  }
+
+  // ── create_workspace ─────────────────────────────────────────────────────
+  // Cria um workspace type=PAYMENTS (o que liga PIX) com a conta de débito, usando
+  // as credenciais DIGITADAS. É a saída pra quando a conta só tem workspaces de
+  // Boleto/DDA. Não move dinheiro; é reversível no Santander (DELETE).
+  if (body.action === "create_workspace") {
+    const clientId = str(body.client_id);
+    const clientSecret = String(body.client_secret ?? "");
+    const baseUrl = str(body.base_url);
+    const branch = str(body.branch);
+    const number = str(body.number);
+    const description = str(body.description) || undefined;
+    if (!clientId || !clientSecret || !baseUrl || !branch || !number) {
+      return json({ error: "BAD_REQUEST", message: "Preenche client_id, client_secret, base URL, agência e conta." }, 200);
+    }
+    const gwUrl = gwBaseUrl();
+    const gwSecret = Deno.env.get("SANTANDER_GW_SECRET");
+    if (!gwUrl || !gwSecret) {
+      return json({ error: "NOT_CONFIGURED", message: "Gateway indisponível. Fala com o admin." }, 200);
+    }
+    const header = gwCredentialsHeader({
+      client_id: clientId,
+      client_secret: clientSecret,
+      workspace_id: "",
+      base_url: baseUrl.replace(/\/+$/, ""),
+      receipts_base_url: null,
+      debit_branch: "",
+      debit_account: "",
+    });
+    try {
+      const res = await fetch(`${gwUrl}/workspaces`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${gwSecret}`, "Content-Type": "application/json", ...header },
+        body: JSON.stringify({
+          type: "PAYMENTS",
+          mainDebitAccount: { branch, number },
+          description: description ?? "PIX Folha SoftHouse",
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        const msg = res.status === 401 || res.status === 403
+          ? "O Santander recusou (credenciais ou permissão pra criar workspace)."
+          : `Não deu pra criar o workspace agora (HTTP ${res.status}).`;
+        return json({ error: "CREATE_WS_FAILED", message: msg }, 200);
+      }
+      await sbAdmin.from("payment_2fa_events").insert({
+        company_id: null,
+        user_id: user.id,
+        kind: "pix_workspace_created",
+        metadata: { environment: String(body.environment ?? ""), branch, number },
+        ip,
+      });
+      return json({ ok: true, workspace: data }, 200);
     } catch {
       return json({ error: "GATEWAY_UNREACHABLE", message: "Não deu pra falar com o gateway agora." }, 200);
     }

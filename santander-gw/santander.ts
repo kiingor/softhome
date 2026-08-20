@@ -984,6 +984,57 @@ export async function listWorkspaces(cfg: GwConfig): Promise<{ workspaces: Works
   return { workspaces: list.map(workspaceViewOf) };
 }
 
+export interface CreateWorkspaceInput {
+  /** 'PAYMENTS' é o que habilita PIX (os outros tipos não pagam PIX). */
+  type: string;
+  mainDebitAccount: { branch: string; number: string };
+  additionalDebitAccounts?: { branch: string; number: string }[];
+  description?: string;
+}
+
+/**
+ * Cria um workspace de pagamento. Com type=PAYMENTS + a conta de débito, é isto
+ * que liga o PIX no ambiente (a conta Boleto/DDA existente não paga PIX). NÃO
+ * move dinheiro — só registra o workspace; é reversível (DELETE existe no
+ * contrato). retry=false como todo POST (repetir criaria workspace duplicado).
+ */
+export async function createWorkspace(
+  cfg: GwConfig,
+  input: CreateWorkspaceInput,
+): Promise<WorkspaceView> {
+  const body: Record<string, unknown> = {
+    type: input.type,
+    mainDebitAccount: input.mainDebitAccount,
+  };
+  if (input.additionalDebitAccounts && input.additionalDebitAccounts.length > 0) {
+    body.additionalDebitAccounts = input.additionalDebitAccounts;
+  }
+  if (input.description) body.description = input.description;
+
+  log("info", "workspaces.create.start", {
+    type: input.type,
+    branch: input.mainDebitAccount.branch,
+    environment: cfg.environment,
+  });
+
+  const { json } = await call({
+    method: "POST",
+    url: `${cfg.baseUrl}${WORKSPACES_PATH}`,
+    headers: await authHeaders(cfg),
+    body,
+    timeoutMs: TIMEOUT_POST_MS,
+    retry: false,
+    label: "POST workspace",
+  });
+  const view = workspaceViewOf(json);
+  log("info", "workspaces.create.ok", {
+    workspace_id: view.workspaceId,
+    pix_active: view.pixPaymentsActive,
+    environment: cfg.environment,
+  });
+  return view;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Bank Account Information — saldo e extrato (SÓ LEITURA)
 //

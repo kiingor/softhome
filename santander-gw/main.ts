@@ -33,6 +33,7 @@ import {
   certPaths,
   confirmPayment,
   createPayment,
+  createWorkspace,
   DICT_CODE_TYPES,
   type DictCodeType,
   createReceiptFileRequest,
@@ -575,6 +576,21 @@ async function handleWorkspaces(cfg: GwConfig, requestId: string): Promise<Respo
   return json(200, view, requestId);
 }
 
+// Cria um workspace (type=PAYMENTS liga o PIX). NÃO tem kill-switch: não move
+// dinheiro, só registra a configuração no banco. Body:
+//   { type?, mainDebitAccount: { branch, number }, description? }
+async function handleCreateWorkspace(req: Request, cfg: GwConfig, requestId: string): Promise<Response> {
+  const body = await readJsonBody(req);
+  const type = (optionalString(body, "type", 40) ?? "PAYMENTS").toUpperCase();
+  const main = parseDebitAccount(body.mainDebitAccount ?? body.main_debit_account);
+  if (!main) {
+    throw new BadRequest("mainDebitAccount { branch, number } (numéricos) é obrigatório");
+  }
+  const description = optionalString(body, "description", 120) ?? undefined;
+  const view = await createWorkspace(cfg, { type, mainDebitAccount: main, description });
+  return json(201, view, requestId);
+}
+
 async function handleBalance(url: URL, cfg: GwConfig, requestId: string): Promise<Response> {
   const { branch, account } = resolveBranchAccount(url, cfg);
   // balance_id da conta Santander é `agência.conta` (ADR 0006 / doc do banco).
@@ -780,6 +796,10 @@ async function handler(req: Request): Promise<Response> {
 
     if (path === "/workspaces" && req.method === "GET") {
       return await handleWorkspaces(cfg, requestId);
+    }
+
+    if (path === "/workspaces" && req.method === "POST") {
+      return await handleCreateWorkspace(req, cfg, requestId);
     }
 
     if (path === "/account/balance" && req.method === "GET") {

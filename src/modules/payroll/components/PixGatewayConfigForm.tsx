@@ -8,12 +8,14 @@ import {
   FloppyDisk,
   MagnifyingGlass,
   CheckCircle,
+  Plus,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
   useSaveGatewayConfig,
   useDiscoverWorkspaces,
+  useCreateWorkspace,
   type GatewayConfigView,
   type PixEnv,
   type DiscoveredWorkspace,
@@ -52,6 +54,7 @@ export function PixGatewayConfigForm({
 }) {
   const save = useSaveGatewayConfig();
   const discover = useDiscoverWorkspaces();
+  const createWs = useCreateWorkspace();
   const [workspaces, setWorkspaces] = useState<DiscoveredWorkspace[] | null>(null);
   // Seleção por índice (o sandbox devolve o mesmo workspaceId pros três; casar
   // por id destacaria todos). Só o PIX-ativo é selecionável.
@@ -85,8 +88,20 @@ export function PixGatewayConfigForm({
       } else {
         // Auto-seleciona o (primeiro) PIX-ativo — que é o único que paga.
         const activeIdx = list.findIndex((w) => w.pixPaymentsActive);
-        if (activeIdx >= 0) pickWorkspace(list[activeIdx], activeIdx);
-        else toast.warning("Nenhum workspace com PIX ativo. Confere no portal do Santander.");
+        if (activeIdx >= 0) {
+          pickWorkspace(list[activeIdx], activeIdx);
+        } else {
+          // Nenhum tem PIX: pré-preenche a agência/conta com a de um workspace
+          // existente, pra facilitar criar um workspace de PAYMENTS.
+          const acc = list.find((w) => w.mainDebitAccount)?.mainDebitAccount;
+          if (acc) {
+            setForm((f) => ({
+              ...f,
+              debit_branch: acc.branch ?? f.debit_branch,
+              debit_account: acc.number ?? f.debit_account,
+            }));
+          }
+        }
       }
     } catch (err) {
       toast.error((err as Error).message ?? "Não deu pra buscar.");
@@ -120,6 +135,26 @@ export function PixGatewayConfigForm({
       set("client_secret", "");
     } catch (err) {
       toast.error((err as Error).message ?? "Não deu pra salvar.");
+    }
+  };
+
+  const noneActive =
+    !!workspaces && workspaces.length > 0 && !workspaces.some((w) => w.pixPaymentsActive);
+
+  const onCriarWs = async () => {
+    try {
+      await createWs.mutateAsync({
+        environment,
+        client_id: form.client_id.trim(),
+        client_secret: form.client_secret,
+        base_url: form.base_url.trim(),
+        branch: form.debit_branch.trim(),
+        number: form.debit_account.trim(),
+      });
+      toast.success("Workspace de PIX criado. Buscando de novo…");
+      await onBuscar();
+    } catch (err) {
+      toast.error((err as Error).message ?? "Não deu pra criar o workspace.");
     }
   };
 
@@ -224,6 +259,49 @@ export function PixGatewayConfigForm({
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* Nenhum workspace com PIX → oferecer criar um (type PAYMENTS) */}
+      {noneActive && (
+        <div className="rounded-lg border border-warning/30 bg-warning/5 p-3 space-y-2">
+          <p className="text-xs font-medium text-foreground">
+            Nenhum workspace tem PIX ativo.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Cria um workspace de pagamento (type PAYMENTS) com a conta abaixo — é o
+            que liga o PIX. Não move dinheiro; é reversível no Santander.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <Input
+              className="h-8 mono"
+              value={form.debit_branch}
+              onChange={(e) => set("debit_branch", e.target.value)}
+              placeholder="Agência"
+              inputMode="numeric"
+            />
+            <Input
+              className="h-8 mono"
+              value={form.debit_account}
+              onChange={(e) => set("debit_account", e.target.value)}
+              placeholder="Conta"
+              inputMode="numeric"
+            />
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5"
+            disabled={createWs.isPending || !form.debit_branch.trim() || !form.debit_account.trim()}
+            onClick={onCriarWs}
+          >
+            {createWs.isPending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Plus className="w-4 h-4" />
+            )}
+            Criar workspace de PIX
+          </Button>
         </div>
       )}
 

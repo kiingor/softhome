@@ -148,6 +148,27 @@ export function useDiscoverWorkspaces() {
   });
 }
 
+/** Cria um workspace type=PAYMENTS (liga PIX) com a conta de débito, usando as
+ *  credenciais digitadas. Saída pra quando a conta só tem workspaces de Boleto. */
+export function useCreateWorkspace() {
+  return useMutation({
+    mutationFn: async (vars: {
+      environment: PixEnv;
+      client_id: string;
+      client_secret: string;
+      base_url: string;
+      branch: string;
+      number: string;
+      description?: string;
+    }) => {
+      const { data, error } = await supabase.functions.invoke("pix-gateway-config", {
+        body: { action: "create_workspace", ...vars },
+      });
+      return unwrap<{ ok: boolean; workspace: unknown }>(error, data);
+    },
+  });
+}
+
 export function usePixEnvSwitch() {
   const qc = useQueryClient();
   const invalidate = () => qc.invalidateQueries({ queryKey: ["pix-env-status"] });
