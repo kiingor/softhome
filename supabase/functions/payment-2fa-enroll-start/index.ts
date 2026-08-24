@@ -260,35 +260,22 @@ serve(async (req) => {
     );
   }
 
-  // ── 7. Número já em uso ────────────────────────────────────────────────────
-  // SEM filtro de empresa, de propósito: o índice único de telefone é GLOBAL
-  // (o dispositivo é o celular da pessoa, não da empresa). Filtrar por empresa
-  // aqui deixaria a colisão passar batido e estourar como 23505 lá no INSERT —
-  // o usuário receberia um 500 opaco em vez do 409 com mensagem.
+  // ── 7. Número já em uso PELO PRÓPRIO usuário ───────────────────────────────
+  // Filtra por user_id de propósito: números COMPARTILHADOS são permitidos (uma
+  // pessoa do financeiro recebe os códigos de vários pagadores num aparelho só —
+  // ver migration 20260824120000). A unicidade de telefone é POR USUÁRIO, então
+  // aqui só interessa o dispositivo DESTE usuário com esse número: se existir um
+  // pending, a gente reaproveita (§9); se já estiver active, é o aparelho dele.
+  // O índice uq_payment_2fa_devices_phone_per_user garante ≤1 linha aqui, então
+  // o maybeSingle é seguro.
   const { data: sameNumber } = await sbAdmin
     .from("payment_2fa_devices")
     .select("id, user_id, status")
     .eq("phone", phone)
+    .eq("user_id", user.id)
     .in("status", ["pending", "active"])
     .maybeSingle();
 
-  if (sameNumber && sameNumber.user_id !== user.id) {
-    await logEvent(sbAdmin, {
-      company_id: companyId,
-      user_id: user.id,
-      kind: "enroll_blocked",
-      metadata: { reason: "phone_in_use", last4: phone.slice(-4) },
-      ip,
-    });
-    // Mensagem propositalmente vaga: não confirmamos de quem é o número.
-    return jsonResponse(
-      {
-        error: "PHONE_IN_USE",
-        message: "Esse número já está cadastrado nessa empresa.",
-      },
-      409,
-    );
-  }
   if (sameNumber && sameNumber.status === "active") {
     return jsonResponse(
       {
