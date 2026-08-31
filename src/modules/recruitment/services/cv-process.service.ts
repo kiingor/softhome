@@ -2,6 +2,7 @@
 // Faz upload do PDF pro Storage, depois chama a função pra processar.
 
 import { supabase } from "@/integrations/supabase/client";
+import { normalizeCvSignedUrl } from "../lib/cv-storage-url";
 
 export const CV_BUCKET = "candidate-cvs";
 export const MAX_CV_SIZE_MB = 5;
@@ -100,5 +101,8 @@ export async function getCvSignedUrl(
     .from(CV_BUCKET)
     .createSignedUrl(filePath, expiresInSeconds);
   if (error || !data) return null;
-  return data.signedUrl;
+  return normalizeCvSignedUrl(
+    data.signedUrl,
+    import.meta.env.VITE_SUPABASE_PROJECT_ID,
+  );
 }
